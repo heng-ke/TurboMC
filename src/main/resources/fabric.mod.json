@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"id": "hk-script",
+	"version": "${version}",
+	"name": "hk-script",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/hk-script/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"xyz.hegke.HkScript"
+		],
+		"client": [
+			"xyz.hegke.client.HkScriptClient"
+		],
+		"modmenu": [
+			"xyz.hegke.client.config.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"hk-script.mixins.json",
+		{
+			"config": "hk-script.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"recommends": {
+		"modmenu": ">=17.0.1",
+		"cloth-config": ">=21.11.153"
+	}
+}
