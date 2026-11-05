@@ -79,7 +79,6 @@ public final class PackStore {
 			return;
 		}
 		loaded = true;
-		migrateLegacyDir();
 		reload();
 		// 升级路径：老版本把 sb3 放在 imports/ 里当整体工程跑，从未建过包目录。
 		// 首次没有包时自动搬一次，免得用户以为「升级后脚本全没了」。
@@ -294,33 +293,11 @@ public final class PackStore {
 
 	/** 打开包目录（用于把 sb3 放进去）。 */
 	public void ensureDirectories() {
-		migrateLegacyDir();
 		try {
 			Files.createDirectories(directory());
 			Files.createDirectories(importsDir());
 		} catch (IOException e) {
 			LOG.warn("[pack] 创建目录失败: {}", e.getMessage());
-		}
-	}
-
-	/**
-	 * 旧版本的目录叫 {@code config/hk-script}，首次以新名字启动时整体搬一次。
-	 *
-	 * <p>不搬的话用户打开 F7 会看到空列表，以为导入过的脚本全没了。</p>
-	 */
-	private static void migrateLegacyDir() {
-		Path root = FabricLoader.getInstance().getConfigDir();
-		Path legacy = root.resolve("hk-script");
-		Path current = root.resolve("turbomc");
-		if (!Files.isDirectory(legacy) || Files.exists(current)) {
-			return;
-		}
-		try {
-			Files.move(legacy, current);
-			LOG.info("[pack] 已迁移旧目录: {} -> {}", legacy.getFileName(), current.getFileName());
-		} catch (IOException e) {
-			LOG.warn("[pack] 旧目录迁移失败，请手动把 {} 改名为 {}: {}",
-					legacy, current.getFileName(), e.getMessage());
 		}
 	}
 

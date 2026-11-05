@@ -180,9 +180,9 @@ public final class ScriptEngine {
 	 */
 	public void fire(String trigger, Predicate<BlockNode> matcher) {
 		String opcode = switch (trigger) {
-			case "event.chat" -> "hkscript_whenChat";
-			case "event.damage" -> "hkscript_whenDamaged";
-			case "event.death" -> "hkscript_whenDeath";
+			case "event.chat" -> "turbomc_whenChat";
+			case "event.damage" -> "turbomc_whenDamaged";
+			case "event.death" -> "turbomc_whenDeath";
 			case "event.tick", "event.start" -> "event_whenflagclicked";
 			default -> null;
 		};

@@ -13,7 +13,7 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
    * 作用：在 TurboWarp 积木面板里提供 Minecraft 专用积木，导出 .sb3 后由模组解析执行。
    * 浏览器里没有 Minecraft，所有动作都是空实现，只打控制台日志。
    *
-   * 注意：opcode 在 project.json 中呈现为 hkscript_<opcode>，模组按该规则映射，改名会导致导入失败。
+   * 注意：opcode 在 project.json 中呈现为 turbomc_<opcode>，模组按该规则映射，改名会导致导入失败。
    * 菜单项的 value 必须是英文（写入 sb3），显示文本才做本地化。
    */
   var lang = 'en';
@@ -34,10 +34,9 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
       key: "getInfo",
       value: function getInfo() {
         return {
-          // 扩展 id 与积木 opcode 前缀保持 hkscript 不变：旧 .sb3 里存的就是
-          // 「extensions: ["hkscript"]」和 hkscript_xxx 的 opcode，改名会让它们全部失效。
-          // 对外名字只影响积木面板的显示。
-          id: 'hkscript',
+          // 扩展 id 决定 opcode 前缀：注册为 turbomc，积木在 project.json 里就是
+          // turbomc_<opcode>。改这里等于让所有已导出的工程失效。
+          id: 'turbomc',
           name: 'TurboMC',
           color1: '#6F45B0',
           color2: '#5A3894',

@@ -120,7 +120,7 @@ tasks.register('vmImport', JavaExec) {
 	description = '验证 sb3 能解析成可查看的积木树并被 VM 执行（-Psb3=路径）'
 	mainClass = 'xyz.turbomc.client.script.vm.ImportSmokeTest'
 	classpath = sourceSets.client.runtimeClasspath
-	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/config/turbomc/packages/作品.sb3')
+	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/turbomc-vm/fixture.sb3')
 	args = [sb3Path]
 	// 积木树是中文，控制台默认 GBK 会乱码
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'

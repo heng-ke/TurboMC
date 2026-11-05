@@ -130,7 +130,6 @@ public final class TurboMCConfig {
 	}
 
 	public static void load() {
-		migrateLegacy();
 		if (!Files.exists(PATH)) {
 			TurboMC.LOGGER.info("未找到配置文件，写入默认配置: {}", PATH);
 			save();
@@ -145,24 +144,6 @@ public final class TurboMCConfig {
 			TurboMC.LOGGER.info("配置已加载: {}", PATH);
 		} catch (Exception e) {
 			TurboMC.LOGGER.error("配置读取失败，保持默认值: {}", PATH, e);
-		}
-	}
-
-	/**
-	 * 旧版本叫 hk-script，升级时把配置文件搬过来。
-	 *
-	 * <p>不搬的话用户会看到「设置全丢了」——而实际上旧文件就躺在旁边。</p>
-	 */
-	private static void migrateLegacy() {
-		Path legacy = FabricLoader.getInstance().getConfigDir().resolve("hk-script.json");
-		if (!Files.exists(legacy) || Files.exists(PATH)) {
-			return;
-		}
-		try {
-			Files.move(legacy, PATH);
-			TurboMC.LOGGER.info("已迁移旧配置: {} -> {}", legacy.getFileName(), PATH.getFileName());
-		} catch (IOException e) {
-			TurboMC.LOGGER.warn("旧配置迁移失败，将使用默认值: {}", e.getMessage());
 		}
 	}
 

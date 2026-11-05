@@ -272,7 +272,7 @@ public final class RhinoVm {
 		Context cx = factory.enterContext();
 		try {
 			return toInt(call(cx, "__tmcStartHatFiltered",
-					new Object[]{"hkscript_whenChat", "MATCH", message}), 0);
+					new Object[]{"turbomc_whenChat", "MATCH", message}), 0);
 		} finally {
 			Context.exit();
 		}

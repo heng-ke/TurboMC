@@ -14,19 +14,6 @@
 4. 进游戏按 **F7** → 点「导入」→ 点左侧圆点启用该包
 5. 按 **F6** 开启引擎，HUD 出现 `● 包名` 即表示正在运行
 
-## 从旧版本升级
-
-这个模组以前叫 `hk-script`。升级时不需要手动搬东西：
-
-| 旧 | 新 | 处理 |
-|---|---|---|
-| `config/hk-script.json` | `config/turbomc.json` | 首次启动自动改名 |
-| `config/hk-script/` | `config/turbomc/` | 首次启动整目录迁移 |
-
-**已经导出的 `.sb3` 不用重新做**：扩展 id 与积木 opcode 前缀仍是 `hkscript`，
-工程文件里的引用全部有效。TurboWarp 里如果还加载着旧文件名，换成
-`turbowarp/turbomc-extension.js` 即可，积木本身不变。
-
 ## 按键
 
 | 键 | 作用 |

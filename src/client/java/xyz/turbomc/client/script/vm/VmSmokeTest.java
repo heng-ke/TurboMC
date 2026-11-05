@@ -64,7 +64,7 @@ public final class VmSmokeTest {
 			// 模拟宿主事件：聊天含 hello → 触发「当聊天包含 [MATCH]」帽子。
 			// 不传匹配字段：扩展的 MATCH 声明为 input，而 startHats 的字段匹配只认 field，
 			// 传了会在 hatFields[matchField].value 处崩（见阶段 2 报告已知限制）。
-			int started = vm.startHat("hkscript_whenChat", (String) null);
+			int started = vm.startHat("turbomc_whenChat", (String) null);
 			System.out.println("[smoke] startHat 起了 " + started + " 个线程");
 			for (int i = 0; i < 5; i++) {
 				vm.tick(null);

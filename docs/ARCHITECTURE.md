@@ -167,17 +167,14 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 `ScriptKeys.releaseAll(owner)` 因此也没有调用方，真正兜底的是引擎停止时的
 `releaseEveryKey()`。要做按脚本精确回收，得先让 JS 侧把线程标识带进桥。
 
-### 10. 扩展 id 与 opcode 前缀不能改
+### 10. 扩展 id 是 `turbomc`，opcode 前缀随之固定
 
-模组已从 `hk-script` 改名为 `turbomc`，但扩展仍然注册为 `id: 'hkscript'`，
-积木 opcode 前缀也保持 `hkscript_`。
+TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，所以积木在
+`project.json` 里写作 `turbomc_log`、`turbomc_tap` 这样。
 
-这是**数据兼容**要求，不是漏改：`.sb3` 里存的是 `extensions: ["hkscript"]` 和
-`hkscript_xxx` 这样的 opcode。改掉之后，所有已导出的工程都会变成未知积木，
-而且不会报错，只是积木消失。
-
-改名只影响对外可见的部分：模组 id、包名、资源命名空间、配置目录、扩展文件名与显示名。
-新增积木照旧用 `hkscript_` 前缀。
+**改扩展 id 等于改所有积木的名字**：已经导出的工程会变成未知积木，而且不报错，
+只是积木消失。要改就必须同时改 `Sb3Mapping` 的 61 条映射、`ScriptEngine` 里三个
+帽子 opcode、`vm-bootstrap.js` 的拼接前缀，以及所有既有的 `.sb3`。
 
 ## 六、HUD
 
@@ -207,7 +204,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `./gradlew vmSmoke -PvmMode=block` | 验证阻塞动作按时长挂起 |
 | `./gradlew vmImport` | 验证 sb3 能解析成树，并被 VM 执行 |
 
-`vmImport` 默认读 `run/config/turbomc/packages/作品.sb3`，可用
+`vmImport` 默认读 `run/turbomc-vm/fixture.sb3`，可用
 `-Psb3=路径` 指定其他工程。
 
 ## 八、使用流程

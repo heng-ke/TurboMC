@@ -17,7 +17,7 @@ import xyz.turbomc.client.script.sb3.Sb3Mapping;
  * {@link String} / {@link Double} / {@link Boolean}，其余（对象、数组、undefined）
  * 统一转成字符串。Scratch 的值域本来就只有这三种，桥不需要更复杂的转换。</p>
  *
- * <p>opcode 到动作 id 的映射复用 {@link Sb3Mapping}：sb3 opcode（{@code hkscript_log}）
+ * <p>opcode 到动作 id 的映射复用 {@link Sb3Mapping}：sb3 opcode（{@code turbomc_log}）
  * → 积木类型（{@code debug.log}）→ {@link NativeRegistry} 的注册项。这样不引入第四张表。</p>
  */
 public final class ScriptBridge {
@@ -55,9 +55,9 @@ public final class ScriptBridge {
 	}
 
 	/**
-	 * 由 JS 侧调用：{@code ScriptBridge.call('hkscript_log', 'TEXT', args)}。
+	 * 由 JS 侧调用：{@code ScriptBridge.call('turbomc_log', 'TEXT', args)}。
 	 *
-	 * @param opcode sb3 里的扩展 opcode，形如 {@code hkscript_<name>}
+	 * @param opcode sb3 里的扩展 opcode，形如 {@code turbomc_<name>}
 	 * @param names  参数名，英文逗号分隔；顺序取自积木显示文本里的 [NAME]
 	 * @param args   扩展收到的参数对象
 	 * @return 报告类积木的返回值；命令类积木返回 {@code null}

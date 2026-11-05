@@ -114,7 +114,7 @@ for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 		}
 		var names = __tmcOrder[block.opcode] || [];
 		Scratch.__instance[block.opcode] = function (args) {
-			var result = __tmcApi().call('hkscript_' + block.opcode, names, args);
+			var result = __tmcApi().call('turbomc_' + block.opcode, names, args);
 			// 条件型等待优先：它表达的是「等到某事发生」，不能用固定帧数代替
 			var check = __tmcApi().takeWaitCheck();
 			if (check) {
