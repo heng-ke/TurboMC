@@ -198,6 +198,24 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 （新签名），`ChatGate` 管不着，由它按「发送时登记、收到时抵消」拦掉，
 避免「当聊天包含 X → 回复含 X 的聊天」形成无限回路。
 
+### 12. 攻击目标必须先过滤，否则会被服务端踢出
+
+`ServerPlayNetworkHandler` 收到攻击包时会判定「无效实体」，命中就
+`disconnect(invalid_entity_attacked)` —— **是断开连接，不是忽略**。四类目标：
+
+| 目标 | 说明 |
+|---|---|
+| `ItemEntity` | 掉落物 |
+| `ExperienceOrbEntity` | 经验球 |
+| 玩家自己 | — |
+| `PersistentProjectileEntity` 且 `isAttackable()` 为假 | 插在地上/怪物身上的箭 |
+
+「最近实体」如果不加过滤，脚本在刷怪塔、矿洞里几乎必然先选中掉落物，然后被踢。
+`GameActions.isAttackableTarget` 负责排除，选择目标时就用它，而不是等到攻击前。
+
+距离用「眼睛 → 碰撞箱最近点」的平方距离对比 `ENTITY_INTERACTION_RANGE`（默认 3.0），
+与服务端 `canAttackEntityIn` 同口径。用中心距离会偏离：大体型判太远、小体型判太近。
+
 ## 六、HUD
 
 两行内容：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡。

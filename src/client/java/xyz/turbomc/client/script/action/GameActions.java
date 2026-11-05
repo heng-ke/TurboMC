@@ -6,7 +6,11 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.mob.Monster;
+import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.network.packet.c2s.play.ClientStatusC2SPacket;
@@ -36,7 +40,6 @@ import java.util.function.Predicate;
  */
 public final class GameActions {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
-	private static final double ATTACK_RANGE = 3.5d;
 	/**
 	 * 某按键名是否被禁止按下。
 	 *
@@ -139,15 +142,55 @@ public final class GameActions {
 		if (client.interactionManager == null || client.player == null) {
 			return;
 		}
-		Entity target = WorldQueries.nearestEntityOrNull(ctx, filter, cacheKey);
+		// 选目标时就把「打了会被服务端断开」的东西排掉，再交给距离判定
+		Entity target = WorldQueries.nearestEntityOrNull(ctx,
+				entity -> isAttackableTarget(client, entity) && filter.test(entity), cacheKey);
 		if (target == null) {
 			return;
 		}
 		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, target.getEyePos());
-		if (client.player.distanceTo(target) <= ATTACK_RANGE) {
-			client.interactionManager.attackEntity(client.player, target);
-			client.player.swingHand(Hand.MAIN_HAND);
+		if (!withinAttackReach(client.player, target)) {
+			// 原版近战距离之外，服务端会静默丢弃这个包，发了也没用
+			return;
 		}
+		client.interactionManager.attackEntity(client.player, target);
+		client.player.swingHand(Hand.MAIN_HAND);
+	}
+
+	/**
+	 * 服务端会判定为「攻击无效实体」并<b>直接断开连接</b>的目标。
+	 *
+	 * <p>判定在 {@code ServerPlayNetworkHandler} 收到交互包时执行，条件就是这几类：
+	 * 掉落物、经验球、玩家自己、以及不可攻击的箭。命中即
+	 * {@code multiplayer.disconnect.invalid_entity_attacked}——不是忽略，是踢出存档。</p>
+	 *
+	 * <p>另外排除已死亡 / 已移除的实体：它们可能还留在本 tick 的实体列表里，
+	 * 打过去时服务端已经找不到这个目标了。</p>
+	 */
+	private static boolean isAttackableTarget(MinecraftClient client, Entity entity) {
+		if (entity == null || client.player == null || entity == client.player) {
+			return false;
+		}
+		if (!entity.isAlive() || entity.isRemoved()) {
+			return false;
+		}
+		if (entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) {
+			return false;
+		}
+		return !(entity instanceof PersistentProjectileEntity projectile) || projectile.isAttackable();
+	}
+
+	/**
+	 * 是否在原版近战距离内。
+	 *
+	 * <p>用「眼睛到碰撞箱最近点」的平方距离对比 {@code ENTITY_INTERACTION_RANGE}
+	 * （默认 3.0），与服务端 {@code canAttackEntityIn} 的口径一致。取中心距离会
+	 * 让大体型实体被判得太远、小体型被判得太近，两边都不准。</p>
+	 */
+	private static boolean withinAttackReach(ClientPlayerEntity player, Entity target) {
+		double reach = player.getAttributeValue(EntityAttributes.ENTITY_INTERACTION_RANGE);
+		Vec3d eye = player.getEyePos();
+		return target.getBoundingBox().squaredMagnitude(eye) <= reach * reach;
 	}
 
 	/**
