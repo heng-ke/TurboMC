@@ -19,7 +19,7 @@ import xyz.hegke.client.script.ui.ScriptListScreen;
 
 public class HkScriptClient implements ClientModInitializer {
 	private static KeyBinding toggleScriptKey;
-	private static KeyBinding openEditorKey;
+	private static KeyBinding openPacksKey;
 
 	private final TriggerDispatcher triggerDispatcher = new TriggerDispatcher();
 
@@ -38,7 +38,8 @@ public class HkScriptClient implements ClientModInitializer {
 				category
 		));
 
-		openEditorKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+		openPacksKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				// 翻译键沿用旧名（改 key binding id 会让玩家自定义的按键失效），显示文本已改为「打开脚本包」
 				"key.hk-script.open_editor",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_F7,
@@ -73,7 +74,7 @@ public class HkScriptClient implements ClientModInitializer {
 			}
 		}
 
-		while (openEditorKey.wasPressed()) {
+		while (openPacksKey.wasPressed()) {
 			if (client.currentScreen == null) {
 				client.setScreen(new ScriptListScreen(null));
 			}

@@ -1,7 +1,7 @@
 # 架构说明
 
-> 本文是**当前实现的唯一事实来源**。归档目录里的报告描述的是历史阶段，其中提到的
-> 编译器、IR、可写编辑器等都已不存在，不要据此理解现有代码。
+> 本文是**当前实现的唯一事实来源**。改代码时请同步改这里——落后于实现的架构文档
+> 比没有更糟，后来人会照着它去理解不存在的结构。
 
 ## 一、这个模组是什么
 
@@ -68,7 +68,8 @@ src/client/java/xyz/hegke/client/
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
     ├── action/                  动作层（Java 侧真正操作游戏的地方）
-    │   ├── GameActions.java     移动、挖掘、放置、聊天、命令……
+    │   ├── GameActions.java     移动、挖掘、放置、攻击、聊天、命令……
+    │   ├── ContainerActions.java 容器：开界面、点槽位、搬东西、读槽位内容
     │   ├── WorldQueries.java    世界查询（方块、实体、时间……）
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
@@ -76,7 +77,7 @@ src/client/java/xyz/hegke/client/
     ├── runtime/                 宿主上下文
     │   ├── ScriptContext.java   每 tick 重建的宿主环境（含等待请求通道）
     │   ├── TriggerDispatcher.java 按键 / 受伤 / 死亡事件源
-    │   └── Values / ScratchMath / ScratchCast / ScratchCompare / ScratchClock
+    │   └── Values / ScratchCast  值转换（scratch-vm 已自带运算与比较，Java 不重复实现）
     ├── vm/                      JS 运行时
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
@@ -139,6 +140,33 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 `data_changevariableby` 和 `data_setvariableto` 都映射到 `data.set`，结果
 「将 i 增加 1」在查看器里显示成「将 i 设为 1」。这类错误不报错，只是语义悄悄偏移。
 
+### 7. 脚本按下的键必须在引擎停止时统一释放
+
+`KeyBindingMixin` 从 `isPressed` 的读取端接管：只要 `ScriptKeys` 表里登记了某个键就
+恒返回 `true`，**它不看引擎是否在运行**。因此「一直按住」的键（`ticks < 0`）只能由
+`ScriptEngine.stop()` 与 `restart()` 调用 `releaseEveryKey()` 松开。漏掉这一步，
+用户关掉引擎后角色会一直往前走，且没有任何报错。
+
+限时按键（`ticks >= 0`）另有一条路径：每 tick 的 `ScriptKeys.tick()` 到期自动松手。
+
+### 8. 容器操作只能走 `clickSlot`
+
+客户端 `world` 只是服务端状态的副本，直接改 `BlockEntity` 会被下一次同步覆盖——
+看起来「写成功」，实际无效。`clickSlot` 发的是和玩家手点完全相同的包，是唯一合法路径。
+
+另一个必须记住的点：**点击是异步的**。发包 → 服务端处理 → 回发槽位更新，
+同一帧读到的仍是旧值。脚本里每次点击后要等一 tick 再读状态。
+槽位编号与其余时序细节见 [CONTAINER.md](CONTAINER.md)。
+
+### 9. 按键归属标识恒为 `null`
+
+`ScriptContext.currentInstance()` 目前恒返回 `null`——scratch-vm 里没有稳定的脚本句柄
+可以传出来（线程 id 会复用）。后果是所有按键都记在同一个归属上：两个脚本按同一个键时，
+一个松手会连带松开另一个。单脚本场景无影响。
+
+`ScriptKeys.releaseAll(owner)` 因此也没有调用方，真正兜底的是引擎停止时的
+`releaseEveryKey()`。要做按脚本精确回收，得先让 JS 侧把线程标识带进桥。
+
 ## 六、HUD
 
 两行内容：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡。
@@ -184,8 +212,12 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 
 | 日志 | 含义 |
 |---|---|
-| `[script] 已启动 xxx.sb3：N 个脚本，线程 N 个` | 工程载入成功 |
-| `[script] 没有启用的脚本包` | 包目录为空或全部未启用 |
-| `[vm] 单帧执行超出预算` | 某帧超时（多为 GC 或同步发聊天），已跳过 |
-| `[vm] 未映射的扩展积木` | 扩展里有积木没进 `Sb3Mapping` |
-| `[pack] 脚本包就绪：N 个` | 包扫描结果 |
+| `[script] 引擎就绪：积木定义 N 个，脚本包 N 个` | 初始化完成 |
+| `[script] 已启动 xxx.sb3：N 个脚本，线程 N 个，监听按键 N 个` | 工程载入成功 |
+| `[script] 没有启用的脚本包，等待导入` | 包目录为空或全部未启用 |
+| `[pack] 脚本包就绪：N 个，启用 M` | 包扫描结果 |
+| `[pack] 首次启动：从 imports 自动接管 N 个 sb3` | 升级后第一次运行的自动迁移 |
+| `[vm] 单帧执行超出预算……已跳过该帧并继续运行` | 某帧超时（多为 GC 或同步发聊天），不影响后续 |
+| `[vm] 未映射的扩展积木: xxx` | 扩展里有积木没进 `Sb3Mapping`，调用返回空值 |
+| `[vm] 积木 xxx 已映射为 xxx，但动作层没有实现` | 映射到了类型，但 `NativeRegistry` 里没有对应实现 |
+| `[script] 容器距离 N 格超过交互上限` | 服务端会静默拒绝，所以这里提前说明 |

@@ -65,8 +65,7 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }
             }
           },
-          // ---- 动作 ----
-
+          // ---- 输入 ----
           {
             opcode: 'key',
             blockType: Scratch.BlockType.COMMAND,
@@ -82,10 +81,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
                 menu: 'keyState'
               }
             }
-          }, {
-            opcode: 'respawn',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('respawn', '重生')
           }, {
             opcode: 'mouse',
             blockType: Scratch.BlockType.COMMAND,
@@ -128,42 +123,12 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }
             }
           }, {
-            opcode: 'chat',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
-            arguments: {
-              TEXT: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'hello'
-              }
-            }
-          }, {
-            opcode: 'command',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
-            arguments: {
-              COMMAND: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'time set day'
-              }
-            }
-          }, {
             opcode: 'stop',
             blockType: Scratch.BlockType.COMMAND,
             text: T('stop moving', '停止移动')
-          }, {
-            opcode: 'attackNearest',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('attack nearest entity', '攻击最近实体')
-          }, {
-            opcode: 'attackNearestHostile',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('attack nearest hostile', '攻击最近敌对生物')
-          }, {
-            opcode: 'openContainer',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('open nearest container', '打开最近容器')
-          }, {
+          },
+          // ---- 移动与视角 ----
+          {
             opcode: 'moveToward',
             blockType: Scratch.BlockType.COMMAND,
             text: T('move toward x:[X] z:[Z]', '走向 x:[X] z:[Z]'),
@@ -210,30 +175,167 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }
             }
           },
-          // ---- 查询 ----
+          // ---- 方块与挖掘 ----
           {
-            opcode: 'blockInFront',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('block in front?', '前方有方块？')
-          }, {
-            opcode: 'onGround',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('on ground?', '站在地面？')
-          }, {
-            opcode: 'gte',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('[A] >= [B]', '[A] ≥ [B]'),
+            opcode: 'placeBlock',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('place block at x:[X] y:[Y] z:[Z]', '在坐标放方块 x:[X] y:[Y] z:[Z]'),
             arguments: {
-              A: {
+              X: {
                 type: Scratch.ArgumentType.NUMBER,
                 defaultValue: 0
               },
-              B: {
+              Y: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 64
+              },
+              Z: {
                 type: Scratch.ArgumentType.NUMBER,
                 defaultValue: 0
               }
             }
           }, {
+            opcode: 'breakWait',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('wait until block broken', '等待方块被挖破')
+          }, {
+            opcode: 'isMining',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('is mining', '正在挖掘')
+          }, {
+            opcode: 'miningProgress',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('mining progress', '挖掘进度')
+          }, {
+            opcode: 'sleep',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('sleep in nearby bed', '睡附近的床')
+          },
+          // ---- 战斗 ----
+          {
+            opcode: 'attackNearest',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('attack nearest entity', '攻击最近实体')
+          }, {
+            opcode: 'attackNearestHostile',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('attack nearest hostile', '攻击最近敌对生物')
+          },
+          // ---- 容器交互 ----
+          {
+            opcode: 'openContainer',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('open nearest container', '打开最近容器')
+          }, {
+            opcode: 'openContainerAt',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('open container at x:[X] y:[Y] z:[Z]', '打开坐标处的容器 x:[X] y:[Y] z:[Z]'),
+            arguments: {
+              X: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              },
+              Y: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 64
+              },
+              Z: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              }
+            }
+          }, {
+            opcode: 'containerSlots',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('container slots', '界面槽位数')
+          }, {
+            opcode: 'slotItem',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('item in slot [INDEX]', '槽位 [INDEX] 的物品'),
+            arguments: {
+              INDEX: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              }
+            }
+          }, {
+            opcode: 'slotAmount',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('amount in slot [INDEX]', '槽位 [INDEX] 的数量'),
+            arguments: {
+              INDEX: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              }
+            }
+          }, {
+            opcode: 'firstSlotOf',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('first slot with [ITEM]', '第一个装着 [ITEM] 的槽位'),
+            arguments: {
+              ITEM: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'minecraft:iron_ore'
+              }
+            }
+          }, {
+            opcode: 'clickSlot',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('click slot [INDEX] with [BUTTON]', '点击槽位 [INDEX] 用 [BUTTON]'),
+            arguments: {
+              INDEX: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              },
+              BUTTON: {
+                type: Scratch.ArgumentType.STRING,
+                menu: 'slotButton',
+                defaultValue: 'left'
+              }
+            }
+          }, {
+            opcode: 'quickMoveSlot',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('quick move slot [INDEX]', '快速移动槽位 [INDEX]'),
+            arguments: {
+              INDEX: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 0
+              }
+            }
+          }, {
+            opcode: 'closeContainer',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('close container', '关闭界面')
+          },
+          // ---- 交互与通讯 ----
+          {
+            opcode: 'chat',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
+            arguments: {
+              TEXT: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'hello'
+              }
+            }
+          }, {
+            opcode: 'command',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
+            arguments: {
+              COMMAND: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'time set day'
+              }
+            }
+          }, {
+            opcode: 'respawn',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('respawn', '重生')
+          },
+          // ---- 查询 · 玩家 ----
+          {
             opcode: 'health',
             blockType: Scratch.BlockType.REPORTER,
             text: T('health', '血量')
@@ -241,6 +343,18 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
             opcode: 'food',
             blockType: Scratch.BlockType.REPORTER,
             text: T('food level', '饱食度')
+          }, {
+            opcode: 'xpLevel',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('xp level', '经验等级')
+          }, {
+            opcode: 'inventoryFull',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('inventory full?', '背包已满?')
+          }, {
+            opcode: 'onGround',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('on ground?', '站在地面？')
           }, {
             opcode: 'posX',
             blockType: Scratch.BlockType.REPORTER,
@@ -258,51 +372,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
             blockType: Scratch.BlockType.REPORTER,
             text: T('selected slot', '当前槽位')
           }, {
-            opcode: 'nearestEntity',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('nearest entity distance', '最近实体距离')
-          }, {
-            opcode: 'nearestEntityX',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('nearest entity x', '最近实体 X')
-          }, {
-            opcode: 'nearestEntityY',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('nearest entity y', '最近实体 Y')
-          }, {
-            opcode: 'nearestEntityZ',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('nearest entity z', '最近实体 Z')
-          }, {
-            opcode: 'nearestHostile',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('nearest hostile distance', '最近敌对生物距离')
-          }, {
-            opcode: 'itemCount',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
-            arguments: {
-              ITEM: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'minecraft:stone'
-              }
-            }
-          },
-          // ---- 调试 ----
-          {
-            opcode: 'log',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('log [TEXT]', '输出日志 [TEXT]'),
-            arguments: {
-              TEXT: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'hello'
-              }
-            }
-          },
-          // ---- 物品与方块 ----
-
-          {
             opcode: 'heldItem',
             blockType: Scratch.BlockType.REPORTER,
             text: T('held item', '手持物品')
@@ -310,10 +379,32 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
             opcode: 'heldDurability',
             blockType: Scratch.BlockType.REPORTER,
             text: T('held durability %', '手持耐久百分比')
+          },
+          // ---- 查询 · 世界 ----
+          {
+            opcode: 'isDay',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('is daytime?', '是白天?')
           }, {
-            opcode: 'frontBlock',
+            opcode: 'dimension',
             blockType: Scratch.BlockType.REPORTER,
-            text: T('block at crosshair', '准星所指方块')
+            text: T('dimension', '当前维度')
+          }, {
+            opcode: 'biome',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('biome', '当前生物群系')
+          }, {
+            opcode: 'inWater',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('in water?', '在水中?')
+          }, {
+            opcode: 'inLava',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('in lava?', '在岩浆中?')
+          }, {
+            opcode: 'blockInFront',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: T('block in front?', '前方有方块？')
           }, {
             opcode: 'blockBelow',
             blockType: Scratch.BlockType.REPORTER,
@@ -337,33 +428,35 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }
             }
           }, {
-            opcode: 'isDay',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('is daytime?', '是白天?')
-          }, {
-            opcode: 'dimension',
+            opcode: 'frontBlock',
             blockType: Scratch.BlockType.REPORTER,
-            text: T('dimension', '当前维度')
+            text: T('block at crosshair', '准星所指方块')
+          },
+          // ---- 查询 · 实体 ----
+          {
+            opcode: 'nearestEntity',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('nearest entity distance', '最近实体距离')
           }, {
-            opcode: 'inWater',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('in water?', '在水中?')
+            opcode: 'nearestEntityX',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('nearest entity x', '最近实体 X')
           }, {
-            opcode: 'inLava',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('in lava?', '在岩浆中?')
+            opcode: 'nearestEntityY',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('nearest entity y', '最近实体 Y')
+          }, {
+            opcode: 'nearestEntityZ',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('nearest entity z', '最近实体 Z')
           }, {
             opcode: 'nearestEntityName',
             blockType: Scratch.BlockType.REPORTER,
             text: T('nearest entity name', '最近实体名称')
           }, {
-            opcode: 'xpLevel',
+            opcode: 'nearestHostile',
             blockType: Scratch.BlockType.REPORTER,
-            text: T('xp level', '经验等级')
-          }, {
-            opcode: 'inventoryFull',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('inventory full?', '背包已满?')
+            text: T('nearest hostile distance', '最近敌对生物距离')
           }, {
             opcode: 'entityCount',
             blockType: Scratch.BlockType.REPORTER,
@@ -374,50 +467,32 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
                 defaultValue: 'minecraft:zombie'
               }
             }
-          }, {
-            opcode: 'biome',
+          },
+          // ---- 运算与工具 ----
+          {
+            opcode: 'itemCount',
             blockType: Scratch.BlockType.REPORTER,
-            text: T('biome', '当前生物群系')
+            text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
+            arguments: {
+              ITEM: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'minecraft:stone'
+              }
+            }
           }, {
             opcode: 'ping',
             blockType: Scratch.BlockType.REPORTER,
             text: T('server ping (ms)', '服务端延迟(ms)')
-          },
-          // ---- 建造与界面 ----
-          {
-            opcode: 'placeBlock',
+          }, {
+            opcode: 'log',
             blockType: Scratch.BlockType.COMMAND,
-            text: T('place block at x:[X] y:[Y] z:[Z]', '在坐标放方块 x:[X] y:[Y] z:[Z]'),
+            text: T('log [TEXT]', '输出日志 [TEXT]'),
             arguments: {
-              X: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 0
-              },
-              Y: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 64
-              },
-              Z: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 0
+              TEXT: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'hello'
               }
             }
-          }, {
-            opcode: 'sleep',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('sleep in nearby bed', '睡附近的床')
-          }, {
-            opcode: 'breakWait',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('wait until block broken', '等待方块被挖破')
-          }, {
-            opcode: 'isMining',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: T('is mining', '正在挖掘')
-          }, {
-            opcode: 'miningProgress',
-            blockType: Scratch.BlockType.REPORTER,
-            text: T('mining progress', '挖掘进度')
           }],
           menus: {
             mouseButton: {
@@ -431,6 +506,16 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }, {
                 text: T('middle', '中键'),
                 value: 'middle'
+              }]
+            },
+            slotButton: {
+              acceptReporters: true,
+              items: [{
+                text: T('left', '左键'),
+                value: 'left'
+              }, {
+                text: T('right', '右键'),
+                value: 'right'
               }]
             },
             keyState: {
@@ -447,21 +532,11 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         };
       }
 
-      // ---- 动作 ----
+      // ---- 输入 ----
     }, {
       key: "key",
       value: function key(args) {
         this.preview('key ' + args.KEY + ' ' + args.STATE);
-      }
-    }, {
-      key: "tap",
-      value: function tap(args) {
-        this.preview('tap ' + args.KEY + ' x' + args.HOLD);
-      }
-    }, {
-      key: "respawn",
-      value: function respawn() {
-        this.preview('respawn');
       }
     }, {
       key: "mouse",
@@ -474,35 +549,17 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         this.preview('click ' + args.BUTTON);
       }
     }, {
-      key: "chat",
-      value: function chat(args) {
-        this.preview('chat ' + args.TEXT);
-      }
-    }, {
-      key: "command",
-      value: function command(args) {
-        this.preview('command ' + args.COMMAND);
+      key: "tap",
+      value: function tap(args) {
+        this.preview('tap ' + args.KEY + ' x' + args.HOLD);
       }
     }, {
       key: "stop",
       value: function stop() {
         this.preview('stop');
       }
-    }, {
-      key: "attackNearest",
-      value: function attackNearest() {
-        this.preview('attackNearest');
-      }
-    }, {
-      key: "attackNearestHostile",
-      value: function attackNearestHostile() {
-        this.preview('attackNearestHostile');
-      }
-    }, {
-      key: "openContainer",
-      value: function openContainer() {
-        this.preview('openContainer');
-      }
+
+      // ---- 移动与视角 ----
     }, {
       key: "moveToward",
       value: function moveToward(args) {
@@ -519,24 +576,110 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z);
       }
 
-      // ---- 查询（浏览器内返回占位值）----
+      // ---- 方块与挖掘 ----
     }, {
-      key: "blockInFront",
-      value: function blockInFront() {
-        this.preview('blockInFront');
+      key: "placeBlock",
+      value: function placeBlock(args) {
+        this.preview('placeBlock ' + args.X + ',' + args.Y + ',' + args.Z);
+      }
+    }, {
+      key: "breakWait",
+      value: function breakWait() {
+        this.preview('breakWait');
+      }
+    }, {
+      key: "isMining",
+      value: function isMining() {
         return false;
       }
     }, {
-      key: "onGround",
-      value: function onGround() {
-        this.preview('onGround');
-        return true;
+      key: "miningProgress",
+      value: function miningProgress() {
+        return 0;
       }
     }, {
-      key: "gte",
-      value: function gte(args) {
-        return Number(args.A) >= Number(args.B);
+      key: "sleep",
+      value: function sleep() {
+        this.preview('sleep');
       }
+
+      // ---- 战斗 ----
+    }, {
+      key: "attackNearest",
+      value: function attackNearest() {
+        this.preview('attackNearest');
+      }
+    }, {
+      key: "attackNearestHostile",
+      value: function attackNearestHostile() {
+        this.preview('attackNearestHostile');
+      }
+
+      // ---- 容器交互 ----
+    }, {
+      key: "openContainer",
+      value: function openContainer() {
+        this.preview('openContainer');
+      }
+    }, {
+      key: "openContainerAt",
+      value: function openContainerAt(args) {
+        this.preview('openContainerAt');
+      }
+    }, {
+      key: "containerSlots",
+      value: function containerSlots() {
+        return 0;
+      }
+    }, {
+      key: "slotItem",
+      value: function slotItem(args) {
+        return '';
+      }
+    }, {
+      key: "slotAmount",
+      value: function slotAmount(args) {
+        return 0;
+      }
+    }, {
+      key: "firstSlotOf",
+      value: function firstSlotOf(args) {
+        return -1;
+      }
+    }, {
+      key: "clickSlot",
+      value: function clickSlot(args) {
+        this.preview('clickSlot');
+      }
+    }, {
+      key: "quickMoveSlot",
+      value: function quickMoveSlot(args) {
+        this.preview('quickMoveSlot');
+      }
+    }, {
+      key: "closeContainer",
+      value: function closeContainer() {
+        this.preview('closeContainer');
+      }
+
+      // ---- 交互与通讯 ----
+    }, {
+      key: "chat",
+      value: function chat(args) {
+        this.preview('chat ' + args.TEXT);
+      }
+    }, {
+      key: "command",
+      value: function command(args) {
+        this.preview('command ' + args.COMMAND);
+      }
+    }, {
+      key: "respawn",
+      value: function respawn() {
+        this.preview('respawn');
+      }
+
+      // ---- 查询 · 玩家 ----
     }, {
       key: "health",
       value: function health() {
@@ -546,6 +689,22 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
       key: "food",
       value: function food() {
         return 20;
+      }
+    }, {
+      key: "xpLevel",
+      value: function xpLevel() {
+        return 0;
+      }
+    }, {
+      key: "inventoryFull",
+      value: function inventoryFull() {
+        return false;
+      }
+    }, {
+      key: "onGround",
+      value: function onGround() {
+        this.preview('onGround');
+        return true;
       }
     }, {
       key: "posX",
@@ -568,6 +727,67 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         return 1;
       }
     }, {
+      key: "heldItem",
+      value: function heldItem() {
+        return 'minecraft:air';
+      }
+    }, {
+      key: "heldDurability",
+      value: function heldDurability() {
+        return 100;
+      }
+
+      // ---- 查询 · 世界 ----
+    }, {
+      key: "isDay",
+      value: function isDay() {
+        return true;
+      }
+    }, {
+      key: "dimension",
+      value: function dimension() {
+        return 'minecraft:overworld';
+      }
+    }, {
+      key: "biome",
+      value: function biome() {
+        return 'minecraft:plains';
+      }
+    }, {
+      key: "inWater",
+      value: function inWater() {
+        return false;
+      }
+    }, {
+      key: "inLava",
+      value: function inLava() {
+        return false;
+      }
+    }, {
+      key: "blockInFront",
+      value: function blockInFront() {
+        this.preview('blockInFront');
+        return false;
+      }
+    }, {
+      key: "blockBelow",
+      value: function blockBelow() {
+        return 'minecraft:grass_block';
+      }
+    }, {
+      key: "blockAt",
+      value: function blockAt(args) {
+        this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z);
+        return 'minecraft:air';
+      }
+    }, {
+      key: "frontBlock",
+      value: function frontBlock() {
+        return 'minecraft:air';
+      }
+
+      // ---- 查询 · 实体 ----
+    }, {
       key: "nearestEntity",
       value: function nearestEntity() {
         return -1;
@@ -588,116 +808,30 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         return 0;
       }
     }, {
-      key: "nearestHostile",
-      value: function nearestHostile() {
-        return -1;
-      }
-    }, {
-      key: "itemCount",
-      value: function itemCount() {
-        return 0;
-      }
-
-      // ---- 物品与方块（浏览器内返回占位值）----
-    }, {
-      key: "heldItem",
-      value: function heldItem() {
-        return 'minecraft:air';
-      }
-    }, {
-      key: "heldDurability",
-      value: function heldDurability() {
-        return 100;
-      }
-    }, {
-      key: "frontBlock",
-      value: function frontBlock() {
-        return 'minecraft:air';
-      }
-    }, {
-      key: "blockBelow",
-      value: function blockBelow() {
-        return 'minecraft:grass_block';
-      }
-    }, {
-      key: "blockAt",
-      value: function blockAt(args) {
-        this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z);
-        return 'minecraft:air';
-      }
-    }, {
-      key: "isDay",
-      value: function isDay() {
-        return true;
-      }
-    }, {
-      key: "dimension",
-      value: function dimension() {
-        return 'minecraft:overworld';
-      }
-    }, {
-      key: "inWater",
-      value: function inWater() {
-        return false;
-      }
-    }, {
-      key: "inLava",
-      value: function inLava() {
-        return false;
-      }
-    }, {
       key: "nearestEntityName",
       value: function nearestEntityName() {
         return '';
       }
     }, {
-      key: "xpLevel",
-      value: function xpLevel() {
-        return 0;
-      }
-    }, {
-      key: "inventoryFull",
-      value: function inventoryFull() {
-        return false;
+      key: "nearestHostile",
+      value: function nearestHostile() {
+        return -1;
       }
     }, {
       key: "entityCount",
       value: function entityCount() {
         return 0;
       }
+
+      // ---- 运算与工具 ----
     }, {
-      key: "biome",
-      value: function biome() {
-        return 'minecraft:plains';
+      key: "itemCount",
+      value: function itemCount() {
+        return 0;
       }
     }, {
       key: "ping",
       value: function ping() {
-        return 0;
-      }
-    }, {
-      key: "placeBlock",
-      value: function placeBlock(args) {
-        this.preview('placeBlock ' + args.X + ',' + args.Y + ',' + args.Z);
-      }
-    }, {
-      key: "sleep",
-      value: function sleep() {
-        this.preview('sleep');
-      }
-    }, {
-      key: "breakWait",
-      value: function breakWait() {
-        this.preview('breakWait');
-      }
-    }, {
-      key: "isMining",
-      value: function isMining() {
-        return false;
-      }
-    }, {
-      key: "miningProgress",
-      value: function miningProgress() {
         return 0;
       }
     }, {

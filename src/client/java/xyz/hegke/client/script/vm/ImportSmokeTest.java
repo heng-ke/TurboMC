@@ -48,7 +48,7 @@ public final class ImportSmokeTest {
 				+ "，脚本 " + parsed.scripts().size() + " 份");
 		System.out.print(Sb3Importer.describe(parsed.scripts()));
 		if (!parsed.unsupported().isEmpty()) {
-			System.out.println("[import] 无编辑器形态的积木: " + parsed.unsupported());
+			System.out.println("[import] 查看器不认识的积木: " + parsed.unsupported());
 		}
 		boolean viewable = parsed.unsupported().isEmpty();
 		boolean hasCustom = parsed.scripts().stream().anyMatch(item -> contains(item.hat, "procedures.definition"));

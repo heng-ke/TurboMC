@@ -12,6 +12,7 @@ import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.hegke.client.script.action.WorldQueries;
 import xyz.hegke.client.script.runtime.ScriptContext;
 
 import java.io.IOException;
@@ -192,6 +193,9 @@ public final class RhinoVm {
 			return;
 		}
 		ScriptContext context = new ScriptContext(client);
+		// 「等待方块被挖破」靠这个探针判定。不注入的话内核会走默认实现（直接放弃），
+		// 积木会变成立刻通过——看起来没报错，实际一秒都没等。
+		context.setBreakProbe(WorldQueries::probeBreak);
 		ScriptBridge.setContext(context);
 		if (warmupFrames > 0) {
 			warmupFrames--;
@@ -283,20 +287,6 @@ public final class RhinoVm {
 			}
 		}
 		return 0;
-	}
-
-	public synchronized void shutdown() {
-		if (!ready) {
-			return;
-		}
-		Context cx = factory.enterContext();
-		try {
-			stopAll(cx);
-		} finally {
-			Context.exit();
-		}
-		scope = null;
-		ready = false;
 	}
 
 	// ---- 内部 ----

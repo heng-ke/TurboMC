@@ -15,8 +15,10 @@ import java.util.Set;
  * <p>原版每 tick 会用物理按键状态刷新 {@link KeyBinding}，单纯 {@code setPressed} 会被覆盖，
  * 因此由 {@code KeyBindingMixin} 从读取端接管：只要本表登记了某个键，就按本表的值返回。</p>
  *
- * <p><b>按键按实例归属</b>：脚本结束时由调度器调用 {@link #releaseAll(Object)} 收回自己按下的键。
- * 否则「按下 W」后脚本崩溃或正常结束，角色会一直往前走，直到玩家手动停引擎。</p>
+ * <p><b>松手有两条路径</b>：限时按键（{@code ticks >= 0}）由每 tick 的 {@link #tick()} 到期松开；
+ * 「一直按住」的键只能靠 {@link #releaseEveryKey()}，由引擎停止与切换工程时调用。
+ * 少了后者，「按下 W」之后关掉引擎，角色会一直往前走——因为 {@code KeyBindingMixin} 只看本表，
+ * 不看引擎是否在运行。</p>
  *
  * <p>同一个键被多个脚本按下时用引用计数，全部释放才真正松开。
  * {@code ticks} 为负表示一直按住，非负表示剩余 tick（用于「吃食物」这类持续动作）。</p>
@@ -26,7 +28,7 @@ public final class ScriptKeys {
 	}
 
 	private static final Map<KeyBinding, Hold> HELD = new LinkedHashMap<>();
-	/** 实例 → 它按下的键，用于实例结束时精确回收。 */
+	/** owner → 它按下的键。**当前恒为空**：动作层传进来的归属标识一直是 {@code null}。 */
 	private static final Map<Object, Set<KeyBinding>> OWNED = new HashMap<>();
 
 	private ScriptKeys() {
@@ -73,7 +75,13 @@ public final class ScriptKeys {
 	}
 
 	/**
-	 * 收回某个实例按下的全部键。实例结束或崩溃时调用。
+	 * 收回某个 owner 按下的全部键。
+	 *
+	 * <p>当前没有调用方，也命中不了任何条目——动作层传的归属标识恒为 {@code null}
+	 * （见 {@code ScriptContext#currentInstance()}），而 {@link #hold} 对 null 不登记归属。
+	 * 保留它是为了将来能从 JS 侧带线程 id 进来，实现「单个脚本结束时只松自己按的键」。</p>
+	 *
+	 * <p>现在真正起作用的是 {@link #releaseEveryKey()}。</p>
 	 */
 	public static void releaseAll(Object owner) {
 		Set<KeyBinding> keys = OWNED.remove(owner);
@@ -140,7 +148,7 @@ public final class ScriptKeys {
 		}
 	}
 
-	/** 键盘表里已不再持有该键，把它从所有实例的归属列表中摘掉。 */
+	/** 键盘表里已不再持有该键，把它从各 owner 的归属列表中摘掉（归属表当前为空，等于空转）。 */
 	private static void forget(KeyBinding key) {
 		OWNED.values().forEach(keys -> keys.remove(key));
 		OWNED.entrySet().removeIf(entry -> entry.getValue().isEmpty());

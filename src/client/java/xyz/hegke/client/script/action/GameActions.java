@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.hegke.client.config.HkScriptConfig;
 import xyz.hegke.client.config.KeyNames;
-import xyz.hegke.client.script.ScriptEngine;
 import xyz.hegke.client.script.runtime.ScriptContext;
 import xyz.hegke.client.script.runtime.Values;
 
@@ -97,7 +96,6 @@ public final class GameActions {
 		NativeRegistry.action("action.look", GameActions::look);
 		NativeRegistry.action("action.look_at", GameActions::lookAt);
 		NativeRegistry.action("debug.log", GameActions::log);
-		NativeRegistry.action("action.broadcast", GameActions::broadcast);
 		NativeRegistry.action("action.chat", GameActions::chat);
 		NativeRegistry.action("action.command", GameActions::command);
 		NativeRegistry.action("action.tap", GameActions::tap);
@@ -305,10 +303,6 @@ public final class GameActions {
 
 	private static void log(ScriptContext ctx, Object[] args) {
 		LOG.info("{}", Values.asString(args[0]));
-	}
-
-	private static void broadcast(ScriptContext ctx, Object[] args) {
-		ScriptEngine.get().broadcast(Values.asString(args[0]));
 	}
 
 	/**

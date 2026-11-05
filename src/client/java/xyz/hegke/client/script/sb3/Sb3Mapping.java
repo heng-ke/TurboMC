@@ -53,7 +53,6 @@ public final class Sb3Mapping {
 			Map.entry("operator_length", "operator.length"),
 			Map.entry("operator_contains", "operator.contains"),
 			Map.entry("operator_mathop", "operator.mathop"),
-			Map.entry("hkscript_gte", "operator.gte"),
 
 			// ---- 变量 ----
 			Map.entry("data_setvariableto", "data.set"),
@@ -119,6 +118,14 @@ public final class Sb3Mapping {
 			Map.entry("hkscript_attackNearest", "action.attack_nearest"),
 			Map.entry("hkscript_attackNearestHostile", "action.attack_nearest_hostile"),
 			Map.entry("hkscript_openContainer", "action.open_container"),
+			Map.entry("hkscript_openContainerAt", "action.open_container_at"),
+			Map.entry("hkscript_clickSlot", "action.click_slot"),
+			Map.entry("hkscript_quickMoveSlot", "action.quick_move_slot"),
+			Map.entry("hkscript_closeContainer", "action.close_container"),
+			Map.entry("hkscript_containerSlots", "world.container_slots"),
+			Map.entry("hkscript_slotItem", "world.slot_item"),
+			Map.entry("hkscript_slotAmount", "world.slot_amount"),
+			Map.entry("hkscript_firstSlotOf", "world.first_slot_of"),
 			Map.entry("hkscript_moveToward", "action.move_toward"),
 			Map.entry("hkscript_look", "action.look"),
 			Map.entry("hkscript_lookAt", "action.look_at"),
@@ -156,57 +163,8 @@ public final class Sb3Mapping {
 		return TYPES.get(opcode);
 	}
 
-	/**
-	 * 内部积木类型 → sb3 opcode 的反向查表。
-	 *
-	 * <p><b>当前没有调用方</b>：脚本只从 sb3 导入到查看器，没有「写回 sb3」的路径。
-	 * 保留它是为了映射表成对完整——将来若需要导出工程，可直接复用，不必重做一张表。
-	 * 若确认不再需要，可连同 {@code PREFERRED} 与 {@code REVERSE} 一起删除。</p>
-	 *
-	 * <p>一对多的情况由 {@code PREFERRED} 钉死（如 {@code data.set} 固定反查到
-	 * {@code data_setvariableto}），避免依赖 Map 的迭代顺序。</p>
-	 */
-	public static String opcodeOf(String type) {
-		String preferred = PREFERRED.get(type);
-		return preferred != null ? preferred : REVERSE.get(type);
-	}
-
-	/**
-	 * 一个内部类型对应多个 opcode 时的首选。
-	 *
-	 * <p>{@code Map.ofEntries} 的迭代顺序不保证，取首个会随机落到近义积木上。
-	 * 目前映射表已做到一对一（「增加变量」「思考」都有独立类型），这里留作兜底。</p>
-	 */
-	private static final Map<String, String> PREFERRED = Map.of(
-			"data.set", "data_setvariableto",
-			"data.change", "data_changevariableby",
-			"debug.say", "looks_say",
-			"debug.say_for", "looks_sayforsecs",
-			"debug.think", "looks_think",
-			"debug.think_for", "looks_thinkforsecs");
-
-	private static final Map<String, String> REVERSE = buildReverse();
-
-	private static Map<String, String> buildReverse() {
-		Map<String, String> reverse = new java.util.LinkedHashMap<>();
-		TYPES.forEach((opcode, type) -> reverse.putIfAbsent(type, opcode));
-		PREFERRED.forEach(reverse::put);
-		return Map.copyOf(reverse);
-	}
-
 	public static boolean isSupported(String opcode) {
 		return TYPES.containsKey(opcode);
-	}
-
-	/**
-	 * Scratch 的帽子积木：出现在工作区顶部的脚本入口。扩展定义的事件积木同样视作帽子。
-	 */
-	public static boolean isHat(String opcode) {
-		if (opcode == null) {
-			return false;
-		}
-		return opcode.startsWith("event_when") || opcode.equals("hkscript_whenDamaged")
-				|| opcode.equals("hkscript_whenChat") || opcode.equals("hkscript_whenDeath");
 	}
 
 	/**

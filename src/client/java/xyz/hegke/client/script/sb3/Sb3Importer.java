@@ -24,13 +24,13 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * sb3 → 编辑器积木树。
+ * sb3 → 可浏览的积木树。
  *
  * <p>导入后每个顶层积木链变成一份 {@link ScriptDefinition}，供列表展开与只读查看。
  * 脚本的编写与修改由 TurboWarp 负责，这里只做「看得见」。</p>
  *
- * <p>只还原「积木」这一层：造型、声音、角色属性不进入编辑器（编辑器也不维护它们），
- * 原始 sb3 会另行备份，需要时仍可整体运行。</p>
+ * <p>只还原「积木」这一层：造型、声音、角色属性不进入查看器（查看器也不维护它们），
+ * 它们只影响 TurboWarp 里的编辑体验，对执行没有作用。</p>
  */
 public final class Sb3Importer {
 	/** 导入结果。{@code error} 为 {@code null} 表示成功。 */
@@ -63,7 +63,7 @@ public final class Sb3Importer {
 
 	/** 解析 project.json 的根对象。 */
 	public static Result parse(JsonElement root) {
-		// 判断「积木是否有编辑器形态」要查注册表，先确保已装载
+		// 判断「积木是否有查看器形态」要查注册表，先确保已装载
 		BlockRegistry.bootstrapOnce();
 		if (root == null || !root.isJsonObject()) {
 			return new Result(List.of(), List.of(), "project.json 不是对象");
@@ -168,7 +168,7 @@ public final class Sb3Importer {
 	}
 
 	/**
-	 * 把 sb3 的一个积木（含 next 链、分支、输入）还原成编辑器节点。
+	 * 把 sb3 的一个积木（含 next 链、分支、输入）还原成积木树的节点。
 	 */
 	private static BlockNode convert(JsonObject blocks, String id, Scope scope,
 			List<String> unsupported, Set<String> visiting) {
@@ -238,7 +238,7 @@ public final class Sb3Importer {
 					}
 					continue;
 				}
-				// sb3 用秒，编辑器用 tick
+				// sb3 用秒，界面按 tick 显示
 				if ("TICKS".equals(internal) && !slot.hasBlock()) {
 					slot = Slot.literal(scaleToTicks(slot.literal));
 				}
@@ -286,7 +286,7 @@ public final class Sb3Importer {
 
 	/**
 	 * sb3 里变量/列表作为输入时是 {@code [12, 名字, ID]}（列表为 13），
-	 * 必须还原成「读取变量」积木，否则编辑器里会把变量名当成一段文字。
+	 * 必须还原成「读取变量」积木，否则查看器里会把变量名当成一段文字。
 	 */
 	private static Slot variableSlot(JsonElement element, Scope scope) {
 		if (element == null || !element.isJsonArray()) {
@@ -311,7 +311,7 @@ public final class Sb3Importer {
 			name = array.get(1).getAsString();
 		}
 		if (kind == 13) {
-			// 列表整体作为值：编辑器用「列表内容」读取（LIST 是文本参数，不是字段）
+			// 列表整体作为值：查看器用「列表内容」读取（LIST 是文本参数，不是字段）
 			BlockNode contents = BlockNode.of("list.contents").input("LIST", name);
 			return Slot.of(contents);
 		}
@@ -321,7 +321,7 @@ public final class Sb3Importer {
 		return Slot.of(get);
 	}
 
-	/** opcode → 编辑器积木类型，处理少数一对多的情形。 */
+	/** opcode → 查看器的积木类型，处理少数一对多的情形。 */
 	private static String editorType(String opcode, JsonObject block) {
 		if ("control_stop".equals(opcode)) {
 			String option = fieldValue(block, "STOP_OPTION");
@@ -338,7 +338,7 @@ public final class Sb3Importer {
 
 	/**
 	 * 复用 {@link Sb3Mapping} 的输入名映射；自定义积木的 {@code arg0..argN} 额外还原成
-	 * 编辑器习惯的 {@code P1..Pn}。
+	 * 查看器习惯的 {@code P1..Pn}。
 	 */
 	private static String reverseInputName(String opcode, String scratchName) {
 		if (scratchName.startsWith("arg")) {

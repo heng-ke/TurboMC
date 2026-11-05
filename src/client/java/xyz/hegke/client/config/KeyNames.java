@@ -24,13 +24,6 @@ public final class KeyNames {
 	}
 
 	/**
-	 * 名字是否指向 Minecraft 的某个动作（如 {@code key.chat}），而不是物理键。
-	 */
-	public static boolean isActionId(String raw) {
-		return raw != null && raw.trim().toLowerCase(Locale.ROOT).startsWith(KEY_PREFIX);
-	}
-
-	/**
 	 * 物理键名 → 翻译键，如 {@code t} → {@code key.keyboard.t}。
 	 *
 	 * <p>同时接受几个常用别名，省得用户去查 {@code left.shift} 这种全名。</p>
@@ -85,11 +78,4 @@ public final class KeyNames {
 		return translationKey;
 	}
 
-	/**
-	 * 用于界面展示的短名：{@code key.keyboard.left.shift} → {@code left shift}。
-	 */
-	public static String display(String translationKey) {
-		String canonical = canonical(translationKey);
-		return canonical.replace('.', ' ');
-	}
 }

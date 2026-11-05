@@ -10,26 +10,6 @@ public final class Values {
 	private Values() {
 	}
 
-	/**
-	 * 解析字面量：布尔与数字会被识别，其余保持字符串。
-	 */
-	public static Object parseLiteral(String literal) {
-		if (literal == null) {
-			return 0d;
-		}
-		String text = literal.trim();
-		if (text.equalsIgnoreCase("true")) {
-			return Boolean.TRUE;
-		}
-		if (text.equalsIgnoreCase("false")) {
-			return Boolean.FALSE;
-		}
-		try {
-			return Double.parseDouble(text);
-		} catch (NumberFormatException ignored) {
-			return literal;
-		}
-	}
 
 	public static double asNumber(Object value) {
 		return ScratchCast.toNumber(value);

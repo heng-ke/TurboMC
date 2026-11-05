@@ -67,9 +67,6 @@ final class Blocks {
 		regT("operator.eq", "operator", BlockShape.BOOLEAN, "{A} = {B}",
 				BlockParam.number("A", "0"),
 				BlockParam.number("B", "0"));
-		regT("operator.gte", "operator", BlockShape.BOOLEAN, "{A} ≥ {B}",
-				BlockParam.number("A", "0"),
-				BlockParam.number("B", "0"));
 		regT("operator.add", "operator", BlockShape.REPORTER, "{A} + {B}",
 				BlockParam.number("A", "0"),
 				BlockParam.number("B", "0"));
@@ -170,6 +167,13 @@ final class Blocks {
 		reg("world.pos_y", "world", BlockShape.REPORTER);
 		reg("world.pos_z", "world", BlockShape.REPORTER);
 		reg("world.selected_slot", "world", BlockShape.REPORTER);
+		reg("world.container_slots", "world", BlockShape.REPORTER);
+		regT("world.slot_item", "world", BlockShape.REPORTER, "槽位 {INDEX} 的物品",
+				BlockParam.number("INDEX", "0"));
+		regT("world.slot_amount", "world", BlockShape.REPORTER, "槽位 {INDEX} 的数量",
+				BlockParam.number("INDEX", "0"));
+		regT("world.first_slot_of", "world", BlockShape.REPORTER, "第一个装着 {ITEM} 的槽位",
+				BlockParam.text("ITEM", "minecraft:iron_ore"));
 		reg("world.nearest_entity", "world", BlockShape.REPORTER);
 		reg("world.nearest_entity_x", "world", BlockShape.REPORTER);
 		reg("world.nearest_entity_y", "world", BlockShape.REPORTER);
@@ -210,6 +214,16 @@ final class Blocks {
 		reg("action.attack_nearest", "action", BlockShape.STACK);
 		reg("action.attack_nearest_hostile", "action", BlockShape.STACK);
 		reg("action.open_container", "action", BlockShape.STACK);
+		regT("action.open_container_at", "action", BlockShape.STACK, "打开容器 x:{X} y:{Y} z:{Z}",
+				BlockParam.number("X", "0"),
+				BlockParam.number("Y", "64"),
+				BlockParam.number("Z", "0"));
+		regT("action.click_slot", "action", BlockShape.STACK, "点击槽位 {INDEX} 用 {BUTTON}",
+				BlockParam.number("INDEX", "0"),
+				BlockParam.text("BUTTON", "left"));
+		regT("action.quick_move_slot", "action", BlockShape.STACK, "快速移动槽位 {INDEX}",
+				BlockParam.number("INDEX", "0"));
+		regT("action.close_container", "action", BlockShape.STACK, "关闭界面");
 		regT("action.move_toward", "action", BlockShape.STACK, "走向 ({X}, {Z})",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Z", "0"));

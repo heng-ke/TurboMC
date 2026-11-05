@@ -23,8 +23,12 @@
 
 ## 能做什么
 
-积木覆盖移动、挖掘、放置、攻击、使用物品、聊天与命令，以及一批世界查询
+积木覆盖移动、挖掘、放置、攻击、聊天与命令、容器操作，以及一批世界查询
 （方块、实体、时间、坐标等）。完整清单见 `turbowarp/mapping-report.md`。
+
+**容器操作**可以完成自动熔炼、分类存储这类任务：打开箱子或熔炉、读某个槽位装的是什么、
+按物品名定位槽位、点击与 Shift 快速移动、关闭界面。注意点击是异步的，发包后要等一 tick
+再读状态。
 
 脚本的「说 / 思考」会显示在 HUD 上——这两个是 scratch-vm 的原生积木，游戏内没有
 渲染出口，HUD 是它们唯一的表达通道。
@@ -50,9 +54,9 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ## 文档
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 架构、数据流、必须知道的约束
-- [docs/README.md](docs/README.md) — 文档索引（含历史报告归档说明）
-- [turbowarp/README.md](turbowarp/README.md) — 扩展加载步骤
-- [turbowarp/mapping-report.md](turbowarp/mapping-report.md) — 积木与 opcode 对应表
+- [docs/README.md](docs/README.md) — 文档索引
+- [turbowarp/README.md](turbowarp/README.md) — 扩展加载步骤与积木清单
+- [turbowarp/mapping-report.md](turbowarp/mapping-report.md) — 积木与 opcode 对应表（由代码生成）
 
 ## 许可
 

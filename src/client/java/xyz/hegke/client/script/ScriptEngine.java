@@ -4,12 +4,10 @@ import net.minecraft.client.MinecraftClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.hegke.client.config.HkScriptConfig;
-import xyz.hegke.client.script.action.ListFunctions;
 import xyz.hegke.client.script.action.NativeRegistry;
 import xyz.hegke.client.script.action.ScriptKeys;
 import xyz.hegke.client.script.block.BlockRegistry;
 import xyz.hegke.client.script.node.BlockNode;
-import xyz.hegke.client.script.runtime.ScratchClock;
 import xyz.hegke.client.script.sb3.Sb3Importer;
 import xyz.hegke.client.script.store.PackStore;
 import xyz.hegke.client.script.store.ScriptDefinition;
@@ -102,9 +100,6 @@ public final class ScriptEngine {
 
 	private void start() {
 		running = true;
-		ListFunctions.clearAll();
-		// 计时器归零，相当于 Scratch 点绿旗
-		ScratchClock.resetTimer();
 
 		ScriptPack pack = PackStore.get().activePack();
 		if (pack == null) {
@@ -171,6 +166,9 @@ public final class ScriptEngine {
 	private void stop(String reason) {
 		running = false;
 		scriptCount = 0;
+		// 必须在这里松手：脚本按住的键由 KeyBindingMixin 从读取端接管，只要表里还登记着
+		// 就恒返回 true。引擎停掉后没人再来松，角色会一直往前走。
+		ScriptKeys.releaseEveryKey();
 		LOG.info("[script] 已停止：{}", reason);
 	}
 
@@ -210,11 +208,6 @@ public final class ScriptEngine {
 		RhinoVm.get().startChatHat(message);
 	}
 
-	/** 广播由 VM 内部处理（{@code event_broadcast} 积木），这里保留空实现兼容旧调用点。 */
-	public void broadcast(String message) {
-		// no-op：广播积木已由 VM 执行
-	}
-
 	public Set<String> triggerKeys() {
 		return cachedTriggerKeys;
 	}
@@ -224,6 +217,8 @@ public final class ScriptEngine {
 		running = false;
 		halted = false;
 		healthy = true;
+		// 换工程等于上一批线程全部消失，它们按下的键同样没人来松
+		ScriptKeys.releaseEveryKey();
 	}
 
 	public boolean isRunning() {

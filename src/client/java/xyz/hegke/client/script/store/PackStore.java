@@ -74,10 +74,6 @@ public final class PackStore {
 		return lastMessage;
 	}
 
-	public void clearMessage() {
-		lastMessage = "";
-	}
-
 	public void load() {
 		if (loaded) {
 			return;

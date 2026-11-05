@@ -18,7 +18,13 @@ import java.util.function.Supplier;
 public final class ScriptContext {
 	private final Object handle;
 	private final Map<String, Object> cache = new HashMap<>();
-	/** 当前正在执行 step 的实例，供动作层归属按键等资源。 */
+	/**
+	 * 当前脚本的归属标识，动作层用它给按键等资源记归属。
+	 *
+	 * <p><b>目前恒为 {@code null}</b>：scratch-vm 里没有稳定的「脚本实例」句柄可以传出来
+	 * （线程 id 会复用），所以所有按键都记在 null 这一位上。后果是「两个脚本按同一个键、
+	 * 一个松手会连带松开另一个」，单脚本场景无影响。要做精确归属，得从 JS 侧把线程 id 带进桥。</p>
+	 */
 	private Object currentInstance;
 	/** 挖掘等待：由引擎注入，内核只透传宿主目标，不依赖任何 Minecraft 类型。 */
 	private BreakProbe breakProbe = (context, state) -> new BreakResult(state, BreakResult.GIVE_UP);

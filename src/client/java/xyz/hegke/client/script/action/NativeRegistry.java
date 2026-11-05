@@ -48,9 +48,7 @@ public final class NativeRegistry {
 		}
 		bootstrapped = true;
 		GameActions.registerAll();
+		ContainerActions.registerAll();
 		WorldQueries.registerAll();
-		MathFunctions.registerAll();
-		SensingActions.registerAll();
-		ListFunctions.registerAll();
 	}
 }

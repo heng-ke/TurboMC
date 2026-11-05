@@ -9,7 +9,7 @@ import net.minecraft.text.Text;
 import java.util.function.Consumer;
 
 /**
- * 通用单行文本输入屏（重命名、命名新脚本等）。
+ * 通用单行文本输入屏。目前只有一个用途：给脚本包改名。
  */
 public class TextInputScreen extends Screen {
 	private final Screen parent;
