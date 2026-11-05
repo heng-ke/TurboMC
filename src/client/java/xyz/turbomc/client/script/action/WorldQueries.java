@@ -88,6 +88,10 @@ public final class WorldQueries {
 	 */
 	public static ScriptContext.BreakResult probeBreak(ScriptContext ctx, Object state) {
 		MinecraftClient client = client(ctx);
+		if (client == null) {
+			// 无客户端（无头 VM 冒烟）时无从判定，保持等待交给上限超时
+			return new ScriptContext.BreakResult(state, ScriptContext.BreakResult.WAITING);
+		}
 		if (client.player == null || client.world == null) {
 			return new ScriptContext.BreakResult(null, ScriptContext.BreakResult.GIVE_UP);
 		}

@@ -43,18 +43,18 @@ public final class VmSmokeTest {
 		boolean hatMode = args.length > 1 && "hat".equals(args[1]);
 		boolean blockMode = args.length > 1 && "block".equals(args[1]);
 		if (blockMode) {
-			// 阻塞动作：sleep 应让 score 在约 40 帧后才被置 1
+			// 条件等待：「等待方块被挖破」在无客户端时无法判定，应挂起到 200 帧上限才放行
 			vm.greenFlag();
 			int hitFrame = -1;
-			int frames = 120;
+			int frames = 260;
 			for (int i = 0; i < frames; i++) {
 				vm.tick(null);
 				if (hitFrame < 0 && "1".equals(String.valueOf(vm.getVariable("score")))) {
 					hitFrame = i;
 				}
 			}
-			System.out.println("[smoke] score 在第 " + hitFrame + " 帧变为 1（期望约 40）");
-			boolean blockOk = hitFrame >= 30 && hitFrame <= 50;
+			System.out.println("[smoke] score 在第 " + hitFrame + " 帧变为 1（期望约 200）");
+			boolean blockOk = hitFrame >= 190 && hitFrame <= 215;
 			System.out.println(blockOk ? "BLOCK SMOKE PASS" : "BLOCK SMOKE FAIL");
 			System.exit(blockOk ? 0 : 1);
 			return;

@@ -7,7 +7,6 @@
 
 | 积木 | 内部类型 | 说明 |
 |---|---|---|
-| 打开最近容器 | `action.open_container` | ±4 格内最近的容器 |
 | 打开坐标处的容器 x/y/z | `action.open_container_at` | 精确指定；超过 5 格服务端会静默拒绝，因此提前告警 |
 | 界面槽位数 | `world.container_slots` | 没有界面时为 0，可用于判断「到底打开了没有」 |
 | 槽位 [i] 的物品 | `world.slot_item` | 返回注册名 `minecraft:iron_ore`；空槽返回空串 |

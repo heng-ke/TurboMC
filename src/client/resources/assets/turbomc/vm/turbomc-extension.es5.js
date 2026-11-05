@@ -84,22 +84,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
               }
             }
           }, {
-            opcode: 'mouse',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('mouse [BUTTON] [STATE]', '鼠标 [BUTTON] [STATE]'),
-            arguments: {
-              BUTTON: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'left',
-                menu: 'mouseButton'
-              },
-              STATE: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: 'down',
-                menu: 'keyState'
-              }
-            }
-          }, {
             opcode: 'click',
             blockType: Scratch.BlockType.COMMAND,
             text: T('click [BUTTON]', '点击 [BUTTON]'),
@@ -179,24 +163,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
           },
           // ---- 方块与挖掘 ----
           {
-            opcode: 'placeBlock',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('place block at x:[X] y:[Y] z:[Z]', '在坐标放方块 x:[X] y:[Y] z:[Z]'),
-            arguments: {
-              X: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 0
-              },
-              Y: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 64
-              },
-              Z: {
-                type: Scratch.ArgumentType.NUMBER,
-                defaultValue: 0
-              }
-            }
-          }, {
             opcode: 'breakWait',
             blockType: Scratch.BlockType.COMMAND,
             text: T('wait until block broken', '等待方块被挖破')
@@ -208,17 +174,9 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
             opcode: 'miningProgress',
             blockType: Scratch.BlockType.REPORTER,
             text: T('mining progress', '挖掘进度')
-          }, {
-            opcode: 'sleep',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('sleep in nearby bed', '睡附近的床')
           },
           // ---- 容器交互 ----
           {
-            opcode: 'openContainer',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('open nearest container', '打开最近容器')
-          }, {
             opcode: 'openContainerAt',
             blockType: Scratch.BlockType.COMMAND,
             text: T('open container at x:[X] y:[Y] z:[Z]', '打开坐标处的容器 x:[X] y:[Y] z:[Z]'),
@@ -531,11 +489,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
         this.preview('key ' + args.KEY + ' ' + args.STATE);
       }
     }, {
-      key: "mouse",
-      value: function mouse(args) {
-        this.preview('mouse ' + args.BUTTON + ' ' + args.STATE);
-      }
-    }, {
       key: "click",
       value: function click(args) {
         this.preview('click ' + args.BUTTON);
@@ -570,11 +523,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
 
       // ---- 方块与挖掘 ----
     }, {
-      key: "placeBlock",
-      value: function placeBlock(args) {
-        this.preview('placeBlock ' + args.X + ',' + args.Y + ',' + args.Z);
-      }
-    }, {
       key: "breakWait",
       value: function breakWait() {
         this.preview('breakWait');
@@ -589,18 +537,8 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
       value: function miningProgress() {
         return 0;
       }
-    }, {
-      key: "sleep",
-      value: function sleep() {
-        this.preview('sleep');
-      }
 
       // ---- 容器交互 ----
-    }, {
-      key: "openContainer",
-      value: function openContainer() {
-        this.preview('openContainer');
-      }
     }, {
       key: "openContainerAt",
       value: function openContainerAt(args) {

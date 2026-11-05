@@ -208,10 +208,6 @@ final class Blocks {
 		regT("action.key", "action", BlockShape.STACK, "按键 {KEY} {PRESSED}",
 				BlockParam.fieldOrExpr("KEY", "w"),
 				BlockParam.bool("PRESSED", "true"));
-		regT("action.mouse", "action", BlockShape.STACK, "鼠标 {BUTTON} {PRESSED}",
-				BlockParam.fieldOption("BUTTON", "left", "left", "right", "middle"),
-				BlockParam.bool("PRESSED", "true"));
-		reg("action.open_container", "action", BlockShape.STACK);
 		regT("action.open_container_at", "action", BlockShape.STACK, "打开容器 x:{X} y:{Y} z:{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
@@ -238,11 +234,6 @@ final class Blocks {
 				BlockParam.fieldOption("BUTTON", "left", "left", "right", "middle"));
 		regT("action.break_wait", "action", BlockShape.C_SHAPE, "等待挖破当前方块（最多 {TICKS}）",
 				BlockParam.number("TICKS", "200"));
-		reg("action.sleep", "action", BlockShape.STACK);
-		regT("action.place_block", "action", BlockShape.STACK, "在 ({X}, {Y}, {Z}) 放方块",
-				BlockParam.number("X", "0"),
-				BlockParam.number("Y", "64"),
-				BlockParam.number("Z", "0"));
 		regT("action.look", "action", BlockShape.STACK, "视角转到 ({YAW}, {PITCH})",
 				BlockParam.number("YAW", "0"),
 				BlockParam.number("PITCH", "0"));

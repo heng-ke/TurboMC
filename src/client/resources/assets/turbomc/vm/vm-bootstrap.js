@@ -124,10 +124,6 @@ for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 			if (wait > 0) {
 				return __tmcWaitTicks(wait);
 			}
-			if (block.opcode === 'sleep') {
-				// 睡觉本身是一次长动作，Java 侧不声明等待时按 2 秒兜底
-				return __tmcWaitTicks(40);
-			}
 			return result;
 		};
 	})(__tmcInfo.blocks[__j]);

@@ -112,10 +112,8 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_chat", "action.chat"),
 			Map.entry("turbomc_command", "action.command"),
 			Map.entry("turbomc_tap", "action.tap"),
-			Map.entry("turbomc_mouse", "action.mouse"),
 			Map.entry("turbomc_click", "action.click"),
 			Map.entry("turbomc_respawn", "action.respawn"),
-			Map.entry("turbomc_openContainer", "action.open_container"),
 			Map.entry("turbomc_openContainerAt", "action.open_container_at"),
 			Map.entry("turbomc_clickSlot", "action.click_slot"),
 			Map.entry("turbomc_quickMoveSlot", "action.quick_move_slot"),
@@ -148,10 +146,6 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_breakWait", "action.break_wait"),
 			Map.entry("turbomc_isMining", "world.is_mining"),
 			Map.entry("turbomc_miningProgress", "world.mining_progress"),
-
-			// ---- 建造与界面（扩展）----
-			Map.entry("turbomc_placeBlock", "action.place_block"),
-			Map.entry("turbomc_sleep", "action.sleep"),
 
 			// ---- 调试（扩展）----
 			Map.entry("turbomc_log", "debug.log")

@@ -73,23 +73,6 @@
 					}
 					},
 					{
-						opcode: 'mouse',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('mouse [BUTTON] [STATE]', '鼠标 [BUTTON] [STATE]'),
-						arguments: {
-							BUTTON: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'left',
-								menu: 'mouseButton'
-					},
-							STATE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'down',
-								menu: 'keyState'
-					}
-					}
-					},
-					{
 						opcode: 'click',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('click [BUTTON]', '点击 [BUTTON]'),
@@ -148,16 +131,6 @@
 
 					// ---- 方块与挖掘 ----
 					{
-						opcode: 'placeBlock',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('place block at x:[X] y:[Y] z:[Z]', '在坐标放方块 x:[X] y:[Y] z:[Z]'),
-						arguments: {
-							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
-							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
-							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
-					},
-					{
 						opcode: 'breakWait',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('wait until block broken', '等待方块被挖破')
@@ -172,18 +145,7 @@
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('mining progress', '挖掘进度')
 					},
-					{
-						opcode: 'sleep',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('sleep in nearby bed', '睡附近的床')
-					},
-
 					// ---- 容器交互 ----
-					{
-						opcode: 'openContainer',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('open nearest container', '打开最近容器')
-					},
 					{
 						opcode: 'openContainerAt',
 						blockType: Scratch.BlockType.COMMAND,
@@ -470,7 +432,6 @@
 
 		// ---- 输入 ----
 		key(args) { this.preview('key ' + args.KEY + ' ' + args.STATE); }
-		mouse(args) { this.preview('mouse ' + args.BUTTON + ' ' + args.STATE); }
 		click(args) { this.preview('click ' + args.BUTTON); }
 		tap(args) { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }
 		stop() { this.preview('stop'); }
@@ -481,14 +442,11 @@
 		lookAt(args) { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }
 
 		// ---- 方块与挖掘 ----
-		placeBlock(args) { this.preview('placeBlock ' + args.X + ',' + args.Y + ',' + args.Z); }
 		breakWait() { this.preview('breakWait'); }
 		isMining() { return false; }
 		miningProgress() { return 0; }
-		sleep() { this.preview('sleep'); }
 
 		// ---- 容器交互 ----
-		openContainer() { this.preview('openContainer'); }
 		openContainerAt(args) { this.preview('openContainerAt'); }
 		containerSlots() { return 0; }
 		slotItem(args) { return ''; }

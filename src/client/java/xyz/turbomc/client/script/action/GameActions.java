@@ -1,18 +1,11 @@
 package xyz.turbomc.client.script.action;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.network.packet.c2s.play.ClientStatusC2SPacket;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,8 +79,6 @@ public final class GameActions {
 
 	public static void registerAll() {
 		NativeRegistry.action("action.key", GameActions::key);
-		NativeRegistry.action("action.mouse", GameActions::mouse);
-		NativeRegistry.action("action.open_container", GameActions::openContainer);
 		NativeRegistry.action("action.move_toward", GameActions::moveToward);
 		NativeRegistry.action("action.stop", GameActions::stop);
 		NativeRegistry.action("action.look", GameActions::look);
@@ -98,8 +89,6 @@ public final class GameActions {
 		NativeRegistry.action("action.tap", GameActions::tap);
 		NativeRegistry.action("action.click", GameActions::click);
 		NativeRegistry.action("action.respawn", GameActions::respawn);
-		NativeRegistry.action("action.sleep", GameActions::sleep);
-		NativeRegistry.action("action.place_block", GameActions::placeBlock);
 		NativeRegistry.action("action.break_wait", GameActions::breakWait);
 	}
 
@@ -113,40 +102,6 @@ public final class GameActions {
 	private static void breakWait(ScriptContext ctx, Object[] args) {
 		ctx.requestWaitUntil("break", 200);
 	}
-
-	/**
-	 * 打开附近最近的容器（箱子、熔炉等实现了 Inventory 的方块实体）。
-	 */
-	private static void openContainer(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.interactionManager == null || client.player == null || client.world == null) {
-			return;
-		}
-		ClientPlayerEntity player = client.player;
-		BlockPos origin = player.getBlockPos();
-		BlockPos best = null;
-		double bestDistance = Double.MAX_VALUE;
-
-		for (BlockPos pos : BlockPos.iterate(origin.add(-4, -2, -4), origin.add(4, 2, 4))) {
-			if (!(client.world.getBlockEntity(pos) instanceof Inventory)) {
-				continue;
-			}
-			double distance = player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-			if (distance < bestDistance) {
-				bestDistance = distance;
-				best = pos.toImmutable();
-			}
-		}
-		if (best == null) {
-			return;
-		}
-		Vec3d center = Vec3d.ofCenter(best);
-		player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, center);
-		client.interactionManager.interactBlock(player, Hand.MAIN_HAND,
-				new BlockHitResult(center, Direction.UP, best, false));
-		player.swingHand(Hand.MAIN_HAND);
-	}
-
 
 	/**
 	 * 朝坐标走一步：转向目标并按住前进键，进入 0.5 格内自动松手。
@@ -177,70 +132,6 @@ public final class GameActions {
 		releaseMovementKeys();
 	}
 
-
-
-
-	/**
-	 * 在指定坐标放置手持方块：目标必须是空气，从首个相邻固体面出手。
-	 *
-	 * <p>不做「能否放置」的预判，交给服务端校验——客户端预测放错只会回弹，不会刷物品。</p>
-	 */
-	private static void placeBlock(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.world == null || client.player == null || client.interactionManager == null) {
-			return;
-		}
-		BlockPos target = new BlockPos(
-				clampCoord(Values.asNumber(args[0])),
-				clampCoord(Values.asNumber(args[1])),
-				clampCoord(Values.asNumber(args[2])));
-		if (!client.world.getBlockState(target).isAir()) {
-			return;
-		}
-		for (Direction direction : Direction.values()) {
-			BlockPos neighbor = target.offset(direction);
-			if (client.world.getBlockState(neighbor).isAir()) {
-				continue;
-			}
-			Vec3d hitPos = Vec3d.ofCenter(neighbor);
-			client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, hitPos);
-			client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND,
-					new BlockHitResult(hitPos, direction.getOpposite(), neighbor, false));
-			client.player.swingHand(Hand.MAIN_HAND);
-			return;
-		}
-	}
-
-	/**
-	 * 右键附近最近的床。
-	 */
-	private static void sleep(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.world == null || client.player == null || client.interactionManager == null) {
-			return;
-		}
-		BlockPos origin = client.player.getBlockPos();
-		BlockPos best = null;
-		double bestDistance = Double.MAX_VALUE;
-		for (BlockPos pos : BlockPos.iterate(origin.add(-6, -2, -6), origin.add(6, 2, 6))) {
-			if (!client.world.getBlockState(pos).isIn(BlockTags.BEDS)) {
-				continue;
-			}
-			double distance = client.player.squaredDistanceTo(Vec3d.ofCenter(pos));
-			if (distance < bestDistance) {
-				bestDistance = distance;
-				best = pos.toImmutable();
-			}
-		}
-		if (best == null) {
-			return;
-		}
-		Vec3d center = Vec3d.ofCenter(best);
-		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, center);
-		client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND,
-				new BlockHitResult(center, Direction.UP, best, false));
-		client.player.swingHand(Hand.MAIN_HAND);
-	}
 
 
 
@@ -357,14 +248,6 @@ public final class GameActions {
 	 */
 	private static void key(ScriptContext ctx, Object[] args) {
 		applyKey(ctx, Values.asString(args[0]), Values.asBool(args[1]));
-	}
-
-	/**
-	 * 鼠标按键的按下 / 松开，参数是 {@code left} / {@code right} / {@code middle}。
-	 */
-	private static void mouse(ScriptContext ctx, Object[] args) {
-		applyKey(ctx, "mouse." + Values.asString(args[0]).toLowerCase(Locale.ROOT),
-				Values.asBool(args[1]));
 	}
 
 	/**
