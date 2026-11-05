@@ -4,7 +4,7 @@
  * 职责：
  *  1. 把扩展里所有积木方法替换成「转发到 Java 动作层」的实现，
  *     扩展文件本身保持原样（浏览器里仍然可用）；
- *  2. 暴露 __hk* 入口给 Java 侧调用。
+ *  2. 暴露 __tmc* 入口给 Java 侧调用。
  *
  * 参数顺序取自积木显示文本里的 [NAME] 占位符——这是唯一与 arguments 一一对应
  * 且顺序可靠的来源（对象 key 顺序在 ES5 里不保证）。
@@ -14,9 +14,9 @@ if (!Scratch || !Scratch.__instance) {
 	throw new Error('TurboMC 扩展未注册：检查 scratch-globals.js 与扩展的加载顺序');
 }
 
-var __hkInfo = Scratch.__instance.getInfo();
+var __tmcInfo = Scratch.__instance.getInfo();
 
-function __hkArgNames(text) {
+function __tmcArgNames(text) {
 	var names = [];
 	var re = /\[([A-Za-z0-9_]+)\]/g;
 	var m;
@@ -26,47 +26,47 @@ function __hkArgNames(text) {
 	return names;
 }
 
-var __hkOrder = {};
-for (var __i = 0; __i < __hkInfo.blocks.length; __i++) {
-	var __b = __hkInfo.blocks[__i];
-	__hkOrder[__b.opcode] = __hkArgNames(__b.text || '');
+var __tmcOrder = {};
+for (var __i = 0; __i < __tmcInfo.blocks.length; __i++) {
+	var __b = __tmcInfo.blocks[__i];
+	__tmcOrder[__b.opcode] = __tmcArgNames(__b.text || '');
 }
 
-var __hkBridge = null;
-function __hkApi() {
-	if (__hkBridge === null) {
-		__hkBridge = Packages.xyz.turbomc.client.script.vm.ScriptBridge;
+var __tmcBridge = null;
+function __tmcApi() {
+	if (__tmcBridge === null) {
+		__tmcBridge = Packages.xyz.turbomc.client.script.vm.ScriptBridge;
 	}
-	return __hkBridge;
+	return __tmcBridge;
 }
 
 /* ---- 阻塞动作：按帧兑现的 Promise ---- */
 
-var __hkTick = 0;
-var __hkPending = [];
+var __tmcTick = 0;
+var __tmcPending = [];
 
 /**
  * 让当前脚本挂起 ticks 帧，返回 Promise。
  * scratch-vm 见到 thenable 会把线程置为 PROMISE_WAIT，兑现后才继续下一块。
  */
-function __hkWaitTicks(ticks) {
+function __tmcWaitTicks(ticks) {
 	var frames = Math.max(1, Math.floor(ticks));
 	return new Promise(function (resolve) {
-		__hkPending.push({resolve: resolve, until: __hkTick + frames});
+		__tmcPending.push({resolve: resolve, until: __tmcTick + frames});
 	});
 }
 
 /** 每帧推进：兑现到期的等待，并清空微任务队列。 */
-function __hkPumpPromises() {
-	__hkTick++;
-	if (__hkPending.length > 0) {
+function __tmcPumpPromises() {
+	__tmcTick++;
+	if (__tmcPending.length > 0) {
 		var remain = [];
-		for (var i = 0; i < __hkPending.length; i++) {
-			var item = __hkPending[i];
-			var finished = __hkTick >= item.until;
+		for (var i = 0; i < __tmcPending.length; i++) {
+			var item = __tmcPending[i];
+			var finished = __tmcTick >= item.until;
 			// 条件型等待：每帧问一次宿主，满足即提前结束
 			if (!finished && item.check) {
-				finished = __hkApi().poll(item.check) === true;
+				finished = __tmcApi().poll(item.check) === true;
 			}
 			if (finished) {
 				item.resolve();
@@ -74,37 +74,37 @@ function __hkPumpPromises() {
 				remain.push(item);
 			}
 		}
-		__hkPending = remain;
+		__tmcPending = remain;
 	}
 	if (typeof __flushMicro === 'function') {
 		__flushMicro();
 	}
-	return __hkPending.length;
+	return __tmcPending.length;
 }
 
 /**
  * 条件型等待：每帧回调 {@code ScriptBridge.poll(checkKey)}，返回 true 或超时才继续。
  * 用于「等待方块被挖破」这类没有固定时长的动作。
  */
-function __hkWaitUntil(checkKey, maxTicks) {
+function __tmcWaitUntil(checkKey, maxTicks) {
 	var limit = Math.max(1, Math.floor(maxTicks || 200));
 	return new Promise(function (resolve) {
-		__hkPending.push({resolve: resolve, until: __hkTick + limit, check: checkKey});
+		__tmcPending.push({resolve: resolve, until: __tmcTick + limit, check: checkKey});
 	});
 }
 
-function __hkPendingCount() {
-	return __hkPending.length;
+function __tmcPendingCount() {
+	return __tmcPending.length;
 }
 
 /*
  * 覆盖方法体。
  * - 帽子积木补一个恒真实现：startHats 会调用其方法判断条件，
  *   缺失时会因读到 undefined 而崩（扩展原本假定浏览器里由 UI 触发）；
- * - 其余积木统一转发，参数按 __hkOrder 的顺序取出；
+ * - 其余积木统一转发，参数按 __tmcOrder 的顺序取出；
  * - 若动作声明了等待帧数，则返回 Promise 挂起线程。
  */
-for (var __j = 0; __j < __hkInfo.blocks.length; __j++) {
+for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 	(function (block) {
 		if (block.blockType === 'hat') {
 			Scratch.__instance[block.opcode] = function () {
@@ -112,74 +112,74 @@ for (var __j = 0; __j < __hkInfo.blocks.length; __j++) {
 			};
 			return;
 		}
-		var names = __hkOrder[block.opcode] || [];
+		var names = __tmcOrder[block.opcode] || [];
 		Scratch.__instance[block.opcode] = function (args) {
-			var result = __hkApi().call('hkscript_' + block.opcode, names, args);
+			var result = __tmcApi().call('hkscript_' + block.opcode, names, args);
 			// 条件型等待优先：它表达的是「等到某事发生」，不能用固定帧数代替
-			var check = __hkApi().takeWaitCheck();
+			var check = __tmcApi().takeWaitCheck();
 			if (check) {
-				return __hkWaitUntil(check, __hkApi().takeWaitLimit());
+				return __tmcWaitUntil(check, __tmcApi().takeWaitLimit());
 			}
-			var wait = __hkApi().takeWaitTicks();
+			var wait = __tmcApi().takeWaitTicks();
 			if (wait > 0) {
-				return __hkWaitTicks(wait);
+				return __tmcWaitTicks(wait);
 			}
 			if (block.opcode === 'sleep') {
 				// 睡觉本身是一次长动作，Java 侧不声明等待时按 2 秒兜底
-				return __hkWaitTicks(40);
+				return __tmcWaitTicks(40);
 			}
 			return result;
 		};
-	})(__hkInfo.blocks[__j]);
+	})(__tmcInfo.blocks[__j]);
 }
 
-var __hkVm = null;
+var __tmcVm = null;
 
-function __hkSetVm(virtualMachine) {
-	__hkVm = virtualMachine;
+function __tmcSetVm(virtualMachine) {
+	__tmcVm = virtualMachine;
 }
 
 /** 预先登记扩展，避免 loadProject 走浏览器 Worker 路径。 */
-function __hkRegisterExtension() {
-	var manager = __hkVm.extensionManager;
+function __tmcRegisterExtension() {
+	var manager = __tmcVm.extensionManager;
 	var serviceName = manager._registerInternalExtension(Scratch.__instance);
-	manager._loadedExtensions.set(__hkInfo.id, serviceName);
-	manager._registerExtensionInfo(serviceName, __hkInfo);
+	manager._loadedExtensions.set(__tmcInfo.id, serviceName);
+	manager._registerExtensionInfo(serviceName, __tmcInfo);
 }
 
-function __hkLoadProject(json) {
-	return __hkVm.loadProject(json);
+function __tmcLoadProject(json) {
+	return __tmcVm.loadProject(json);
 }
 
-function __hkStep() {
-	__hkPumpPromises();
-	__hkVm.runtime._step();
+function __tmcStep() {
+	__tmcPumpPromises();
+	__tmcVm.runtime._step();
 }
 
-function __hkSetBudget(ms) {
-	__hkVm.runtime.currentStepTime = ms;
+function __tmcSetBudget(ms) {
+	__tmcVm.runtime.currentStepTime = ms;
 }
 
-function __hkGreenFlag() {
-	__hkVm.greenFlag();
+function __tmcGreenFlag() {
+	__tmcVm.greenFlag();
 }
 
-function __hkStartHat(opcode, matchValue) {
-	return __hkVm.runtime.startHats(opcode, matchValue || null);
+function __tmcStartHat(opcode, matchValue) {
+	return __tmcVm.runtime.startHats(opcode, matchValue || null);
 }
 
 /** 带单个匹配字段的触发：{@code fieldName} 为空表示不带匹配条件。 */
-function __hkStartHatField(opcode, fieldName, value) {
+function __tmcStartHatField(opcode, fieldName, value) {
 	var match = null;
 	if (fieldName) {
 		match = {};
 		match[fieldName] = value;
 	}
-	return __hkVm.runtime.startHats(opcode, match);
+	return __tmcVm.runtime.startHats(opcode, match);
 }
 
 /** 取字段文本：兼容 {name,value,id} 对象与 [value, id] 数组两种形态。 */
-function __hkFieldText(block, name) {
+function __tmcFieldText(block, name) {
 	var field = block.fields && block.fields[name];
 	if (!field) {
 		return null;
@@ -194,8 +194,8 @@ function __hkFieldText(block, name) {
 }
 
 /** 读取积木某个参数槽的文本：优先 fields，其次 [1,[10,"x"]] 与 [1,"blockId"] 两种输入形态。 */
-function __hkReadInput(blocks, block, name) {
-	var direct = __hkFieldText(block, name);
+function __tmcReadInput(blocks, block, name) {
+	var direct = __tmcFieldText(block, name);
 	if (direct !== null) {
 		return direct;
 	}
@@ -230,9 +230,9 @@ function __hkReadInput(blocks, block, name) {
  * <p>{@code runtime.startHats} 的字段匹配只认 field，而扩展把「当聊天包含」的关键词
  * 声明成 input，因此不能用它做过滤。这里自己遍历顶层块、读输入值、按需 pushThread。</p>
  */
-function __hkStartHatFiltered(opcode, inputName, matchText) {
+function __tmcStartHatFiltered(opcode, inputName, matchText) {
 	var started = 0;
-	var runtime = __hkVm.runtime;
+	var runtime = __tmcVm.runtime;
 	var targets = runtime.targets;
 	var needle = matchText === null || matchText === undefined ? null : String(matchText);
 	for (var t = 0; t < targets.length; t++) {
@@ -248,7 +248,7 @@ function __hkStartHatFiltered(opcode, inputName, matchText) {
 				continue;
 			}
 			if (inputName && needle !== null) {
-				var pattern = __hkReadInput(blocks, block, inputName);
+				var pattern = __tmcReadInput(blocks, block, inputName);
 				if (pattern && needle.indexOf(pattern) < 0) {
 					continue;
 				}
@@ -272,17 +272,17 @@ function __hkStartHatFiltered(opcode, inputName, matchText) {
 	return started;
 }
 
-function __hkBlockCount() {
-	return __hkInfo.blocks.length;
+function __tmcBlockCount() {
+	return __tmcInfo.blocks.length;
 }
 
-function __hkThreadCount() {
-	return __hkVm.runtime.threads.length;
+function __tmcThreadCount() {
+	return __tmcVm.runtime.threads.length;
 }
 
 /** 读取变量值：全局在 Stage 上，局部在各自的 target 上，这里全部遍历一遍。 */
-function __hkGetVar(name) {
-	var targets = __hkVm.runtime.targets;
+function __tmcGetVar(name) {
+	var targets = __tmcVm.runtime.targets;
 	for (var t = 0; t < targets.length; t++) {
 		var vars = targets[t].variables;
 		for (var id in vars) {
@@ -295,9 +295,9 @@ function __hkGetVar(name) {
 }
 
 /** 变量快照，格式 {@code 名字=值} 用分号分隔，供运行时面板显示。 */
-function __hkDumpVars() {
+function __tmcDumpVars() {
 	var parts = [];
-	var targets = __hkVm.runtime.targets;
+	var targets = __tmcVm.runtime.targets;
 	for (var t = 0; t < targets.length; t++) {
 		var vars = targets[t].variables;
 		for (var id in vars) {
@@ -307,11 +307,11 @@ function __hkDumpVars() {
 	return parts.join(';');
 }
 
-function __hkDescribe() {
+function __tmcDescribe() {
 	var list = [];
-	for (var k = 0; k < __hkInfo.blocks.length; k++) {
-		var b = __hkInfo.blocks[k];
-		list.push(b.opcode + ':' + b.blockType + ':' + (__hkOrder[b.opcode] || []).join('|'));
+	for (var k = 0; k < __tmcInfo.blocks.length; k++) {
+		var b = __tmcInfo.blocks[k];
+		list.push(b.opcode + ':' + b.blockType + ':' + (__tmcOrder[b.opcode] || []).join('|'));
 	}
 	return list.join(';');
 }
@@ -323,9 +323,9 @@ function __hkDescribe() {
  * 其中 usageId 每次说话都会变——用它判断「是不是新的一句」，比比对文本可靠
  * （同一句话连说两次也能识别）。</p>
  */
-function __hkSpeech() {
+function __tmcSpeech() {
 	var out = [];
-	var targets = __hkVm.runtime.targets;
+	var targets = __tmcVm.runtime.targets;
 	for (var t = 0; t < targets.length; t++) {
 		var target = targets[t];
 		if (!target || typeof target.getCustomState !== 'function') {

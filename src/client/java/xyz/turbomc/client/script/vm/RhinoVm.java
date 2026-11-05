@@ -88,7 +88,7 @@ public final class RhinoVm {
 		if (ready) {
 			Context cx = factory.enterContext();
 			try {
-				call(cx, "__hkSetBudget", new Object[]{budgetNanos / 1_000_000d});
+				call(cx, "__tmcSetBudget", new Object[]{budgetNanos / 1_000_000d});
 			} finally {
 				Context.exit();
 			}
@@ -112,13 +112,13 @@ public final class RhinoVm {
 			}
 			// 实例化 VM 与登记扩展（等价于阶段 0 在 Node 里验证过的内部注册路径）
 			cx.evaluateString(scope,
-					"var __hkVmInstance = new ScratchVM();"
-							+ "__hkSetVm(__hkVmInstance);"
-							+ "__hkRegisterExtension();",
+					"var __tmcVmInstance = new ScratchVM();"
+							+ "__tmcSetVm(__tmcVmInstance);"
+							+ "__tmcRegisterExtension();",
 					"vm-init", 1, null);
 			// 必须显式设定步进间隔：currentStepTime 为 null 时 stepThreads 的
 			// WORK_TIME 计算为 0，整帧静默空转且不报错（阶段 0 踩过的坑）。
-			call(cx, "__hkSetBudget", new Object[]{budgetNanos / 1_000_000d});
+			call(cx, "__tmcSetBudget", new Object[]{budgetNanos / 1_000_000d});
 			ready = true;
 		} catch (RuntimeException e) {
 			LOG.error("[vm] 初始化失败", e);
@@ -132,21 +132,21 @@ public final class RhinoVm {
 
 	/** VM 认识的积木数量，用于日志与冒烟测试断言。 */
 	public int blockCount() {
-		return toInt(callQuietly("__hkBlockCount", new Object[0]), 0);
+		return toInt(callQuietly("__tmcBlockCount", new Object[0]), 0);
 	}
 
 	public int threadCount() {
-		return toInt(callQuietly("__hkThreadCount", new Object[0]), 0);
+		return toInt(callQuietly("__tmcThreadCount", new Object[0]), 0);
 	}
 
 	/** 读取 Stage 上的全局变量，供宿主/测试观测脚本状态。 */
 	public Object getVariable(String name) {
-		return callQuietly("__hkGetVar", new Object[]{name});
+		return callQuietly("__tmcGetVar", new Object[]{name});
 	}
 
 	/** 全部变量快照，格式 {@code 名字=值} 用分号分隔。 */
 	public String variableDump() {
-		Object value = callQuietly("__hkDumpVars", new Object[0]);
+		Object value = callQuietly("__tmcDumpVars", new Object[0]);
 		return value == null ? "" : value.toString();
 	}
 
@@ -154,7 +154,7 @@ public final class RhinoVm {
 	 * 所有角色当前的气泡（「说 / 思考」积木的结果），JSON 数组；VM 未就绪返回空串。
 	 */
 	public String speechJson() {
-		Object value = callQuietly("__hkSpeech", new Object[0]);
+		Object value = callQuietly("__tmcSpeech", new Object[0]);
 		return value == null ? "" : value.toString();
 	}
 
@@ -165,7 +165,7 @@ public final class RhinoVm {
 		requireReady();
 		Context cx = factory.enterContext();
 		try {
-			Object promise = call(cx, "__hkLoadProject", new Object[]{projectJson});
+			Object promise = call(cx, "__tmcLoadProject", new Object[]{projectJson});
 			call(cx, "__waitPromise", new Object[]{promise, PROMISE_ROUNDS});
 		} finally {
 			Context.exit();
@@ -176,7 +176,7 @@ public final class RhinoVm {
 		requireReady();
 		Context cx = factory.enterContext();
 		try {
-			call(cx, "__hkGreenFlag", new Object[0]);
+			call(cx, "__tmcGreenFlag", new Object[0]);
 		} finally {
 			Context.exit();
 		}
@@ -205,7 +205,7 @@ public final class RhinoVm {
 		}
 		Context cx = factory.enterContext();
 		try {
-			call(cx, "__hkStep", new Object[0]);
+			call(cx, "__tmcStep", new Object[0]);
 		} catch (EvaluatorException e) {
 			// 单帧执行超时：真机上多由 GC 或宿主同步调用（发聊天 / 执行命令）造成抖动。
 			// 只跳过本帧，绝不能 stopAll——那会把整个工程的脚本全部停掉，
@@ -233,7 +233,7 @@ public final class RhinoVm {
 		}
 		Context cx = factory.enterContext();
 		try {
-			return threadCountOf(call(cx, "__hkStartHat", new Object[]{opcode, match}));
+			return threadCountOf(call(cx, "__tmcStartHat", new Object[]{opcode, match}));
 		} finally {
 			Context.exit();
 		}
@@ -250,7 +250,7 @@ public final class RhinoVm {
 		}
 		Context cx = factory.enterContext();
 		try {
-			return threadCountOf(call(cx, "__hkStartHatField", new Object[]{opcode, fieldName, value}));
+			return threadCountOf(call(cx, "__tmcStartHatField", new Object[]{opcode, fieldName, value}));
 		} finally {
 			Context.exit();
 		}
@@ -271,7 +271,7 @@ public final class RhinoVm {
 		}
 		Context cx = factory.enterContext();
 		try {
-			return toInt(call(cx, "__hkStartHatFiltered",
+			return toInt(call(cx, "__tmcStartHatFiltered",
 					new Object[]{"hkscript_whenChat", "MATCH", message}), 0);
 		} finally {
 			Context.exit();
@@ -293,7 +293,7 @@ public final class RhinoVm {
 
 	private void stopAll(Context cx) {
 		try {
-			Object vm = ScriptableObject.getProperty(scope, "__hkVmInstance");
+			Object vm = ScriptableObject.getProperty(scope, "__tmcVmInstance");
 			if (vm instanceof Scriptable scriptable) {
 				Object runtime = ScriptableObject.getProperty(scriptable, "runtime");
 				if (runtime instanceof Scriptable runtimeScriptable) {
