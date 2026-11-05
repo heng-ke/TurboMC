@@ -8,12 +8,17 @@ TurboWarp 是本项目**唯一**的脚本编辑方式。游戏内只负责加载
 1. 打开 <https://turbowarp.org/editor>
 2. 左下角「添加扩展」（积木面板底部的 ＋）
 3. 滚到底部选「Custom Extension / 自定义扩展」
-4. 选 **File** 标签，加载本目录下的 `turbomc-extension.js`
+4. 选 **File** 标签，加载 `turbomc-extension.js`
+   - 装了模组的话，游戏启动后会自动释放一份到 `.minecraft/config/turbomc/turbomc-extension.js`，
+     直接用那个即可，不用再从仓库找
+   - 仓库里 `turbowarp/turbomc-extension.js` 是同一份源文件；两者内容不一致时说明模组版本旧了
 5. 积木面板出现紫色的 **TurboMC** 分类
 
 > 也可以用 **Text** 标签把 js 内容粘贴进去，效果相同。
+>
+> `config/turbomc/` 下那份是模组每次启动按 jar 内版本覆盖的，改扩展请改仓库里的源文件。
 
-## 二、扩展积木清单（60 个）
+## 二、扩展积木清单
 
 ### 事件
 

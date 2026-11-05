@@ -19,6 +19,7 @@ import xyz.turbomc.client.script.runtime.ChatGate;
 import xyz.turbomc.client.script.runtime.TriggerDispatcher;
 import xyz.turbomc.client.script.ui.ScriptHudElement;
 import xyz.turbomc.client.script.ui.ScriptListScreen;
+import xyz.turbomc.client.script.vm.ExtensionExporter;
 
 public class TurboMCClient implements ClientModInitializer {
 	private static KeyBinding toggleScriptKey;
@@ -30,6 +31,9 @@ public class TurboMCClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		// 客户端配置在初始化阶段加载，保证后续所有客户端功能都读到同一份数据。
 		TurboMCConfig.load();
+
+		// 把打包进 jar 的 TurboWarp 扩展释放到 config/turbomc/，分发出去的 jar 才自带可导入的 js
+		ExtensionExporter.exportToConfig();
 
 		// Category.create 会向全局注册表登记，同一个 id 只能创建一次，因此两个按键共享同一实例。
 		KeyBinding.Category category = KeyBinding.Category.create(TurboMC.id("general"));

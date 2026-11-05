@@ -8,11 +8,15 @@
 ## 快速开始
 
 1. 安装模组，以及前置 **Fabric API**；要改配置需再装 Cloth Config + Mod Menu。
-2. 在 TurboWarp 里加载扩展：`turbowarp/turbomc-extension.js`
-   不加载的话，扩展积木会显示成未知块。
-3. 写脚本，导出 `.sb3`，放进 `.minecraft/config/turbomc/imports/`
-4. 进游戏按 **F7** → 点「导入」→ 点左侧圆点启用该包
-5. 按 **F6** 开启引擎，HUD 出现 `● 包名` 即表示正在运行
+2. 启动一次游戏，扩展会自动释放到 `.minecraft/config/turbomc/turbomc-extension.js`
+   （模组更新后会自动覆盖成新版本）。
+3. 在 TurboWarp 里加载这个 js：不加载的话，扩展积木会显示成未知块。
+4. 写脚本，导出 `.sb3`，放进 `.minecraft/config/turbomc/imports/`
+5. 进游戏按 **F7** → 点「导入」→ 点左侧圆点启用该包
+6. 按 **F6** 开启引擎，HUD 出现 `● 包名` 即表示正在运行
+
+> 仓库里的 `turbowarp/turbomc-extension.js` 是同一份文件的源，改扩展请改仓库这份，
+> 再重新构建——`config/turbomc/` 下的副本每次启动都会按 jar 内版本覆盖。
 
 ## 按键
 
@@ -53,6 +57,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmSmoke -PvmMode=block   # 阻塞动作
 ./gradlew vmImport                 # sb3 解析 + 执行
 ./gradlew vmChat                   # 聊天帽子：一次事件只触发一次、关键词过滤
+./gradlew exportSmoke              # 扩展释放：创建 / 内容一致不动 / 旧版覆盖
 ```
 
 ## 文档

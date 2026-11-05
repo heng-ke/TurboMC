@@ -62,6 +62,12 @@ processResources {
 	def version = project.version
 	inputs.property "version", version
 
+	// 把 TurboWarp 扩展源文件打进 jar：客户端启动时由 ExtensionExporter 释放到 config/turbomc/，
+	// 这样分发出去的 jar 自带可导入的 js，玩家不用再从仓库找文件。
+	from("turbowarp/turbomc-extension.js") {
+		into "assets/turbomc/turbowarp"
+	}
+
 	filesMatching("fabric.mod.json") {
 		expand "version": version
 	}
@@ -133,6 +139,15 @@ tasks.register('vmChat', JavaExec) {
 	mainClass = 'xyz.turbomc.client.script.vm.ChatHatTest'
 	classpath = sourceSets.client.runtimeClasspath
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8' 
+}
+
+// TurboWarp 扩展释放冒烟：创建 → 内容一致不动 → 内容过期覆盖
+tasks.register('exportSmoke', JavaExec) {
+	group = 'verification'
+	description = '验证 jar 内的 TurboWarp 扩展能正确释放到 config/turbomc/'
+	mainClass = 'xyz.turbomc.client.script.vm.ExtensionExportSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
 // configure the maven publication
