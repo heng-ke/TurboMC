@@ -64,4 +64,4 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 
 ## 许可
 
-CC0
+MIT，见 [LICENSE](LICENSE)。

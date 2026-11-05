@@ -8,7 +8,7 @@
 		"TurboMC"
 	],
 	"contact": {},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/turbomc/icon.png",
 	"environment": "client",
 	"entrypoints": {
