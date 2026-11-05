@@ -126,8 +126,6 @@
   "block.turbomc.world.biome": "Biome",
   "block.turbomc.world.ping": "Server ping (ms)",
   "block.turbomc.action.key": "Key [KEY] [PRESSED]",
-  "block.turbomc.action.attack_nearest": "Attack nearest",
-  "block.turbomc.action.attack_nearest_hostile": "Attack nearest hostile",
   "block.turbomc.action.open_container": "Open nearest container",
   "block.turbomc.action.move_toward": "Move toward",
   "block.turbomc.action.look": "Set view angle",

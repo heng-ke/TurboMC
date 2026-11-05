@@ -68,7 +68,7 @@ src/client/java/xyz/turbomc/client/
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
     ├── action/                  动作层（Java 侧真正操作游戏的地方）
-    │   ├── GameActions.java     移动、挖掘、放置、攻击、聊天、命令……
+    │   ├── GameActions.java     移动、挖掘、放置、聊天、命令、容器……
     │   ├── ContainerActions.java 容器：开界面、点槽位、搬东西、读槽位内容
     │   ├── WorldQueries.java    世界查询（方块、实体、时间……）
     │   ├── ScriptKeys.java      按键按住 / 释放
@@ -198,23 +198,19 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 （新签名），`ChatGate` 管不着，由它按「发送时登记、收到时抵消」拦掉，
 避免「当聊天包含 X → 回复含 X 的聊天」形成无限回路。
 
-### 12. 攻击目标必须先过滤，否则会被服务端踢出
+### 12. 不提供攻击积木
 
-`ServerPlayNetworkHandler` 收到攻击包时会判定「无效实体」，命中就
-`disconnect(invalid_entity_attacked)` —— **是断开连接，不是忽略**。四类目标：
+`interactionManager.attackEntity` 发的包和玩家左键完全相同，但**自己选目标**这条路走不通：
 
-| 目标 | 说明 |
-|---|---|
-| `ItemEntity` | 掉落物 |
-| `ExperienceOrbEntity` | 经验球 |
-| 玩家自己 | — |
-| `PersistentProjectileEntity` 且 `isAttackable()` 为假 | 插在地上/怪物身上的箭 |
+- 服务端对四类目标直接 `disconnect(invalid_entity_attacked)`：掉落物（`ItemEntity`）、
+  经验球（`ExperienceOrbEntity`）、玩家自己、`isAttackable()` 为假的箭。
+  刷怪塔里「最近的实体」几乎必然是掉落物，脚本一跑就被踢出存档。
+- 就算过滤掉，自动选目标 + 瞬间转向 + 等间隔连点，在带反作弊的服务器上仍是
+  killaura 的典型特征（原版服务端不管这些，但插件会）。
 
-「最近实体」如果不加过滤，脚本在刷怪塔、矿洞里几乎必然先选中掉落物，然后被踢。
-`GameActions.isAttackableTarget` 负责排除，选择目标时就用它，而不是等到攻击前。
-
-距离用「眼睛 → 碰撞箱最近点」的平方距离对比 `ENTITY_INTERACTION_RANGE`（默认 3.0），
-与服务端 `canAttackEntityIn` 同口径。用中心距离会偏离：大体型判太远、小体型判太近。
+因此攻击统一走输入积木：`点击左键` / `按住 mouse.left`。这条路径是
+`KeyBinding.onKeyPressed` → 原版 `doAttack()`，客户端自己做射线与距离判定，
+服务端收到的与手点一模一样。
 
 ## 六、HUD
 

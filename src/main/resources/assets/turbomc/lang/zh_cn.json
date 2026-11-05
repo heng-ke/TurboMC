@@ -126,8 +126,6 @@
   "block.turbomc.world.biome": "当前生物群系",
   "block.turbomc.world.ping": "服务端延迟(ms)",
   "block.turbomc.action.key": "按键 [KEY] [PRESSED]",
-  "block.turbomc.action.attack_nearest": "攻击最近实体",
-  "block.turbomc.action.attack_nearest_hostile": "攻击最近敌对生物",
   "block.turbomc.action.open_container": "打开最近容器",
   "block.turbomc.action.move_toward": "走向坐标",
   "block.turbomc.action.look": "设置视角",

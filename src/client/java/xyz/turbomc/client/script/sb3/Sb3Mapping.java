@@ -115,8 +115,6 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_mouse", "action.mouse"),
 			Map.entry("turbomc_click", "action.click"),
 			Map.entry("turbomc_respawn", "action.respawn"),
-			Map.entry("turbomc_attackNearest", "action.attack_nearest"),
-			Map.entry("turbomc_attackNearestHostile", "action.attack_nearest_hostile"),
 			Map.entry("turbomc_openContainer", "action.open_container"),
 			Map.entry("turbomc_openContainerAt", "action.open_container_at"),
 			Map.entry("turbomc_clickSlot", "action.click_slot"),

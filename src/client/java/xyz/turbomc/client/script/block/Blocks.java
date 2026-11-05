@@ -211,8 +211,6 @@ final class Blocks {
 		regT("action.mouse", "action", BlockShape.STACK, "鼠标 {BUTTON} {PRESSED}",
 				BlockParam.fieldOption("BUTTON", "left", "left", "right", "middle"),
 				BlockParam.bool("PRESSED", "true"));
-		reg("action.attack_nearest", "action", BlockShape.STACK);
-		reg("action.attack_nearest_hostile", "action", BlockShape.STACK);
 		reg("action.open_container", "action", BlockShape.STACK);
 		regT("action.open_container_at", "action", BlockShape.STACK, "打开容器 x:{X} y:{Y} z:{Z}",
 				BlockParam.number("X", "0"),

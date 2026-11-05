@@ -7,10 +7,10 @@
 
 | 项 | 数量 |
 |---|---|
-| 扩展积木 | 60 |
+| 扩展积木 | 58 |
 | 其中事件帽子（宿主触发） | 3 |
-| 需要动作实现 | 57 |
-| 映射表条目 | 114 |
+| 需要动作实现 | 55 |
+| 映射表条目 | 112 |
 | 其中原生积木 | 54 |
 
 ## 二、扩展积木
@@ -33,50 +33,48 @@
 | 14 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
 | 15 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
 | 16 | `turbomc_sleep` | `action.sleep` | COMMAND |
-| 17 | `turbomc_attackNearest` | `action.attack_nearest` | COMMAND |
-| 18 | `turbomc_attackNearestHostile` | `action.attack_nearest_hostile` | COMMAND |
-| 19 | `turbomc_openContainer` | `action.open_container` | COMMAND |
-| 20 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
-| 21 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
-| 22 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
-| 23 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
-| 24 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
-| 25 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
-| 26 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
-| 27 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
-| 28 | `turbomc_chat` | `action.chat` | COMMAND |
-| 29 | `turbomc_command` | `action.command` | COMMAND |
-| 30 | `turbomc_respawn` | `action.respawn` | COMMAND |
-| 31 | `turbomc_health` | `world.health` | REPORTER |
-| 32 | `turbomc_food` | `world.food` | REPORTER |
-| 33 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
-| 34 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
-| 35 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
-| 36 | `turbomc_posX` | `world.pos_x` | REPORTER |
-| 37 | `turbomc_posY` | `world.pos_y` | REPORTER |
-| 38 | `turbomc_posZ` | `world.pos_z` | REPORTER |
-| 39 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
-| 40 | `turbomc_heldItem` | `world.held_item` | REPORTER |
-| 41 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
-| 42 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
-| 43 | `turbomc_dimension` | `world.dimension` | REPORTER |
-| 44 | `turbomc_biome` | `world.biome` | REPORTER |
-| 45 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
-| 46 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
-| 47 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
-| 48 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
-| 49 | `turbomc_blockAt` | `world.block_at` | REPORTER |
-| 50 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
-| 51 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
-| 52 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
-| 53 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
-| 54 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
-| 55 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
-| 56 | `turbomc_nearestHostile` | `world.nearest_hostile` | REPORTER |
-| 57 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
-| 58 | `turbomc_itemCount` | `world.item_count` | REPORTER |
-| 59 | `turbomc_ping` | `world.ping` | REPORTER |
-| 60 | `turbomc_log` | `debug.log` | COMMAND |
+| 17 | `turbomc_openContainer` | `action.open_container` | COMMAND |
+| 18 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
+| 19 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
+| 20 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
+| 21 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
+| 22 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
+| 23 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
+| 24 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
+| 25 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
+| 26 | `turbomc_chat` | `action.chat` | COMMAND |
+| 27 | `turbomc_command` | `action.command` | COMMAND |
+| 28 | `turbomc_respawn` | `action.respawn` | COMMAND |
+| 29 | `turbomc_health` | `world.health` | REPORTER |
+| 30 | `turbomc_food` | `world.food` | REPORTER |
+| 31 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
+| 32 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
+| 33 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
+| 34 | `turbomc_posX` | `world.pos_x` | REPORTER |
+| 35 | `turbomc_posY` | `world.pos_y` | REPORTER |
+| 36 | `turbomc_posZ` | `world.pos_z` | REPORTER |
+| 37 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
+| 38 | `turbomc_heldItem` | `world.held_item` | REPORTER |
+| 39 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
+| 40 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
+| 41 | `turbomc_dimension` | `world.dimension` | REPORTER |
+| 42 | `turbomc_biome` | `world.biome` | REPORTER |
+| 43 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
+| 44 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
+| 45 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
+| 46 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
+| 47 | `turbomc_blockAt` | `world.block_at` | REPORTER |
+| 48 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
+| 49 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
+| 50 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
+| 51 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
+| 52 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
+| 53 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
+| 54 | `turbomc_nearestHostile` | `world.nearest_hostile` | REPORTER |
+| 55 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
+| 56 | `turbomc_itemCount` | `world.item_count` | REPORTER |
+| 57 | `turbomc_ping` | `world.ping` | REPORTER |
+| 58 | `turbomc_log` | `debug.log` | COMMAND |
 
 ## 三、原生积木
 
@@ -149,3 +147,5 @@
 - **参数的 `menu` 必须写菜单名（字符串），不能内联 items 对象**。scratch-vm 用
   `menuInfo[argInfo.menu]` 查表，传对象会得到 undefined 并抛错——积木在 TurboWarp 里
   直接拖不出来，日志只有一行 `Error parsing block`。
+- 不提供攻击积木：自动选目标会打掉落物/经验球，服务端判定无效实体直接断开连接。
+  攻击用「点击左键」，走原版射线。

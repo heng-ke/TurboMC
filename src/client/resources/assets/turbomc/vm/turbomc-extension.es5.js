@@ -213,16 +213,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
             blockType: Scratch.BlockType.COMMAND,
             text: T('sleep in nearby bed', '睡附近的床')
           },
-          // ---- 战斗 ----
-          {
-            opcode: 'attackNearest',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('attack nearest entity', '攻击最近实体')
-          }, {
-            opcode: 'attackNearestHostile',
-            blockType: Scratch.BlockType.COMMAND,
-            text: T('attack nearest hostile', '攻击最近敌对生物')
-          },
           // ---- 容器交互 ----
           {
             opcode: 'openContainer',
@@ -603,18 +593,6 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
       key: "sleep",
       value: function sleep() {
         this.preview('sleep');
-      }
-
-      // ---- 战斗 ----
-    }, {
-      key: "attackNearest",
-      value: function attackNearest() {
-        this.preview('attackNearest');
-      }
-    }, {
-      key: "attackNearestHostile",
-      value: function attackNearestHostile() {
-        this.preview('attackNearestHostile');
       }
 
       // ---- 容器交互 ----

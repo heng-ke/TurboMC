@@ -6,11 +6,6 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.network.packet.c2s.play.ClientStatusC2SPacket;
@@ -33,7 +28,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * 会改变世界状态的动作：挖掘、移动、攻击、使用、放置、界面。
+ * 会改变世界状态的动作：挖掘、移动、使用、放置、界面。
  *
  * <p>动作走「输入模拟 + 交互管理器」两条通道，不发送自定义数据包。
  * 只读的世界状态查询在 {@link WorldQueries}。</p>
@@ -92,8 +87,6 @@ public final class GameActions {
 	public static void registerAll() {
 		NativeRegistry.action("action.key", GameActions::key);
 		NativeRegistry.action("action.mouse", GameActions::mouse);
-		NativeRegistry.action("action.attack_nearest", GameActions::attackNearest);
-		NativeRegistry.action("action.attack_nearest_hostile", GameActions::attackNearestHostile);
 		NativeRegistry.action("action.open_container", GameActions::openContainer);
 		NativeRegistry.action("action.move_toward", GameActions::moveToward);
 		NativeRegistry.action("action.stop", GameActions::stop);
@@ -119,78 +112,6 @@ public final class GameActions {
 	 */
 	private static void breakWait(ScriptContext ctx, Object[] args) {
 		ctx.requestWaitUntil("break", 200);
-	}
-
-
-
-
-	/**
-	 * 自动索敌：转向最近的存活实体，进入攻击距离后立即攻击。
-	 *
-	 * <p>超出距离只转向不出手，避免客户端发出必然被服务端拒绝的攻击包。</p>
-	 */
-	private static void attackNearest(ScriptContext ctx, Object[] args) {
-		attackEntity(ctx, entity -> true, "nearest_entity");
-	}
-
-	private static void attackNearestHostile(ScriptContext ctx, Object[] args) {
-		attackEntity(ctx, entity -> entity instanceof Monster, "nearest_hostile");
-	}
-
-	private static void attackEntity(ScriptContext ctx, Predicate<Entity> filter, String cacheKey) {
-		MinecraftClient client = client(ctx);
-		if (client.interactionManager == null || client.player == null) {
-			return;
-		}
-		// 选目标时就把「打了会被服务端断开」的东西排掉，再交给距离判定
-		Entity target = WorldQueries.nearestEntityOrNull(ctx,
-				entity -> isAttackableTarget(client, entity) && filter.test(entity), cacheKey);
-		if (target == null) {
-			return;
-		}
-		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, target.getEyePos());
-		if (!withinAttackReach(client.player, target)) {
-			// 原版近战距离之外，服务端会静默丢弃这个包，发了也没用
-			return;
-		}
-		client.interactionManager.attackEntity(client.player, target);
-		client.player.swingHand(Hand.MAIN_HAND);
-	}
-
-	/**
-	 * 服务端会判定为「攻击无效实体」并<b>直接断开连接</b>的目标。
-	 *
-	 * <p>判定在 {@code ServerPlayNetworkHandler} 收到交互包时执行，条件就是这几类：
-	 * 掉落物、经验球、玩家自己、以及不可攻击的箭。命中即
-	 * {@code multiplayer.disconnect.invalid_entity_attacked}——不是忽略，是踢出存档。</p>
-	 *
-	 * <p>另外排除已死亡 / 已移除的实体：它们可能还留在本 tick 的实体列表里，
-	 * 打过去时服务端已经找不到这个目标了。</p>
-	 */
-	private static boolean isAttackableTarget(MinecraftClient client, Entity entity) {
-		if (entity == null || client.player == null || entity == client.player) {
-			return false;
-		}
-		if (!entity.isAlive() || entity.isRemoved()) {
-			return false;
-		}
-		if (entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) {
-			return false;
-		}
-		return !(entity instanceof PersistentProjectileEntity projectile) || projectile.isAttackable();
-	}
-
-	/**
-	 * 是否在原版近战距离内。
-	 *
-	 * <p>用「眼睛到碰撞箱最近点」的平方距离对比 {@code ENTITY_INTERACTION_RANGE}
-	 * （默认 3.0），与服务端 {@code canAttackEntityIn} 的口径一致。取中心距离会
-	 * 让大体型实体被判得太远、小体型被判得太近，两边都不准。</p>
-	 */
-	private static boolean withinAttackReach(ClientPlayerEntity player, Entity target) {
-		double reach = player.getAttributeValue(EntityAttributes.ENTITY_INTERACTION_RANGE);
-		Vec3d eye = player.getEyePos();
-		return target.getBoundingBox().squaredMagnitude(eye) <= reach * reach;
 	}
 
 	/**

@@ -178,18 +178,6 @@
 						text: T('sleep in nearby bed', '睡附近的床')
 					},
 
-					// ---- 战斗 ----
-					{
-						opcode: 'attackNearest',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('attack nearest entity', '攻击最近实体')
-					},
-					{
-						opcode: 'attackNearestHostile',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('attack nearest hostile', '攻击最近敌对生物')
-					},
-
 					// ---- 容器交互 ----
 					{
 						opcode: 'openContainer',
@@ -498,10 +486,6 @@
 		isMining() { return false; }
 		miningProgress() { return 0; }
 		sleep() { this.preview('sleep'); }
-
-		// ---- 战斗 ----
-		attackNearest() { this.preview('attackNearest'); }
-		attackNearestHostile() { this.preview('attackNearestHostile'); }
 
 		// ---- 容器交互 ----
 		openContainer() { this.preview('openContainer'); }
