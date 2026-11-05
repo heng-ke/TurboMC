@@ -1,31 +1,31 @@
 {
 	"schemaVersion": 1,
-	"id": "hk-script",
+	"id": "turbomc",
 	"version": "${version}",
-	"name": "hk-script",
+	"name": "TurboMC",
 	"description": "在 Minecraft 里运行 Scratch 积木脚本。脚本用 TurboWarp 编写并导出为 .sb3，模组负责加载与执行。",
 	"authors": [
-		"hk-script"
+		"TurboMC"
 	],
 	"contact": {},
 	"license": "CC0-1.0",
-	"icon": "assets/hk-script/icon.png",
+	"icon": "assets/turbomc/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"main": [
-			"xyz.hegke.HkScript"
+			"xyz.turbomc.TurboMC"
 		],
 		"client": [
-			"xyz.hegke.client.HkScriptClient"
+			"xyz.turbomc.client.TurboMCClient"
 		],
 		"modmenu": [
-			"xyz.hegke.client.config.ModMenuIntegration"
+			"xyz.turbomc.client.config.ModMenuIntegration"
 		]
 	},
 	"mixins": [
-		"hk-script.mixins.json",
+		"turbomc.mixins.json",
 		{
-			"config": "hk-script.client.mixins.json",
+			"config": "turbomc.client.mixins.json",
 			"environment": "client"
 		}
 	],

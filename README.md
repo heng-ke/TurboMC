@@ -1,4 +1,4 @@
-# hk-script
+# TurboMC
 
 用 Scratch 积木控制 Minecraft 的 Fabric 客户端模组（1.21.11）。
 
@@ -8,11 +8,24 @@
 ## 快速开始
 
 1. 安装模组，以及前置 **Fabric API**；要改配置需再装 Cloth Config + Mod Menu。
-2. 在 TurboWarp 里加载扩展：`turbowarp/hkscript-extension.js`
+2. 在 TurboWarp 里加载扩展：`turbowarp/turbomc-extension.js`
    不加载的话，扩展积木会显示成未知块。
-3. 写脚本，导出 `.sb3`，放进 `.minecraft/config/hk-script/imports/`
+3. 写脚本，导出 `.sb3`，放进 `.minecraft/config/turbomc/imports/`
 4. 进游戏按 **F7** → 点「导入」→ 点左侧圆点启用该包
 5. 按 **F6** 开启引擎，HUD 出现 `● 包名` 即表示正在运行
+
+## 从旧版本升级
+
+这个模组以前叫 `hk-script`。升级时不需要手动搬东西：
+
+| 旧 | 新 | 处理 |
+|---|---|---|
+| `config/hk-script.json` | `config/turbomc.json` | 首次启动自动改名 |
+| `config/hk-script/` | `config/turbomc/` | 首次启动整目录迁移 |
+
+**已经导出的 `.sb3` 不用重新做**：扩展 id 与积木 opcode 前缀仍是 `hkscript`，
+工程文件里的引用全部有效。TurboWarp 里如果还加载着旧文件名，换成
+`turbowarp/turbomc-extension.js` 即可，积木本身不变。
 
 ## 按键
 
@@ -40,7 +53,7 @@
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物位于 `build/libs/hk-script-1.0.0.jar`。
+产物位于 `build/libs/turbomc-1.0.0.jar`。
 
 冒烟测试不需要启动客户端：
 

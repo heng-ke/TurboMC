@@ -18,7 +18,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"hk-script" {
+		"turbomc" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -99,16 +99,16 @@ jar {
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
 	// 冒烟测试类只用于 `gradlew vmSmoke / vmWrite`，不随模组发布
-	exclude "xyz/hegke/client/script/vm/*SmokeTest*.class"
+	exclude "xyz/turbomc/client/script/vm/*SmokeTest*.class"
 }
 
 // VM 后端的冒烟测试：不启动客户端，直接验证 Rhino + scratch-vm 链路
 tasks.register('vmSmoke', JavaExec) {
 	group = 'verification'
 	description = '在纯 JVM 中跑通 VM 后端（-PvmProject=路径 -PvmMode=hat）'
-	mainClass = 'xyz.hegke.client.script.vm.VmSmokeTest'
+	mainClass = 'xyz.turbomc.client.script.vm.VmSmokeTest'
 	classpath = sourceSets.client.runtimeClasspath
-	def projectPath = providers.gradleProperty('vmProject').getOrElse('run/hkscript-vm/project.json')
+	def projectPath = providers.gradleProperty('vmProject').getOrElse('run/turbomc-vm/project.json')
 	def mode = providers.gradleProperty('vmMode').getOrElse('')
 	args = mode.isEmpty() ? [projectPath] : [projectPath, mode]
 }
@@ -118,9 +118,9 @@ tasks.register('vmSmoke', JavaExec) {
 tasks.register('vmImport', JavaExec) {
 	group = 'verification'
 	description = '验证 sb3 能解析成可查看的积木树并被 VM 执行（-Psb3=路径）'
-	mainClass = 'xyz.hegke.client.script.vm.ImportSmokeTest'
+	mainClass = 'xyz.turbomc.client.script.vm.ImportSmokeTest'
 	classpath = sourceSets.client.runtimeClasspath
-	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/config/hk-script/packages/作品.sb3')
+	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/config/turbomc/packages/作品.sb3')
 	args = [sb3Path]
 	// 积木树是中文，控制台默认 GBK 会乱码
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'

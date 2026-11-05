@@ -16,12 +16,12 @@ Fabric 1.21.11 客户端模组：用 Scratch 积木描述自动化行为，在 M
 ## 二、数据流
 
 ```
-TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/hk-script/imports/
+TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/turbomc/imports/
                                               │
                                         F7 点「导入」
                                               │
                                               ▼
-                                   config/hk-script/packages/
+                                   config/turbomc/packages/
                                               │
                      ┌────────────────────────┴────────────────────────┐
                      ▼                                                 ▼
@@ -59,11 +59,11 @@ TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/hk-script/
 ## 四、代码结构
 
 ```
-src/client/java/xyz/hegke/client/
-├── HkScriptClient.java          入口：按键、事件注册、tick 驱动
+src/client/java/xyz/turbomc/client/
+├── TurboMCClient.java          入口：按键、事件注册、tick 驱动
 ├── config/
-│   ├── HkScriptConfig.java      配置数据与持久化
-│   ├── HkScriptConfigScreen.java 模组菜单（需 Cloth Config）
+│   ├── TurboMCConfig.java      配置数据与持久化
+│   ├── TurboMCConfigScreen.java 模组菜单（需 Cloth Config）
 │   └── HudCorner.java           HUD 停靠角落
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
@@ -99,8 +99,8 @@ src/client/java/xyz/hegke/client/
         └── NodeChain / ParamLabels / WaitUnit / TextInputScreen
 ```
 
-`src/client/resources/assets/hk-script/vm/` 存放内嵌的 JS 运行时：
-`vm.es5.js`（scratch-vm）、`hkscript-extension.es5.js`（扩展）、`vm-bootstrap.js`
+`src/client/resources/assets/turbomc/vm/` 存放内嵌的 JS 运行时：
+`vm.es5.js`（scratch-vm）、`turbomc-extension.es5.js`（扩展）、`vm-bootstrap.js`
 （宿主与 VM 的粘合层）、若干 shim。
 
 ## 五、必须知道的约束
@@ -167,6 +167,18 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 `ScriptKeys.releaseAll(owner)` 因此也没有调用方，真正兜底的是引擎停止时的
 `releaseEveryKey()`。要做按脚本精确回收，得先让 JS 侧把线程标识带进桥。
 
+### 10. 扩展 id 与 opcode 前缀不能改
+
+模组已从 `hk-script` 改名为 `turbomc`，但扩展仍然注册为 `id: 'hkscript'`，
+积木 opcode 前缀也保持 `hkscript_`。
+
+这是**数据兼容**要求，不是漏改：`.sb3` 里存的是 `extensions: ["hkscript"]` 和
+`hkscript_xxx` 这样的 opcode。改掉之后，所有已导出的工程都会变成未知积木，
+而且不会报错，只是积木消失。
+
+改名只影响对外可见的部分：模组 id、包名、资源命名空间、配置目录、扩展文件名与显示名。
+新增积木照旧用 `hkscript_` 前缀。
+
 ## 六、HUD
 
 两行内容：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡。
@@ -184,7 +196,7 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物：`build/libs/hk-script-1.0.0.jar`
+产物：`build/libs/turbomc-1.0.0.jar`
 
 ### 冒烟测试（不启动客户端）
 
@@ -195,14 +207,14 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `./gradlew vmSmoke -PvmMode=block` | 验证阻塞动作按时长挂起 |
 | `./gradlew vmImport` | 验证 sb3 能解析成树，并被 VM 执行 |
 
-`vmImport` 默认读 `run/config/hk-script/packages/作品.sb3`，可用
+`vmImport` 默认读 `run/config/turbomc/packages/作品.sb3`，可用
 `-Psb3=路径` 指定其他工程。
 
 ## 八、使用流程
 
-1. 在 TurboWarp 里加载 `turbowarp/hkscript-extension.js`（否则扩展积木显示为未知块）
+1. 在 TurboWarp 里加载 `turbowarp/turbomc-extension.js`（否则扩展积木显示为未知块）
 2. 编写脚本，导出为 `.sb3`
-3. 放进 `.minecraft/config/hk-script/imports/`
+3. 放进 `.minecraft/config/turbomc/imports/`
 4. 游戏内按 **F7** → 点「导入」→ 点圆点启用
 5. 按 **F6** 开引擎，HUD 出现 `● 包名` 即表示在跑
 

@@ -1,6 +1,6 @@
 # 积木与 opcode 对应表
 
-> 由脚本从 `Sb3Mapping.java` 与 `hkscript-extension.js` 直接生成，不是手写。
+> 由脚本从 `Sb3Mapping.java` 与 `turbomc-extension.js` 直接生成，不是手写。
 > 表格顺序与 TurboWarp 积木面板一致，改完扩展后重跑生成即可。
 
 ## 一、统计

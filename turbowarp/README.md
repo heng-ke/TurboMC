@@ -1,4 +1,4 @@
-# 用 TurboWarp 编写 hk-script 脚本
+# 用 TurboWarp 编写 TurboMC 脚本
 
 TurboWarp 是本项目**唯一**的脚本编辑方式。游戏内只负责加载与运行，不提供积木拼接
 （可以查看脚本树，但不能改）。
@@ -8,8 +8,8 @@ TurboWarp 是本项目**唯一**的脚本编辑方式。游戏内只负责加载
 1. 打开 <https://turbowarp.org/editor>
 2. 左下角「添加扩展」（积木面板底部的 ＋）
 3. 滚到底部选「Custom Extension / 自定义扩展」
-4. 选 **File** 标签，加载本目录下的 `hkscript-extension.js`
-5. 积木面板出现紫色的 **Hk Script** 分类
+4. 选 **File** 标签，加载本目录下的 `turbomc-extension.js`
+5. 积木面板出现紫色的 **TurboMC** 分类
 
 > 也可以用 **Text** 标签把 js 内容粘贴进去，效果相同。
 
@@ -143,7 +143,7 @@ TurboWarp 是本项目**唯一**的脚本编辑方式。游戏内只负责加载
 ## 五、导出与导入
 
 1. TurboWarp 菜单 **File → Save to your computer**，得到 `.sb3`
-2. 把 `.sb3` 放进 `config/hk-script/imports/`
+2. 把 `.sb3` 放进 `config/turbomc/imports/`
 3. 游戏内按 **F7** → 点「导入」
 4. 导入的包会自动成为「当前启用」；只有一个包能处于启用状态
 5. 点圆点可切换启用，点「展开」可看到包内的每个脚本，「收起」恢复
