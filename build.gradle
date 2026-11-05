@@ -25,6 +25,13 @@ loom {
 	}
 }
 
+configurations {
+	// 需要合并进 mod jar 的普通（非 mod）依赖。Loom 的 include 只适用于 mod 依赖，
+	// 第三方 Java 库走这里，由下面的 jar 任务解包合并。
+	embed
+	implementation.extendsFrom(embed)
+}
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -33,6 +40,10 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Rhino：在客户端内嵌 JS 运行时，承载 scratch-vm（见 vm 包）。
+	// 用独立配置打包进 mod jar，避免把 Minecraft / Fabric 一起卷进来。
+	embed "org.mozilla:rhino:1.7.15"
 
 	// Mod Menu: 仅客户端，软依赖（编译期可见 + 开发环境本地运行时加载，不写进发布依赖）
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
@@ -79,11 +90,44 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_$projectName"}
 	}
+
+	// 把 Rhino 解包合并进 mod jar；签名与清单文件必须排除，否则会破坏 jar 校验
+	from({ configurations.embed.collect { it.isDirectory() ? it : zipTree(it) } }) {
+		exclude "META-INF/MANIFEST.MF"
+		exclude "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA"
+	}
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	// 冒烟测试类只用于 `gradlew vmSmoke / vmWrite`，不随模组发布
+	exclude "xyz/hegke/client/script/vm/*SmokeTest*.class"
+}
+
+// VM 后端的冒烟测试：不启动客户端，直接验证 Rhino + scratch-vm 链路
+tasks.register('vmSmoke', JavaExec) {
+	group = 'verification'
+	description = '在纯 JVM 中跑通 VM 后端（-PvmProject=路径 -PvmMode=hat）'
+	mainClass = 'xyz.hegke.client.script.vm.VmSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath
+	def projectPath = providers.gradleProperty('vmProject').getOrElse('run/hkscript-vm/project.json')
+	def mode = providers.gradleProperty('vmMode').getOrElse('')
+	args = mode.isEmpty() ? [projectPath] : [projectPath, mode]
+}
+
+// 往返冒烟：编辑器积木树 → project.json → VM 执行
+// 导入：sb3 → 可查看的积木树 + VM 执行
+tasks.register('vmImport', JavaExec) {
+	group = 'verification'
+	description = '验证 sb3 能解析成可查看的积木树并被 VM 执行（-Psb3=路径）'
+	mainClass = 'xyz.hegke.client.script.vm.ImportSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath
+	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/config/hk-script/packages/作品.sb3')
+	args = [sb3Path]
+	// 积木树是中文，控制台默认 GBK 会乱码
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
 // configure the maven publication
-publishing {
-	publications {
+publishing {	publications {
 		create("mavenJava", MavenPublication) {
 			from components.java
 		}

@@ -32,13 +32,6 @@ public final class NodeChain {
 		return nodes;
 	}
 
-	public static BlockNode relink(List<BlockNode> nodes) {
-		for (int i = 0; i < nodes.size(); i++) {
-			nodes.get(i).next = i + 1 < nodes.size() ? nodes.get(i + 1) : null;
-		}
-		return nodes.isEmpty() ? null : nodes.get(0);
-	}
-
 	public static String label(String type) {
 		return I18n.translate("block.hk-script." + type);
 	}
@@ -63,8 +56,8 @@ public final class NodeChain {
 	/**
 	 * 带展开层数的摘要。
 	 *
-	 * <p>嵌套的表达式会内联成 {@code (长度 (指令))} 这样的文本，而不是 {@code [...]}——
-	 * 调试时最需要的正是"这里到底算的是什么"。层数用尽后退化为 {@code …}，避免一行过长。</p>
+	 * <p>嵌套的表达式会内联成 {@code (列表长度 (方块列表))} 这样的文本，而不是 {@code [...]}——
+	 * 查看时最需要看懂的正是"这里到底算的是什么"。层数用尽后退化为 {@code …}，避免一行过长。</p>
 	 */
 	private static String summary(BlockNode node, String scopeId, int depth) {
 		// 有显示模板的积木直接套模板，参数嵌在句子里（如「{B} 的第 {A} 个字符」）

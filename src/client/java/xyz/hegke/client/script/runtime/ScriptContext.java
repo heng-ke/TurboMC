@@ -9,8 +9,8 @@ import java.util.function.Supplier;
 /**
  * 脚本可见的宿主环境。
  *
- * <p>刻意用 {@link Object} 持有宿主句柄、不直接引用任何 Minecraft 类型，使执行内核
- * （编译器 / 解释器 / 调度器）可以脱离游戏运行，便于自检与后续单元测试。</p>
+ * <p>刻意用 {@link Object} 持有宿主句柄、不直接引用任何 Minecraft 类型，使动作层
+ * 与测试可以在没有客户端实例的情况下加载——冒烟测试正是靠这一点在纯 JVM 里跑通。</p>
  *
  * <p>实例每 tick 重建一次，因此内部的 {@link #cached} 天然是「单 tick 缓存」：
  * 多个查询积木读取同一份世界数据时只遍历一次。</p>
@@ -18,11 +18,8 @@ import java.util.function.Supplier;
 public final class ScriptContext {
 	private final Object handle;
 	private final Map<String, Object> cache = new HashMap<>();
-	private boolean stopAllRequested;
 	/** 当前正在执行 step 的实例，供动作层归属按键等资源。 */
 	private Object currentInstance;
-	/** 广播并等待：由引擎注入「发出广播并返回被唤醒实例」的实现。 */
-	private Function<String, List<ScriptInstance>> broadcaster = message -> List.of();
 	/** 挖掘等待：由引擎注入，内核只透传宿主目标，不依赖任何 Minecraft 类型。 */
 	private BreakProbe breakProbe = (context, state) -> new BreakResult(state, BreakResult.GIVE_UP);
 
@@ -34,36 +31,8 @@ public final class ScriptContext {
 		return handle;
 	}
 
-	/**
-	 * 请求停止全部脚本。标志位由引擎在本次 tick 的调度结束后统一处理，
-	 * 避免在遍历实例时直接清空集合。
-	 */
-	public void requestStopAll() {
-		stopAllRequested = true;
-	}
-
-	public boolean stopAllRequested() {
-		return stopAllRequested;
-	}
-
-	public void setCurrentInstance(Object instance) {
-		this.currentInstance = instance;
-	}
-
 	public Object currentInstance() {
 		return currentInstance;
-	}
-
-	public void setBroadcaster(Function<String, List<ScriptInstance>> broadcaster) {
-		this.broadcaster = broadcaster == null ? message -> List.of() : broadcaster;
-	}
-
-	/**
-	 * 发出广播，返回本次被唤醒的实例（可能为空）。
-	 */
-	public List<ScriptInstance> broadcast(String message) {
-		List<ScriptInstance> started = broadcaster.apply(message);
-		return started == null ? List.of() : started;
 	}
 
 	public Object cached(String key, Supplier<Object> supplier) {
@@ -72,6 +41,56 @@ public final class ScriptContext {
 		}
 		Object value = supplier.get();
 		cache.put(key, value);
+		return value;
+	}
+
+	// ---- 阻塞动作的等待请求 ----
+
+	/**
+	 * 动作请求脚本暂停的帧数，供 JS 运行时包装成 Promise。
+	 *
+	 * <p>命令类积木原本同步返回即可，但「按住 N tick」「等待方块挖破」这类动作
+	 * 在 Scratch 语义里必须挂起线程，否则后续积木会立刻执行。</p>
+	 */
+	private int waitTicks;
+
+	/** 动作层声明需要等待的帧数；取较大值，避免同一次调用里被较小的值覆盖。 */
+	public void requestWait(int ticks) {
+		if (ticks > waitTicks) {
+			waitTicks = ticks;
+		}
+	}
+
+	/** 取走并清空等待请求。 */
+	public int takeWaitTicks() {
+		int value = waitTicks;
+		waitTicks = 0;
+		return value;
+	}
+
+	/**
+	 * 条件型等待：挂起直到宿主侧的检查通过，或超过上限帧数。
+	 *
+	 * <p>用于「等待方块被挖破」这类没有固定时长的动作。检查键由 JS 运行时每帧
+	 * 回调 {@code ScriptBridge.poll(key)}，返回 {@code true} 即结束等待。</p>
+	 */
+	private String waitCheck;
+	private int waitLimit;
+
+	public void requestWaitUntil(String checkKey, int maxTicks) {
+		waitCheck = checkKey;
+		waitLimit = Math.max(1, maxTicks);
+	}
+
+	public String takeWaitCheck() {
+		String value = waitCheck;
+		waitCheck = null;
+		return value;
+	}
+
+	public int takeWaitLimit() {
+		int value = waitLimit;
+		waitLimit = 0;
 		return value;
 	}
 

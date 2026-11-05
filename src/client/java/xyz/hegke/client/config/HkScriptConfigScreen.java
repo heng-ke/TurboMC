@@ -48,36 +48,8 @@ public final class HkScriptConfigScreen {
 				.setSaveConsumer(value -> config.hudCorner = value)
 				.build());
 
-		// ---- 自动化 ----
-		ConfigCategory automation = builder.getOrCreateCategory(Text.translatable("config.hk-script.category.automation"));
-
-		automation.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.hk-script.auto_tool"), config.autoToolEnabled)
-				.setDefaultValue(false)
-				.setTooltip(Text.translatable("config.hk-script.auto_tool.tooltip"))
-				.setSaveConsumer(value -> config.autoToolEnabled = value)
-				.build());
-
-		automation.addEntry(entries
-				.startIntSlider(Text.translatable("config.hk-script.auto_tool_radius"), config.autoToolSearchRadius, 1, 8)
-				.setDefaultValue(3)
-				.setTooltip(Text.translatable("config.hk-script.auto_tool_radius.tooltip"))
-				.setSaveConsumer(value -> config.autoToolSearchRadius = value)
-				.build());
-
 		// ---- 脚本引擎 ----
 		ConfigCategory script = builder.getOrCreateCategory(Text.translatable("config.hk-script.category.script"));
-
-		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.hk-script.loop_throttle"), config.scratchLoopThrottle)
-				.setDefaultValue(false)
-				.setTooltip(Text.translatable("config.hk-script.loop_throttle.tooltip"))
-				.setSaveConsumer(value -> {
-					config.scratchLoopThrottle = value;
-					// 循环是否让出是在编译期决定的，改动后需要重新编译脚本
-					xyz.hegke.client.script.ScriptEngine.get().restart();
-				})
-				.build());
 
 		script.addEntry(entries
 				.startBooleanToggle(Text.translatable("config.hk-script.auto_respawn"), config.autoRespawn)

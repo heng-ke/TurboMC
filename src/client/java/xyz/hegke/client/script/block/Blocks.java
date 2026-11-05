@@ -4,7 +4,10 @@ import java.util.List;
 
 /**
  * 核心积木清单，覆盖「事件 / 控制 / 运算 / 变量 / 查询 / 动作 / 调试」七类。
- * 参数规格同时驱动编辑器的控件生成，新增积木时在此声明参数即可。
+ *
+ * <p>这份清单只服务于「把 sb3 积木渲染成文本」。脚本由 TurboWarp 编写，
+ * 游戏内不提供拼接，因此这里不生成任何控件；新增积木时若忘了在此声明，
+ * 查看器会把它显示成未注册的原始 opcode（不影响运行）。</p>
  */
 final class Blocks {
 	private Blocks() {
@@ -28,10 +31,13 @@ final class Blocks {
 		regT("event.broadcast", "event", BlockShape.HAT, "当收到 {MSG}",
 				BlockParam.fieldText("MSG", ""));
 
+		// 自定义积木：游戏内不能定义，但导入的工程要能看见定义与函数体
+		regT("procedures.definition", "control", BlockShape.HAT, "定义 {NAME}",
+				BlockParam.text("NAME", ""));
+
 		// 控制
 		regT("control.if", "control", BlockShape.C_SHAPE, "如果 {CONDITION}",
-				BlockParam.bool("CONDITION", "false"));
-		regT("control.if_else", "control", BlockShape.C_SHAPE, "如果 {CONDITION} 否则",
+				BlockParam.bool("CONDITION", "false"));		regT("control.if_else", "control", BlockShape.C_SHAPE, "如果 {CONDITION} 否则",
 				BlockParam.bool("CONDITION", "false"));
 		regT("control.repeat", "control", BlockShape.C_SHAPE, "重复 {TIMES} 次",
 				BlockParam.number("TIMES", "10"));
@@ -113,6 +119,12 @@ final class Blocks {
 				BlockParam.fieldText("VAR", "x"),
 				BlockParam.fieldOption("SCOPE", "local", "local", "global"),
 				BlockParam.number("VALUE", "0"));
+		// 只读查看需要它：sb3 里的「将变量增加」与「设为」是两块积木，
+		// 挤到同一个类型上会把「增加 1」显示成「设为 1」
+		regT("data.change", "data", BlockShape.STACK, "将 {VAR} 增加 {VALUE}",
+				BlockParam.fieldText("VAR", "x"),
+				BlockParam.fieldOption("SCOPE", "local", "local", "global"),
+				BlockParam.number("VALUE", "1"));
 		reg("data.get", "data", BlockShape.REPORTER,
 				BlockParam.fieldText("VAR", "x"),
 				BlockParam.fieldOption("SCOPE", "local", "local", "global"));
@@ -245,6 +257,12 @@ final class Blocks {
 		regT("debug.say", "debug", BlockShape.STACK, "说 {TEXT}",
 				BlockParam.text("TEXT", ""));
 		regT("debug.say_for", "debug", BlockShape.STACK, "说 {TEXT} {TICKS}",
+				BlockParam.text("TEXT", ""),
+				BlockParam.number("TICKS", "20"));
+		// 思考与说是两块不同积木，同样的道理不能合并
+		regT("debug.think", "debug", BlockShape.STACK, "思考 {TEXT}",
+				BlockParam.text("TEXT", ""));
+		regT("debug.think_for", "debug", BlockShape.STACK, "思考 {TEXT} {TICKS}",
 				BlockParam.text("TEXT", ""),
 				BlockParam.number("TICKS", "20"));
 

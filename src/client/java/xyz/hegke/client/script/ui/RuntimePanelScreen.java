@@ -5,23 +5,17 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 import xyz.hegke.client.script.ScriptEngine;
-import xyz.hegke.client.script.action.ListFunctions;
-import xyz.hegke.client.script.runtime.GlobalVariables;
-import xyz.hegke.client.script.node.BlockNode;
-import xyz.hegke.client.script.runtime.ScriptInstance;
-import xyz.hegke.client.script.runtime.Values;
-
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import xyz.hegke.client.script.vm.RhinoVm;
+import xyz.hegke.client.script.vm.ScriptBridge;
 
 /**
- * 运行状态面板：实时展示活动脚本实例的程序计数器与局部变量。
+ * 运行状态面板：展示 VM 的线程数、脚本数与变量快照。
  *
- * <p>数据在每帧渲染时直接读取调度器，因此不需要刷新按钮。</p>
+ * <p>执行内核换成 scratch-vm 之后，不再有「实例 / 程序计数器」这类概念——
+ * VM 内部以字节码线程运行，所以这里只呈现可观测的聚合状态。数据每帧现读，无需刷新。</p>
  */
 public class RuntimePanelScreen extends Screen {
-	private static final int MAX_ROWS = 8;
+	private static final int MAX_VARS = 8;
 
 	private final Screen parent;
 
@@ -48,81 +42,45 @@ public class RuntimePanelScreen extends Screen {
 				Text.translatable(running ? "screen.hk-script.runtime_on" : "screen.hk-script.runtime_off"),
 				width / 2, 38, running ? 0xFF55FF55 : 0xFFFF5555);
 
-		List<ScriptInstance> instances = ScriptEngine.get().instances();
 		int left = width / 2 - 200;
-		int y = 58;
+		int y = 62;
 
-		if (instances.isEmpty()) {
-			context.drawCenteredTextWithShadow(textRenderer,
-					Text.translatable("screen.hk-script.runtime_empty"), width / 2, 88, 0xFF808080);
+		RhinoVm vm = RhinoVm.get();
+		boolean ready = vm.isReady();
+		context.drawTextWithShadow(textRenderer,
+				"runtime: " + (ready ? "rhino + scratch-vm" : "not loaded"), left, y, 0xFFA0A0A0);
+		y += 13;
+
+		context.drawTextWithShadow(textRenderer,
+				"pack=" + (ScriptEngine.get().activeName().isEmpty() ? "none" : ScriptEngine.get().activeName())
+						+ "  scripts=" + ScriptEngine.get().scriptCount()
+						+ "  threads=" + (ready ? vm.threadCount() : 0)
+						+ "  bridge=" + ScriptBridge.callCount()
+						+ "  unmapped=" + ScriptBridge.missCount(),
+				left, y, 0xFFFFFFFF);
+		y += 16;
+
+		String dump = ready ? vm.variableDump() : "";
+		if (dump == null || dump.isEmpty()) {
+			context.drawTextWithShadow(textRenderer,
+					Text.translatable("screen.hk-script.runtime_empty"), left, y, 0xFF808080);
 			return;
 		}
 
+		context.drawTextWithShadow(textRenderer, "[variables]", left, y, 0xFFFFFF80);
+		y += 12;
+		String[] parts = dump.split(";");
 		int shown = 0;
-		for (ScriptInstance instance : instances) {
-			if (shown++ >= MAX_ROWS) {
+		for (String part : parts) {
+			if (shown++ >= MAX_VARS) {
+				context.drawTextWithShadow(textRenderer,
+						"... " + (parts.length - MAX_VARS) + " more", left + 8, y, 0xFF808080);
 				break;
 			}
-			String header = instance.script().name()
-					+ "  [" + stateLabel(instance) + "]"
-					+ "  " + instance.pc() + "/" + instance.script().size();
-			context.drawTextWithShadow(textRenderer, header, left, y, 0xFFFFFFFF);
+			context.drawTextWithShadow(textRenderer,
+					textRenderer.trimToWidth(part, width - left - 24), left + 8, y, 0xFFA0A0A0);
 			y += 11;
-
-			// 当前积木：把 pc 翻译成编辑器里能看到的那一行，否则只有数字无从定位
-			BlockNode current = instance.script().blockAt(Math.max(0, instance.pc() - 1));
-			if (current != null) {
-				String summary = "▶ " + NodeChain.summary(current, instance.script().scopeId());
-				context.drawTextWithShadow(textRenderer,
-						Text.literal(textRenderer.trimToWidth(summary, width - left - 24)),
-						left + 12, y, 0xFFFFC24D);
-				y += 11;
-			}
-
-			Map<String, Object> locals = instance.locals();
-			String variables = locals.entrySet().stream()
-					.limit(4)
-					.map(entry -> entry.getKey() + "=" + Values.asString(entry.getValue()))
-					.collect(Collectors.joining("  "));
-			if (!variables.isEmpty()) {
-				context.drawTextWithShadow(textRenderer, variables, left + 12, y, 0xFFA0A0A0);
-				y += 11;
-			}
-			if (instance.state() == ScriptInstance.State.ERROR) {
-				context.drawTextWithShadow(textRenderer,
-						Text.literal(instance.error()), left + 12, y, 0xFFFF5555);
-				y += 11;
-			}
-			y += 6;
 		}
-
-		Map<String, Object> globals = GlobalVariables.snapshot();
-		if (!globals.isEmpty()) {
-			String text = globals.entrySet().stream()
-					.limit(8)
-					.map(entry -> entry.getKey() + "=" + Values.asString(entry.getValue()))
-					.collect(Collectors.joining("  "));
-			context.drawTextWithShadow(textRenderer, "[global] " + text, left, y + 6, 0xFFFFFF80);
-			y += 12;
-		}
-
-		Map<String, Integer> lists = ListFunctions.sizes();
-		if (!lists.isEmpty()) {
-			String text = lists.entrySet().stream()
-					.limit(8)
-					.map(entry -> entry.getKey() + ":" + entry.getValue())
-					.collect(Collectors.joining("  "));
-			context.drawTextWithShadow(textRenderer, "[list] " + text, left, y + 6, 0xFF80E0E0);
-		}
-	}
-
-	private String stateLabel(ScriptInstance instance) {
-		return switch (instance.state()) {
-			case RUNNING -> "run";
-			case WAITING -> "wait";
-			case FINISHED -> "done";
-			case ERROR -> "error";
-		};
 	}
 
 	@Override

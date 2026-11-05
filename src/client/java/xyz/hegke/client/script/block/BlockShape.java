@@ -1,7 +1,7 @@
 package xyz.hegke.client.script.block;
 
 /**
- * 积木外形。决定该积木在编辑器中的连接规则与是否产生返回值。
+ * 积木外形。仅用于查看时的视觉归类，不参与任何拼接规则。
  */
 public enum BlockShape {
 	/** 事件积木，只能位于脚本顶部。 */

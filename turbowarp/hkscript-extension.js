@@ -34,16 +34,22 @@
 					{
 						opcode: 'whenDamaged',
 						blockType: Scratch.BlockType.HAT,
+						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
+						isEdgeActivated: false,
 						text: T('when damaged', '当受伤时')
 					},
 					{
 						opcode: 'whenDeath',
 						blockType: Scratch.BlockType.HAT,
+						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
+						isEdgeActivated: false,
 						text: T('when player dies', '当玩家死亡')
 					},
 					{
 						opcode: 'whenChat',
 						blockType: Scratch.BlockType.HAT,
+						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
+						isEdgeActivated: false,
 						text: T('when chat contains [MATCH]', '当聊天包含 [MATCH]'),
 						arguments: {
 							MATCH: {type: Scratch.ArgumentType.STRING, defaultValue: ''}
@@ -372,6 +378,21 @@
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('sleep in nearby bed', '睡附近的床')
 					},
+					{
+						opcode: 'breakWait',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('wait until block broken', '等待方块被挖破')
+					},
+					{
+						opcode: 'isMining',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('is mining', '正在挖掘')
+					},
+					{
+						opcode: 'miningProgress',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('mining progress', '挖掘进度')
+					},
 				],
 				menus: {
 					mouseButton: {
@@ -444,6 +465,9 @@
 		ping() { return 0; }
 		placeBlock(args) { this.preview('placeBlock ' + args.X + ',' + args.Y + ',' + args.Z); }
 		sleep() { this.preview('sleep'); }
+		breakWait() { this.preview('breakWait'); }
+		isMining() { return false; }
+		miningProgress() { return 0; }
 
 		log(args) {
 			console.log('[hk-script]', args.TEXT);

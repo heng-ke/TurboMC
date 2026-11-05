@@ -5,7 +5,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 积木类型注册表。编译期与编辑器共用同一份定义，避免两处语义漂移。
+ * 积木类型注册表。
+ *
+ * <p>这些定义现在只有一个用途：把 sb3 里的积木渲染成可读的一行文本。脚本本身由
+ * TurboWarp 编写与执行，游戏内不再拼接积木，所以这里的参数不会生成任何控件。</p>
  */
 public final class BlockRegistry {
 	private static final Map<String, BlockType> TYPES = new LinkedHashMap<>();

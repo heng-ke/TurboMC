@@ -6,133 +6,95 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 import xyz.hegke.client.script.ScriptEngine;
+import xyz.hegke.client.script.sb3.Sb3Importer;
+import xyz.hegke.client.script.store.PackStore;
 import xyz.hegke.client.script.store.ScriptDefinition;
-import xyz.hegke.client.script.store.ScriptStore;
+import xyz.hegke.client.script.store.ScriptPack;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * 脚本列表：新建、启用/停用、删除、进入编辑。
+ * 脚本包列表。
+ *
+ * <p>脚本在 TurboWarp 里编写、导出成 sb3，这里只负责：导入、启用哪一个包、重命名、删除，
+ * 以及展开查看包里的脚本树。</p>
+ *
+ * <p>开关是互斥的——同时只运行一个工程。这样才能把 sb3 原样交给 VM，
+ * 不必合并多个工程的角色与舞台变量（那会引入静默的变量错乱）。</p>
  */
 public class ScriptListScreen extends Screen {
-	private static final int PAGE_SIZE = 8;
-	private static final int ROW_HEIGHT = 26;
+	private static final int ROW_HEIGHT = 20;
 
 	private final Screen parent;
-	private int page;
-	private int totalPages = 1;
+	/** 展开的包（文件名）。 */
+	private final Set<String> expanded = new HashSet<>();
+	/** 选中的包，重命名/删除作用在它身上。 */
+	private String selected;
 
 	public ScriptListScreen(Screen parent) {
-		super(Text.translatable("screen.hk-script.scripts"));
+		super(Text.translatable("screen.hk-script.packs"));
 		this.parent = parent;
+	}
+
+	public ScriptListScreen(Screen parent, String selectAfterOpen) {
+		this(parent);
+		this.selected = selectAfterOpen;
 	}
 
 	@Override
 	protected void init() {
-		List<ScriptDefinition> scripts = ScriptStore.get().sorted();
-		totalPages = Math.max(1, (scripts.size() + PAGE_SIZE - 1) / PAGE_SIZE);
-		page = Math.max(0, Math.min(page, totalPages - 1));
+		PackStore store = PackStore.get();
+		store.ensureDirectories();
+		List<ScriptPack> packs = store.packs();
 
 		int left = width / 2 - 210;
-		int startY = 48;
-		int from = page * PAGE_SIZE;
-		int to = Math.min(scripts.size(), from + PAGE_SIZE);
+		int y = 48;
 
-		for (int index = from; index < to; index++) {
-			ScriptDefinition definition = scripts.get(index);
-			int rowY = startY + (index - from) * ROW_HEIGHT;
-			String marker = definition.enabled ? "\u25CF " : "\u25CB ";
+		for (ScriptPack pack : packs) {
+			addPackRow(store, pack, left, y);
+			y += ROW_HEIGHT;
 
-			addDrawableChild(ButtonWidget.builder(
-					Text.literal(marker + definition.name),
-					button -> {
-						if (client != null) {
-							client.setScreen(new ScriptEditScreen(this, definition));
-						}
-					}
-			).dimensions(left, rowY, 200, 20).build());
-
-			addDrawableChild(ButtonWidget.builder(
-					Text.translatable(definition.enabled ? "screen.hk-script.on" : "screen.hk-script.off"),
-					button -> {
-						definition.enabled = !definition.enabled;
-						ScriptStore.get().save(definition);
-						ScriptEngine.get().restart();
-						refresh();
-					}
-			).dimensions(left + 204, rowY, 40, 20).build());
-
-			addDrawableChild(ButtonWidget.builder(
-					Text.translatable("screen.hk-script.duplicate"),
-					button -> {
-						ScriptStore.get().duplicate(definition);
-						ScriptEngine.get().restart();
-						refresh();
-					}
-			).dimensions(left + 248, rowY, 40, 20).build());
-
-			addDrawableChild(ButtonWidget.builder(
-					Text.translatable("screen.hk-script.rename"),
-					button -> {
-						if (client != null) {
-							client.setScreen(new TextInputScreen(this,
-									Text.translatable("screen.hk-script.rename"),
-									definition.name,
-									name -> {
-										ScriptStore.get().rename(definition, name);
-										ScriptEngine.get().restart();
-										if (client != null) {
-											client.setScreen(new ScriptListScreen(parent));
-										}
-									}));
-						}
-					}
-			).dimensions(left + 292, rowY, 52, 20).build());
-
-			addDrawableChild(ButtonWidget.builder(
-					Text.translatable("screen.hk-script.delete"),
-					button -> confirmDelete(definition)
-			).dimensions(left + 348, rowY, 46, 20).build());
+			if (expanded.contains(pack.fileName)) {
+				Sb3Importer.Result result = store.scripts(pack);
+				if (!result.ok()) {
+					y += ROW_HEIGHT;
+					continue;
+				}
+				for (ScriptDefinition definition : result.scripts()) {
+					addScriptRow(pack, definition, left, y);
+					y += ROW_HEIGHT;
+				}
+			}
 		}
 
-		int bottom = height - 32;
-		addDrawableChild(ButtonWidget.builder(
-				Text.translatable("screen.hk-script.new"),
-				button -> {
-					ScriptDefinition created = ScriptStore.get().create("script");
-					if (client != null) {
-						client.setScreen(new ScriptEditScreen(this, created));
-					}
-				}
-		).dimensions(left, bottom, 70, 20).build());
-
+		int bottom = height - 30;
 		addDrawableChild(ButtonWidget.builder(
 				Text.translatable("screen.hk-script.import"),
 				button -> {
-					ScriptStore.get().importAll();
-					ScriptEngine.get().restart();
+					int added = store.importAll();
+					if (added > 0) {
+						// 新包默认接管运行，用户点导入就是想马上看到效果
+						ScriptPack active = store.activePack();
+						if (active == null) {
+							store.setActive(store.packs().stream().findFirst().orElse(null));
+						}
+						ScriptEngine.get().restart();
+					}
 					refresh();
 				}
-		).dimensions(left + 74, bottom, 60, 20).build());
+		).dimensions(left, bottom, 60, 20).build());
 
-		if (page > 0) {
-			addDrawableChild(ButtonWidget.builder(
-					Text.literal("<"),
-					button -> {
-						page--;
-						refresh();
-					}
-			).dimensions(left + 140, bottom, 28, 20).build());
-		}
-		if (page + 1 < totalPages) {
-			addDrawableChild(ButtonWidget.builder(
-					Text.literal(">"),
-					button -> {
-						page++;
-						refresh();
-					}
-			).dimensions(left + 172, bottom, 28, 20).build());
-		}
+		addDrawableChild(ButtonWidget.builder(
+				Text.translatable("screen.hk-script.rename"),
+				button -> renameSelected()
+		).dimensions(left + 64, bottom, 60, 20).build());
+
+		addDrawableChild(ButtonWidget.builder(
+				Text.translatable("screen.hk-script.delete"),
+				button -> confirmDeleteSelected()
+		).dimensions(left + 128, bottom, 60, 20).build());
 
 		addDrawableChild(ButtonWidget.builder(
 				Text.translatable("screen.hk-script.runtime"),
@@ -149,14 +111,106 @@ public class ScriptListScreen extends Screen {
 		).dimensions(left + 330, bottom, 90, 20).build());
 	}
 
-	private void confirmDelete(ScriptDefinition definition) {
-		if (client == null) {
+	private void addPackRow(PackStore store, ScriptPack pack, int left, int y) {
+		boolean isSelected = pack.fileName.equals(selected);
+
+		// 状态圆点：点击即切换启用（互斥，其余包自动关闭）
+		addDrawableChild(ButtonWidget.builder(
+				Text.literal(pack.enabled ? "\u25CF" : "\u25CB"),
+				button -> {
+					// 点已启用的包不做事：全部关掉等于让引擎空转，用户容易以为坏了。
+					// 要停止运行请用 F6 总开关。
+					if (!pack.enabled) {
+						store.setActive(pack);
+						ScriptEngine.get().restart();
+						refresh();
+					}
+				}
+		).dimensions(left, y, 20, 20).build());
+
+		addDrawableChild(ButtonWidget.builder(
+				Text.literal((isSelected ? "\u00BB " : "") + pack.displayName()),
+				button -> {
+					selected = pack.fileName;
+					refresh();
+				}
+		).dimensions(left + 22, y, 190, 20).build());
+
+		Sb3Importer.Result result = store.scripts(pack);
+		String count = result.ok()
+				? Text.translatable("screen.hk-script.script_count", result.scripts().size()).getString()
+				: Text.translatable("screen.hk-script.broken").getString();
+		// 数量是只读信息，用按钮只是因为与行对齐
+		addDrawableChild(ButtonWidget.builder(
+				Text.literal(count),
+				button -> {
+					selected = pack.fileName;
+					refresh();
+				}
+		).dimensions(left + 214, y, 100, 20).build());
+
+		boolean open = expanded.contains(pack.fileName);
+		addDrawableChild(ButtonWidget.builder(
+				Text.translatable(open ? "screen.hk-script.collapse" : "screen.hk-script.expand"),
+				button -> {
+					if (!expanded.remove(pack.fileName)) {
+						expanded.add(pack.fileName);
+					}
+					refresh();
+				}
+		).dimensions(left + 318, y, 76, 20).build());
+	}
+
+	private void addScriptRow(ScriptPack pack, ScriptDefinition definition, int left, int y) {
+		String trigger = definition.hat == null ? "" : NodeChain.label(definition.hat.type);
+		addDrawableChild(ButtonWidget.builder(
+				Text.literal("  \u2514 " + definition.name + "   " + trigger),
+				button -> {
+					if (client != null) {
+						client.setScreen(new ScriptEditScreen(this, definition));
+					}
+				}
+		).dimensions(left + 22, y, 372, 20).build());
+	}
+
+	private ScriptPack selectedPack() {
+		if (selected == null) {
+			return null;
+		}
+		for (ScriptPack pack : PackStore.get().packs()) {
+			if (pack.fileName.equals(selected)) {
+				return pack;
+			}
+		}
+		return null;
+	}
+
+	private void renameSelected() {
+		ScriptPack pack = selectedPack();
+		if (pack == null || client == null) {
+			return;
+		}
+		client.setScreen(new TextInputScreen(this,
+				Text.translatable("screen.hk-script.rename"),
+				pack.displayName(),
+				name -> {
+					PackStore.get().rename(pack, name);
+					ScriptEngine.get().restart();
+					if (client != null) {
+						client.setScreen(new ScriptListScreen(parent));
+					}
+				}));
+	}
+
+	private void confirmDeleteSelected() {
+		ScriptPack pack = selectedPack();
+		if (pack == null || client == null) {
 			return;
 		}
 		client.setScreen(new ConfirmScreen(
 				confirmed -> {
 					if (confirmed) {
-						ScriptStore.get().delete(definition);
+						PackStore.get().delete(pack);
 						ScriptEngine.get().restart();
 					}
 					if (client != null) {
@@ -164,15 +218,10 @@ public class ScriptListScreen extends Screen {
 					}
 				},
 				Text.translatable("screen.hk-script.delete.title"),
-				Text.translatable("screen.hk-script.delete.message", definition.name)
+				Text.translatable("screen.hk-script.delete.message", pack.fileName)
 		));
 	}
 
-	/**
-	 * 重建控件但保留本屏状态（页码、选中项）。
-	 *
-	 * <p>以前这里 {@code new} 一个新实例：页码随之归零，翻页按钮点了等于原地打转。</p>
-	 */
 	private void refresh() {
 		clearAndInit();
 	}
@@ -180,14 +229,29 @@ public class ScriptListScreen extends Screen {
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
 		super.render(context, mouseX, mouseY, deltaTicks);
+		int left = width / 2 - 210;
 		context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 24, 0xFFFFFFFF);
-		context.drawCenteredTextWithShadow(textRenderer,
-				Text.literal((page + 1) + " / " + totalPages), width / 2, height - 46, 0xFFA0A0A0);
 
-		String message = ScriptStore.get().lastMessage();
+		if (PackStore.get().packs().isEmpty()) {
+			context.drawCenteredTextWithShadow(textRenderer,
+					Text.translatable("screen.hk-script.no_packs"), width / 2, 60, 0xFFA0A0A0);
+		}
+
+		context.drawTextWithShadow(textRenderer,
+				Text.translatable("screen.hk-script.pack_hint"),
+				left, height - 44, 0xFF808080);
+
+		ScriptPack active = PackStore.get().activePack();
+		if (active != null) {
+			context.drawTextWithShadow(textRenderer,
+					Text.translatable("screen.hk-script.running_pack", active.fileName),
+					left, height - 60, 0xFF55FF55);
+		}
+
+		String message = PackStore.get().lastMessage();
 		if (!message.isEmpty()) {
 			context.drawCenteredTextWithShadow(textRenderer, Text.literal(message),
-					width / 2, height - 62, 0xFF55FF55);
+					width / 2, height - 58, 0xFF55FF55);
 		}
 	}
 

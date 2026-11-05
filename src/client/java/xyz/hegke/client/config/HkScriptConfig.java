@@ -37,17 +37,15 @@ public final class HkScriptConfig {
 	public boolean masterEnabled = true;
 	public HudCorner hudCorner = HudCorner.TOP_LEFT;
 
-	// ---- 自动化示例项 ----
-	public boolean autoToolEnabled = false;
-	public int autoToolSearchRadius = 3;
-
 	// ---- 脚本引擎 ----
 	public boolean scriptEngineEnabled = false;
 	/**
-	 * 循环节流：开启后每个循环轮次消耗一个 tick，与 Scratch 的「每帧一轮」一致；
-	 * 关闭时在一个 tick 内尽量多跑（默认，适合自动化脚本）。
+	 * VM 每 tick 的脚本时间预算（毫秒）。
+	 *
+	 * <p>scratch-vm 按 {@code 0.75 × 该值} 分配执行时间，默认 4 ms 约等于 20 tps
+	 * 的 50 ms 预算的 7%。调大跑得更快但会挤占渲染时间。</p>
 	 */
-	public boolean scratchLoopThrottle = false;
+	public int scratchVmBudgetMs = 4;
 	/**
 	 * 死亡后自动重生（不需要写脚本）。
 	 *

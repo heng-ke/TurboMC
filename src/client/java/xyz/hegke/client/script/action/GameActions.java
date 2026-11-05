@@ -105,6 +105,18 @@ public final class GameActions {
 		NativeRegistry.action("action.respawn", GameActions::respawn);
 		NativeRegistry.action("action.sleep", GameActions::sleep);
 		NativeRegistry.action("action.place_block", GameActions::placeBlock);
+		NativeRegistry.action("action.break_wait", GameActions::breakWait);
+	}
+
+	/**
+	 * 等待准星所指的方块被破坏。
+	 *
+	 * <p>没有固定时长，因此用条件型等待：JS 侧每帧回调 {@code ScriptBridge.poll("break")}，
+	 * 由 {@link WorldQueries#probeBreak} 判定。上限 200 帧（约 10 秒），
+	 * 超时或被挡（GIVE_UP）都放行，避免脚本永久挂住。</p>
+	 */
+	private static void breakWait(ScriptContext ctx, Object[] args) {
+		ctx.requestWaitUntil("break", 200);
 	}
 
 
@@ -186,12 +198,16 @@ public final class GameActions {
 		double dx = targetX - client.player.getX();
 		double dz = targetZ - client.player.getZ();
 		KeyBinding forward = client.options.forwardKey;
-		if (dx * dx + dz * dz < 0.25d) {
+		double distance = Math.sqrt(dx * dx + dz * dz);
+		if (distance < 0.5d) {
 			ScriptKeys.release(ctx.currentInstance(), forward);
 			return;
 		}
 		client.player.setYaw((float) Math.toDegrees(Math.atan2(-dx, dz)));
 		ScriptKeys.hold(ctx.currentInstance(), forward, -1);
+		// 步行约 0.216 格/tick；取 0.15 留出被地形拖慢的余量，上限 200 帧防止卡死。
+		// 这是估算而非到达判定：被挡住时会提前放行，需要精确语义时应配合「重复执行直到」使用。
+		ctx.requestWait((int) Math.min(200d, Math.ceil(distance / 0.15d)));
 	}
 
 	private static void stop(ScriptContext ctx, Object[] args) {
@@ -393,7 +409,12 @@ public final class GameActions {
 	 * 点按键盘键：按下后按住若干 tick 自动松开。
 	 */
 	private static void tap(ScriptContext ctx, Object[] args) {
-		applyTap(ctx, Values.asString(args[0]), (int) Math.round(Values.asNumber(args[1])));
+		int hold = (int) Math.round(Values.asNumber(args[1]));
+		applyTap(ctx, Values.asString(args[0]), hold);
+		// 按住期间脚本必须挂起，否则后面的积木会在松手之前就执行完
+		if (hold > 0) {
+			ctx.requestWait(hold);
+		}
 	}
 
 	/**

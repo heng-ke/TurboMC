@@ -4,6 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
@@ -13,6 +14,7 @@ import xyz.hegke.HkScript;
 import xyz.hegke.client.config.HkScriptConfig;
 import xyz.hegke.client.script.ScriptEngine;
 import xyz.hegke.client.script.runtime.TriggerDispatcher;
+import xyz.hegke.client.script.ui.ScriptHudElement;
 import xyz.hegke.client.script.ui.ScriptListScreen;
 
 public class HkScriptClient implements ClientModInitializer {
@@ -45,14 +47,14 @@ public class HkScriptClient implements ClientModInitializer {
 
 		ScriptEngine.get().init();
 
+		// 脚本 HUD：引擎状态 + 「说 / 思考」气泡。scratch-vm 的 say/think 在游戏内
+		// 没有任何渲染出口，不在这里补，脚本的话就没人看得见。
+		HudElementRegistry.addLast(HkScript.id("script_hud"), new ScriptHudElement());
+
 		ClientReceiveMessageEvents.CHAT.register(
 				(message, signedMessage, sender, params, receptionTimestamp) ->
-						ScriptEngine.get().fire("event.chat", hat -> {
-							String match = ScriptEngine.get().hatText(hat, "MATCH");
-							// null 表示关键词是表达式，触发时无法求值：不匹配，而不是匹配全部
-							return match != null
-									&& (match.isBlank() || message.getString().contains(match));
-						}));
+						// 关键词过滤在 VM 侧按每个「当聊天包含」积木的输入值完成
+						ScriptEngine.get().fireChat(message.getString()));
 
 		// 脚本在 START_CLIENT_TICK 推进，使本 tick 设置的动作能赶在实体移动逻辑之前生效。
 		ClientTickEvents.START_CLIENT_TICK.register(this::onClientTick);

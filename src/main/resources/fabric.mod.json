@@ -3,17 +3,14 @@
 	"id": "hk-script",
 	"version": "${version}",
 	"name": "hk-script",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "在 Minecraft 里运行 Scratch 积木脚本。脚本用 TurboWarp 编写并导出为 .sb3，模组负责加载与执行。",
 	"authors": [
-		"Me!"
+		"hk-script"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"contact": {},
 	"license": "CC0-1.0",
 	"icon": "assets/hk-script/icon.png",
-	"environment": "*",
+	"environment": "client",
 	"entrypoints": {
 		"main": [
 			"xyz.hegke.HkScript"

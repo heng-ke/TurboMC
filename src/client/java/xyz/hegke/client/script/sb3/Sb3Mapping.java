@@ -58,7 +58,7 @@ public final class Sb3Mapping {
 			// ---- 变量 ----
 			Map.entry("data_setvariableto", "data.set"),
 			Map.entry("data_variable", "data.get"),
-			Map.entry("data_changevariableby", "data.set"),
+			Map.entry("data_changevariableby", "data.change"),
 
 			// ---- 列表 ----
 			Map.entry("data_addtolist", "list.add"),
@@ -70,6 +70,7 @@ public final class Sb3Mapping {
 			Map.entry("data_lengthoflist", "list.length"),
 			Map.entry("data_listcontainsitem", "list.contains"),
 			Map.entry("data_itemnumoflist", "list.item_num"),
+			Map.entry("data_listcontents", "list.contents"),
 
 			// ---- 自定义积木 ----
 			Map.entry("procedures_call", "func.call"),
@@ -87,9 +88,9 @@ public final class Sb3Mapping {
 
 			// ---- 输出（说 / 思考 → 动作栏 + 日志）----
 			Map.entry("looks_say", "debug.say"),
-			Map.entry("looks_think", "debug.say"),
+			Map.entry("looks_think", "debug.think"),
 			Map.entry("looks_sayforsecs", "debug.say_for"),
-			Map.entry("looks_thinkforsecs", "debug.say_for"),
+			Map.entry("looks_thinkforsecs", "debug.think_for"),
 
 			// ---- 世界查询（扩展）----
 			Map.entry("hkscript_blockInFront", "world.block_in_front"),
@@ -139,6 +140,9 @@ public final class Sb3Mapping {
 			Map.entry("hkscript_entityCount", "world.entity_count"),
 			Map.entry("hkscript_biome", "world.biome"),
 			Map.entry("hkscript_ping", "world.ping"),
+			Map.entry("hkscript_breakWait", "action.break_wait"),
+			Map.entry("hkscript_isMining", "world.is_mining"),
+			Map.entry("hkscript_miningProgress", "world.mining_progress"),
 
 			// ---- 建造与界面（扩展）----
 			Map.entry("hkscript_placeBlock", "action.place_block"),
@@ -150,6 +154,44 @@ public final class Sb3Mapping {
 
 	public static String typeOf(String opcode) {
 		return TYPES.get(opcode);
+	}
+
+	/**
+	 * 内部积木类型 → sb3 opcode 的反向查表。
+	 *
+	 * <p><b>当前没有调用方</b>：脚本只从 sb3 导入到查看器，没有「写回 sb3」的路径。
+	 * 保留它是为了映射表成对完整——将来若需要导出工程，可直接复用，不必重做一张表。
+	 * 若确认不再需要，可连同 {@code PREFERRED} 与 {@code REVERSE} 一起删除。</p>
+	 *
+	 * <p>一对多的情况由 {@code PREFERRED} 钉死（如 {@code data.set} 固定反查到
+	 * {@code data_setvariableto}），避免依赖 Map 的迭代顺序。</p>
+	 */
+	public static String opcodeOf(String type) {
+		String preferred = PREFERRED.get(type);
+		return preferred != null ? preferred : REVERSE.get(type);
+	}
+
+	/**
+	 * 一个内部类型对应多个 opcode 时的首选。
+	 *
+	 * <p>{@code Map.ofEntries} 的迭代顺序不保证，取首个会随机落到近义积木上。
+	 * 目前映射表已做到一对一（「增加变量」「思考」都有独立类型），这里留作兜底。</p>
+	 */
+	private static final Map<String, String> PREFERRED = Map.of(
+			"data.set", "data_setvariableto",
+			"data.change", "data_changevariableby",
+			"debug.say", "looks_say",
+			"debug.say_for", "looks_sayforsecs",
+			"debug.think", "looks_think",
+			"debug.think_for", "looks_thinkforsecs");
+
+	private static final Map<String, String> REVERSE = buildReverse();
+
+	private static Map<String, String> buildReverse() {
+		Map<String, String> reverse = new java.util.LinkedHashMap<>();
+		TYPES.forEach((opcode, type) -> reverse.putIfAbsent(type, opcode));
+		PREFERRED.forEach(reverse::put);
+		return Map.copyOf(reverse);
 	}
 
 	public static boolean isSupported(String opcode) {
@@ -170,8 +212,8 @@ public final class Sb3Mapping {
 	/**
 	 * 输入槽改名。Scratch 各积木的输入名并不统一，这里统一收敛到内部命名。
 	 *
-	 * <p>注意 ITEM 只在列表积木（{@code data_*}）里改名为 VALUE；扩展积木 itemCount 的
-	 * 参数本身就叫 ITEM，不能一起改。</p>
+	 * <p>这是全项目唯一一份输入名映射，导入器直接调用。注意 ITEM 只在列表积木
+	 * （{@code data_*}）里改名为 VALUE；扩展积木 itemCount 的参数本身就叫 ITEM，不能一起改。</p>
 	 */
 	public static String inputName(String opcode, String scratchName) {
 		return switch (scratchName) {
@@ -191,6 +233,9 @@ public final class Sb3Mapping {
 
 	/**
 	 * 字段改名。Scratch 用 VARIABLE / KEY_OPTION / BROADCAST_OPTION，内部统一。
+	 *
+	 * <p>这是全项目唯一一份字段名映射，导入器直接调用；不要在别处再写一份，
+	 * 两份规则一旦漂移就会表现为「某个积木的参数显示成英文名」。</p>
 	 */
 	public static String fieldName(String opcode, String scratchName) {
 		return switch (scratchName) {
@@ -199,6 +244,7 @@ public final class Sb3Mapping {
 			case "BROADCAST_OPTION" -> "MSG";
 			case "OPERATOR" -> "OP";
 			case "CURRENTMENU" -> "UNIT";
+			case "STOP_OPTION" -> "OP";
 			default -> scratchName;
 		};
 	}

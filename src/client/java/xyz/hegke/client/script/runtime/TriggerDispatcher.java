@@ -58,10 +58,9 @@ public final class TriggerDispatcher {
 					: InputKeys.isDown(client, key);
 			boolean wasDown = keyStates.getOrDefault(key, false);
 			if (down && !wasDown) {
-				ScriptEngine.get().fire("event.key", hat -> {
-					String target = ScriptEngine.get().hatText(hat, "KEY");
-					return target != null && key.equals(target);
-				});
+				// 按键过滤交给 VM：startHats 按 KEY_OPTION 字段精确匹配，
+				// 只有绑定该键的脚本会启动
+				ScriptEngine.get().fireKey(key);
 			}
 			keyStates.put(key, down);
 		}

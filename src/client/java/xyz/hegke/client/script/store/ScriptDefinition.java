@@ -2,20 +2,18 @@ package xyz.hegke.client.script.store;
 
 import xyz.hegke.client.script.node.BlockNode;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * 一份用户脚本：名称、启用状态、入口积木链、自定义积木定义。
+ * 从 sb3 解析出的一份脚本：名称、所属角色、入口积木链。
+ *
+ * <p>不再持久化，也不再带启用状态——启停是包级的事。它只是导入结果的视图模型，
+ * 供列表与只读查看器使用。</p>
  */
 public final class ScriptDefinition {
 	public String name = "untitled";
-	public boolean enabled = false;
 	public BlockNode hat = BlockNode.of("event.tick");
-	public List<FunctionDefinition> functions = new ArrayList<>();
 	/**
-	 * 角色作用域标识：同一 sb3 角色导出的多个脚本共享它，对应 Scratch 的
-	 * 「仅适用于当前角色」变量。编辑器新建的脚本默认用自身名字。
+	 * 角色作用域标识：同一 sb3 角色下的多个脚本共享它，对应 Scratch 的
+	 * 「仅适用于当前角色」变量。导入时取角色名。
 	 */
 	public String scopeId = "";
 
