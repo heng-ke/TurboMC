@@ -194,6 +194,20 @@ function __tmcFieldText(block, name) {
 }
 
 /** 读取积木某个参数槽的文本：优先 fields，其次 [1,[10,"x"]] 与 [1,"blockId"] 两种输入形态。 */
+/**
+ * 读取积木某个参数槽的文本。
+ *
+ * <p>要同时兼容两种形态：</p>
+ * <ul>
+ *   <li><b>原始 JSON</b>：{@code [1, [10, "文字"]]} 或 {@code [1, "blockId"]}；</li>
+ *   <li><b>VM 运行期</b>：{@code {name, block, shadow}}——sb3 载入后输入会被改写成这个对象，
+ *       字面量本身则变成一个独立的替身积木，值放在它的 {@code fields.VALUE} 里。</li>
+ * </ul>
+ *
+ * <p>只认字面量。变量或表达式无法静态求值，返回 {@code null} 表示「不知道」，
+ * 由调用方决定不要拿它做过滤——返回空串会被当成「关键词为空 ⇒ 匹配全部」，
+ * 那正是「说一次却什么都触发」的来源。</p>
+ */
 function __tmcReadInput(blocks, block, name) {
 	var direct = __tmcFieldText(block, name);
 	if (direct !== null) {
@@ -203,23 +217,57 @@ function __tmcReadInput(blocks, block, name) {
 	if (!input) {
 		return '';
 	}
+
+	// 运行期对象形态 {name, block, shadow}：block 与 shadow 不同，说明槽里接了
+	// 变量或表达式，静态读不出值——返回 null 让调用方别拿它当关键词。
+	if (input.block !== undefined) {
+		if (input.block !== input.shadow) {
+			return null;
+		}
+		return __tmcShadowText(blocks, input.block);
+	}
+
+	// 原始 JSON 形态 [1, [10, "文字"]] 或 [1, "blockId"]
 	var value = input[1];
 	if (typeof value === 'string') {
-		var inner = blocks._blocks[value];
-		if (!inner) {
-			return '';
-		}
-		if (inner.fields) {
-			for (var key in inner.fields) {
-				if (inner.fields[key] && inner.fields[key].value !== undefined) {
-					return String(inner.fields[key].value);
-				}
-			}
-		}
-		return '';
+		return __tmcShadowText(blocks, value);
 	}
 	if (value && value.length >= 2) {
 		return String(value[1] === null || value[1] === undefined ? '' : value[1]);
+	}
+	return '';
+}
+
+/**
+ * 读替身积木里的字面量。
+ *
+ * <p>替身按类型把值放在不同字段上：文本是 {@code TEXT}、数字是 {@code NUM}，
+ * 变量是 {@code VARIABLE}（存的是名字，不是值——所以变量永远不会走到这里）。</p>
+ */
+function __tmcShadowText(blocks, id) {
+	var inner = blocks._blocks && blocks._blocks[id];
+	if (!inner) {
+		return '';
+	}
+	var byValue = __tmcFieldText(inner, 'VALUE');
+	if (byValue !== null) {
+		return byValue;
+	}
+	var byText = __tmcFieldText(inner, 'TEXT');
+	if (byText !== null) {
+		return byText;
+	}
+	var byNumber = __tmcFieldText(inner, 'NUM');
+	if (byNumber !== null) {
+		return byNumber;
+	}
+	if (inner.fields) {
+		for (var key in inner.fields) {
+			var text = __tmcFieldText(inner, key);
+			if (text !== null) {
+				return text;
+			}
+		}
 	}
 	return '';
 }
@@ -249,7 +297,11 @@ function __tmcStartHatFiltered(opcode, inputName, matchText) {
 			}
 			if (inputName && needle !== null) {
 				var pattern = __tmcReadInput(blocks, block, inputName);
-				if (pattern && needle.indexOf(pattern) < 0) {
+				if (pattern === null) {
+					// 关键词不是字面量（表达式之类）：静态读不出值，退化为「不按关键词过滤」
+					pattern = '';
+				}
+				if (pattern !== '' && needle.indexOf(pattern) < 0) {
 					continue;
 				}
 			}

@@ -49,6 +49,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmSmoke -PvmMode=hat     # 事件触发
 ./gradlew vmSmoke -PvmMode=block   # 阻塞动作
 ./gradlew vmImport                 # sb3 解析 + 执行
+./gradlew vmChat                   # 聊天帽子：一次事件只触发一次、关键词过滤
 ```
 
 ## 文档

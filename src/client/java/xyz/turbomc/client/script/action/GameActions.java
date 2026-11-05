@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.config.KeyNames;
 import xyz.turbomc.client.script.runtime.ScriptContext;
+import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.Values;
 
 import java.util.Locale;
@@ -361,6 +362,9 @@ public final class GameActions {
 			return;
 		}
 		client.getNetworkHandler().sendChatMessage(text);
+		// 服务端会把这条广播回来，同样触发一次聊天事件。登记一下，
+		// 免得「当聊天包含」被自己的回复再次拉起，形成无限回路。
+		SelfChatEcho.sentByScript(text);
 	}
 
 	/**

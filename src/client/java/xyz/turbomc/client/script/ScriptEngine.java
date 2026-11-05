@@ -8,6 +8,7 @@ import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.action.ScriptKeys;
 import xyz.turbomc.client.script.block.BlockRegistry;
 import xyz.turbomc.client.script.node.BlockNode;
+import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 import xyz.turbomc.client.script.store.PackStore;
 import xyz.turbomc.client.script.store.ScriptDefinition;
@@ -205,6 +206,10 @@ public final class ScriptEngine {
 	 * <p>关键词为空视为无条件匹配；消息为 null 时同样全部触发。</p>
 	 */
 	public void fireChat(String message) {
+		// 脚本自己发的聊天会被服务端回传，若照常触发就会「自己触发自己」
+		if (SelfChatEcho.isEcho(message)) {
+			return;
+		}
 		RhinoVm.get().startChatHat(message);
 	}
 

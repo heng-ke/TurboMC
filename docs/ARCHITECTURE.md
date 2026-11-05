@@ -111,11 +111,17 @@ src/client/java/xyz/turbomc/client/
 参数在积木里是 **input** 而不是 field，VM 会直接崩。因此聊天关键词过滤没有走
 这个接口，而是在 `vm-bootstrap.js` 里自己遍历顶层积木判断。
 
+读这个 input 要按**运行期形态**来：`project.json` 里的 `[1, [10, "文字"]]` 在载入后
+会变成 `{name, block, shadow}`，字面量本身成为一个独立的替身积木，值放在它的
+`fields.TEXT`（文本）/ `fields.NUM`（数字）里。按原始数组去读会永远得到空串，
+而空串的语义是「关键词为空 ⇒ 匹配全部」——症状是「随便说句话都能触发」，
+不报错、日志也没有。`block !== shadow` 则表示槽里接了变量或表达式，静态读不出值。
+
 ### 2. 阻塞类积木靠 Promise 挂起
 
 scratch-vm 见到 primitive 返回 thenable 就把线程置为 `PROMISE_WAIT`。Java 动作通过
-`ScriptContext.requestWait(n)` 声明要等多少帧，桥把它转给 JS 的 `__hkWaitTicks`，
-每帧由 `__hkPumpPromises` 兑现。条件型等待（等待方块被挖破）用
+`ScriptContext.requestWait(n)` 声明要等多少帧，桥把它转给 JS 的 `__tmcWaitTicks`，
+每帧由 `__tmcPumpPromises` 兑现。条件型等待（等待方块被挖破）用
 `requestWaitUntil(key, maxTicks)` + 每帧 `poll(key)`。
 
 ### 3. ClassShutter 白名单
@@ -203,6 +209,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `./gradlew vmSmoke -PvmMode=hat` | 验证事件触发帽子积木 |
 | `./gradlew vmSmoke -PvmMode=block` | 验证阻塞动作按时长挂起 |
 | `./gradlew vmImport` | 验证 sb3 能解析成树，并被 VM 执行 |
+| `./gradlew vmChat` | 验证聊天帽子一条消息只触发一次、关键词能过滤、自己发的聊天不回声 |
 
 `vmImport` 默认读 `run/turbomc-vm/fixture.sb3`，可用
 `-Psb3=路径` 指定其他工程。

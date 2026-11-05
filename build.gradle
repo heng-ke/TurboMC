@@ -126,6 +126,15 @@ tasks.register('vmImport', JavaExec) {
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
+// 「当聊天包含」的触发次数冒烟：一条消息只应让帽子跑一次
+tasks.register('vmChat', JavaExec) {
+	group = 'verification'
+	description = '验证聊天帽子每次事件只触发一次，且关键词能过滤'
+	mainClass = 'xyz.turbomc.client.script.vm.ChatHatTest'
+	classpath = sourceSets.client.runtimeClasspath
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8' 
+}
+
 // configure the maven publication
 publishing {	publications {
 		create("mavenJava", MavenPublication) {
