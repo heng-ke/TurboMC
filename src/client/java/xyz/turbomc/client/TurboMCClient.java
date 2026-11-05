@@ -10,9 +10,12 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.Base64;
 import xyz.turbomc.TurboMC;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.ScriptEngine;
+import xyz.turbomc.client.script.runtime.ChatGate;
 import xyz.turbomc.client.script.runtime.TriggerDispatcher;
 import xyz.turbomc.client.script.ui.ScriptHudElement;
 import xyz.turbomc.client.script.ui.ScriptListScreen;
@@ -53,9 +56,17 @@ public class TurboMCClient implements ClientModInitializer {
 		HudElementRegistry.addLast(TurboMC.id("script_hud"), new ScriptHudElement());
 
 		ClientReceiveMessageEvents.CHAT.register(
-				(message, signedMessage, sender, params, receptionTimestamp) ->
-						// 关键词过滤在 VM 侧按每个「当聊天包含」积木的输入值完成
-						ScriptEngine.get().fireChat(message.getString()));
+				(message, signedMessage, sender, params, receptionTimestamp) -> {
+					// 同一条消息只触发一次：回调可能重复，用签名当身份；无签名时按短窗口兜底
+					String signature = signedMessage != null && signedMessage.hasSignature()
+							? Base64.getEncoder().encodeToString(signedMessage.signature().data())
+							: null;
+					if (!ChatGate.accept(message.getString(), signature)) {
+						return;
+					}
+					// 关键词过滤在 VM 侧按每个「当聊天包含」积木的输入值完成
+					ScriptEngine.get().fireChat(message.getString());
+				});
 
 		// 脚本在 START_CLIENT_TICK 推进，使本 tick 设置的动作能赶在实体移动逻辑之前生效。
 		ClientTickEvents.START_CLIENT_TICK.register(this::onClientTick);

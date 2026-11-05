@@ -8,6 +8,7 @@ import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.action.ScriptKeys;
 import xyz.turbomc.client.script.block.BlockRegistry;
 import xyz.turbomc.client.script.node.BlockNode;
+import xyz.turbomc.client.script.runtime.ChatGate;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 import xyz.turbomc.client.script.store.PackStore;
@@ -224,6 +225,8 @@ public final class ScriptEngine {
 		healthy = true;
 		// 换工程等于上一批线程全部消失，它们按下的键同样没人来松
 		ScriptKeys.releaseEveryKey();
+		// 旧工程收过的消息不该挡住新工程
+		ChatGate.reset();
 	}
 
 	public boolean isRunning() {

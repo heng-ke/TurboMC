@@ -1,6 +1,7 @@
 package xyz.turbomc.client.script.vm;
 
 import xyz.turbomc.client.script.action.NativeRegistry;
+import xyz.turbomc.client.script.runtime.ChatGate;
 import xyz.turbomc.client.script.block.BlockRegistry;
 
 /**
@@ -67,9 +68,18 @@ public final class ChatHatTest {
 		boolean echoSuppressed = xyz.turbomc.client.script.runtime.SelfChatEcho.isEcho("<Steve> bot reply");
 		boolean playerStillWorks = !xyz.turbomc.client.script.runtime.SelfChatEcho.isEcho("<Steve> hello there");
 
-		boolean ok = single && filtered && echoSuppressed && playerStillWorks;
+		// 同一条消息只触发一次：签名相同视为同一条，签名不同视为新消息
+		boolean sameMessageOnce = ChatGate.accept("hello", "sig-1") && !ChatGate.accept("hello", "sig-1");
+		boolean newMessagePasses = ChatGate.accept("hello", "sig-2");
+		boolean unsignedWindow = ChatGate.accept("hello there", null) && !ChatGate.accept("hello there", null);
+
+		boolean ok = single && filtered && echoSuppressed && playerStillWorks
+				&& sameMessageOnce && newMessagePasses && unsignedWindow;
 		System.out.println("[chat] 一条消息只跑一次=" + single + " 关键词过滤=" + filtered
 				+ " 回声被吞=" + echoSuppressed + " 玩家消息仍触发=" + playerStillWorks);
+		System.out.println("[chat] 同一条消息只触发一次=" + sameMessageOnce
+				+ " 相同文字的新消息仍触发=" + newMessagePasses
+				+ " 无签名短窗口去重=" + unsignedWindow);
 		System.out.println(ok ? "CHAT HAT PASS" : "CHAT HAT FAIL");
 		System.exit(ok ? 0 : 1);
 	}
