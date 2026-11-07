@@ -23,6 +23,27 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
+      # VM 后端的冒烟：不启动客户端，在纯 JVM 里验证 Rhino + scratch-vm 链路。
+      # 夹具在 src/test/resources/turbomc-vm/，进版本控制，CI 上才存在。
+      # 分开成独立步骤：失败时能直接看出是哪一环坏了，不必翻整段日志。
+      - name: smoke · 顺序执行
+        run: ./gradlew vmSmoke
+      - name: smoke · 事件帽子
+        run: ./gradlew vmSmoke -PvmMode=hat -PvmProject=hat-project.json
+      - name: smoke · 阻塞动作
+        run: ./gradlew vmSmoke -PvmMode=block -PvmProject=block-project.json
+
+      # 「等待直到 按下鼠标 [中键]?」必须挂住：守住布尔归一化接线（恒真事故）
+      - name: 等待条件冒烟
+        run: ./gradlew vmSmoke -PvmMode=wait -PvmProject=wait-mouse-project.json
+      - name: smoke · sb3 导入
+        run: ./gradlew vmImport
+      - name: smoke · 聊天帽子去重
+        run: ./gradlew vmChat
+      - name: smoke · 数值字符串化
+        run: ./gradlew vmNumberFormat
+      - name: smoke · 扩展释放
+        run: ./gradlew exportSmoke
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:

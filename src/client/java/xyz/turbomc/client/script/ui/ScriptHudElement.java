@@ -13,6 +13,9 @@ import net.minecraft.text.Text;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.config.HudCorner;
 import xyz.turbomc.client.script.ScriptEngine;
+import xyz.turbomc.client.script.action.path.PathFollower;
+import xyz.turbomc.client.script.runtime.MonitorStore;
+import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.vm.RhinoVm;
 
 import java.util.ArrayList;
@@ -44,6 +47,11 @@ public final class ScriptHudElement implements HudElement {
 	/** 角色名 → 当前气泡。scratch-vm 里气泡是按 target 存的，同一角色只会有一条。 */
 	private final Map<String, Bubble> bubbles = new LinkedHashMap<>();
 
+	/** 寻路两行的缓存：内容没变就不重建 Text，避免每帧几十个临时对象。 */
+	private String pathCacheKey;
+	private Text pathLine1;
+	private Text pathLine2;
+
 	private record Bubble(String name, String text, boolean think, String usageId, long updatedAt) {
 	}
 
@@ -69,6 +77,8 @@ public final class ScriptHudElement implements HudElement {
 		}
 
 		long now = System.currentTimeMillis();
+		// 这一段每帧都进 Rhino 读气泡与监视器，是 HUD 侧唯一的可变开销；绘制本身不算在内
+		long perf = PerfProbe.begin();
 		pollSpeech(now);
 		expire(now);
 
@@ -77,6 +87,7 @@ public final class ScriptHudElement implements HudElement {
 
 		TextRenderer textRenderer = client.textRenderer;
 		List<Row> rows = buildRows(textRenderer, running, packName);
+		PerfProbe.end("hud.read", perf);
 		if (rows.isEmpty()) {
 			return;
 		}
@@ -96,6 +107,12 @@ public final class ScriptHudElement implements HudElement {
 			rows.add(new Row(Text.translatable("hud.turbomc.disabled"), 0xFF9A9A9A));
 		}
 
+		TurboMCConfig config = TurboMCConfig.get();
+		if (config.showPathHud) {
+			addPathRows(rows);
+		}
+		addMonitorRows(rows, textRenderer);
+
 		// 按时间正序：旧消息在上，新消息贴着状态行往下排
 		List<Bubble> visible = bubbles.values().stream()
 				.sorted(Comparator.comparingLong(Bubble::updatedAt))
@@ -109,6 +126,106 @@ public final class ScriptHudElement implements HudElement {
 			rows.add(new Row(Text.literal(clipped), bubble.think() ? 0xFFB0B0B0 : 0xFFFFFFFF));
 		}
 		return rows;
+	}
+
+	/**
+	 * 变量 / 列表监视器。
+	 *
+	 * <p>scratch-vm 的监视器本来由舞台 GUI 绘制，游戏内没有那一层，改由 HUD 承担：
+	 * 脚本「显示变量」只是登记名字，值在这里现读 VM。Minecraft 的 tick 与渲染同在
+	 * 主线程，和 {@link #pollSpeech} 取气泡是同一条路，不存在并发读写。</p>
+	 */
+	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {
+		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
+		if (monitors.isEmpty()) {
+			return;
+		}
+		RhinoVm vm = RhinoVm.get();
+		int limit = Math.max(1, TurboMCConfig.get().monitorListItems);
+		for (Map.Entry<String, MonitorStore.Kind> entry : monitors.entrySet()) {
+			String name = entry.getKey();
+			String text = entry.getValue() == MonitorStore.Kind.LIST
+					? name + " = [" + listPreview(vm, name, limit) + "]"
+					: name + " = " + stringify(vm.getVariable(name));
+			rows.add(new Row(Text.literal(textRenderer.trimToWidth(text, MAX_WIDTH)), 0xFFFFD54F));
+		}
+	}
+
+	/** 列表前 N 项，超出部分只报总数——整表刷在 HUD 上会挡住半个屏幕。 */
+	private String listPreview(RhinoVm vm, String name, int limit) {
+		try {
+			JsonElement parsed = JsonParser.parseString(vm.getList(name));
+			if (!parsed.isJsonArray()) {
+				return "";
+			}
+			JsonArray array = parsed.getAsJsonArray();
+			int shown = Math.min(limit, array.size());
+			StringBuilder builder = new StringBuilder();
+			for (int i = 0; i < shown; i++) {
+				if (i > 0) {
+					builder.append(", ");
+				}
+				JsonElement item = array.get(i);
+				builder.append(item.isJsonNull() ? "" : item.getAsString());
+			}
+			if (array.size() > shown) {
+				builder.append(" …(共 ").append(array.size()).append(" 项)");
+			}
+			return builder.toString();
+		} catch (RuntimeException e) {
+			return "";
+		}
+	}
+
+	/** 值转文本：VM 未就绪时可能拿到 null，别让 HUD 上出现 "null"。 */
+	private static String stringify(Object value) {
+		if (value == null) {
+			return "";
+		}
+		String text = String.valueOf(value);
+		return "null".equals(text) ? "" : text;
+	}
+
+	/**
+	 * 寻路状态两行。没有会话时什么都不加——终端 HUD 不该常年挂一个「空闲」。
+	 *
+	 * <p>内容变化才重建 {@link Text}：距离每 tick 都在变，但取到 0.1 格后大约每 5 tick 才变一次，
+	 * 中间这些帧直接复用同一对对象。</p>
+	 */
+	private void addPathRows(List<Row> rows) {
+		PathFollower.Status status = PathFollower.status();
+		if (status == null) {
+			pathCacheKey = null;
+			return;
+		}
+		String key = status.phase() + '|' + status.target() + '|'
+				+ status.nodeIndex() + '/' + status.nodeCount() + '|'
+				+ status.replans() + '|' + status.partialReplans() + '|' + status.planMs() + '|'
+				+ Math.round(status.distance() * 10.0);
+		if (!key.equals(pathCacheKey)) {
+			pathCacheKey = key;
+			pathLine1 = Text.translatable("hud.turbomc.path.distance",
+					String.format("%.1f", status.distance()),
+					status.target().getX(), status.target().getY(), status.target().getZ());
+			Text phase = Text.translatable("hud.turbomc.path.phase." + status.phase());
+			pathLine2 = status.nodeCount() == 0
+					? Text.translatable("hud.turbomc.path.planning")
+					: status.partialReplans() > 0
+							// 分段过：多显示「分段 N」，否则看不出「重算 0」其实已经走了好几段
+							? Text.translatable("hud.turbomc.path.progress.partial",
+									status.nodeIndex(), status.nodeCount(), status.replans(),
+									status.partialReplans(), status.planMs(), phase)
+							: Text.translatable("hud.turbomc.path.progress",
+									status.nodeIndex(), status.nodeCount(), status.replans(),
+									status.planMs(), phase);
+		}
+		int color = switch (status.phase()) {
+			case "follow", "turning", "planning" -> 0xFF55FFFF;
+			case "arrived" -> 0xFF55FF55;
+			default -> 0xFFFFAA55;
+		};
+		rows.add(new Row(pathLine1, color));
+		rows.add(new Row(pathLine2, color));
 	}
 
 	private void draw(DrawContext context, TextRenderer textRenderer, HudCorner corner, List<Row> rows) {

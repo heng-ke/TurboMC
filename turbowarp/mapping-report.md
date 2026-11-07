@@ -71,6 +71,7 @@
 | 52 | `turbomc_itemCount` | `world.item_count` | REPORTER |
 | 53 | `turbomc_ping` | `world.ping` | REPORTER |
 | 54 | `turbomc_log` | `debug.log` | COMMAND |
+| 55 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
 
 ## 三、原生积木
 
@@ -81,6 +82,7 @@
 | `event.tick` | `event_whenflagclicked` |
 | `event.key` | `event_whenkeypressed` |
 | `event.broadcast` | `event_whenbroadcastreceived` |
+| `event.when_greater` | `event_whengreaterthan` |
 | `control.if` | `control_if` |
 | `control.if_else` | `control_if_else` |
 | `control.repeat` | `control_repeat` |
@@ -89,6 +91,8 @@
 | `control.wait` | `control_wait` |
 | `control.wait_until` | `control_wait_until` |
 | `control.stop` | `control_stop` |
+| `control.while` | `control_while` |
+| `control.for_each` | `control_for_each` |
 | `operator.lt` | `operator_lt` |
 | `operator.gt` | `operator_gt` |
 | `operator.eq` | `operator_equals` |
@@ -110,6 +114,8 @@
 | `data.set` | `data_setvariableto` |
 | `data.get` | `data_variable` |
 | `data.change` | `data_changevariableby` |
+| `data.show_var` | `data_showvariable` |
+| `data.hide_var` | `data_hidevariable` |
 | `list.add` | `data_addtolist` |
 | `list.delete` | `data_deleteoflist` |
 | `list.clear` | `data_deletealloflist` |
@@ -120,10 +126,18 @@
 | `list.contains` | `data_listcontainsitem` |
 | `list.item_num` | `data_itemnumoflist` |
 | `list.contents` | `data_listcontents` |
+| `data.show_list` | `data_showlist` |
+| `data.hide_list` | `data_hidelist` |
 | `func.call` | `procedures_call` |
+| `func.arg_string` | `argument_reporter_string_number` |
+| `func.arg_boolean` | `argument_reporter_boolean` |
 | `action.broadcast` | `event_broadcast` |
 | `control.broadcast_wait` | `event_broadcastandwait` |
 | `input.key_pressed` | `sensing_keypressed` |
+| `input.mouse_down` | `sensing_mousedown` |
+| `sensing.ask` | `sensing_askandwait` |
+| `sensing.answer` | `sensing_answer` |
+| `sensing.username` | `sensing_username` |
 | `sensing.timer` | `sensing_timer` |
 | `sensing.reset_timer` | `sensing_resettimer` |
 | `sensing.current` | `sensing_current` |

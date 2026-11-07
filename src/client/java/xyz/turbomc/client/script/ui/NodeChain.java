@@ -33,7 +33,11 @@ public final class NodeChain {
 	}
 
 	public static String label(String type) {
-		return I18n.translate("block.turbomc." + type);
+		String key = "block.turbomc." + type;
+		String translated = I18n.translate(key);
+		// 缺键时 translate 原样返回键名，界面上会冒出 "block.turbomc.xxx"；
+		// 这时退回积木类型名（至少能看出是什么积木）。
+		return translated == null || translated.isBlank() || key.equals(translated) ? type : translated;
 	}
 
 	/** 摘要里嵌套表达式的最大展开层数。 */
@@ -60,6 +64,10 @@ public final class NodeChain {
 	 * 查看时最需要看懂的正是"这里到底算的是什么"。层数用尽后退化为 {@code …}，避免一行过长。</p>
 	 */
 	private static String summary(BlockNode node, String scopeId, int depth) {
+		// 自定义积木调用：参数个数可变，模板表达式装不下括号列表，单独拼
+		if ("func.call".equals(node.type)) {
+			return callText(node, scopeId, depth);
+		}
 		// 有显示模板的积木直接套模板，参数嵌在句子里（如「{B} 的第 {A} 个字符」）
 		BlockType spec = BlockRegistry.get(node.type);
 		if (spec != null && spec.hasTemplate()) {
@@ -137,5 +145,44 @@ public final class NodeChain {
 			return ParamLabels.variableName(value, scopeId);
 		}
 		return ParamLabels.value(key, value);
+	}
+
+	/**
+	 * 自定义积木调用：{@code 调用 addscore(5)}。
+	 *
+	 * <p>参数个数取自导入时写入的 {@code ARGC}（缺省时数一下 {@code P1..P5}）。
+	 * 尾部的空参数不显示——定义里没用到的槽位如果照实画出来，
+	 * 会变成「调用 foo(5, , )」这种尾巴。</p>
+	 */
+	private static String callText(BlockNode node, String scopeId, int depth) {
+		String name = node.fields.getOrDefault("NAME", "");
+		String head = name == null || name.isBlank() ? label("func.call") : name;
+		int count = argCount(node);
+		List<String> args = new ArrayList<>();
+		for (int i = 1; i <= count; i++) {
+			args.add(paramText(node, "P" + i, scopeId, depth));
+		}
+		while (!args.isEmpty() && args.get(args.size() - 1).isBlank()) {
+			args.remove(args.size() - 1);
+		}
+		return "调用 " + head + "(" + String.join(", ", args) + ")";
+	}
+
+	private static int argCount(BlockNode node) {
+		String raw = node.fields.get("ARGC");
+		if (raw != null) {
+			try {
+				return Math.max(0, Math.min(5, Integer.parseInt(raw.trim())));
+			} catch (NumberFormatException ignored) {
+				// ARGC 缺失或损坏时按实际槽位兜底
+			}
+		}
+		int count = 0;
+		for (int i = 1; i <= 5; i++) {
+			if (node.inputs.containsKey("P" + i)) {
+				count = i;
+			}
+		}
+		return count;
 	}
 }

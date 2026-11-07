@@ -47,6 +47,12 @@ public final class TurboMCConfig {
 	 */
 	public int scratchVmBudgetMs = 4;
 	/**
+	 * HUD 列表监视器最多显示几项。
+	 *
+	 * <p>整张列表刷在屏幕上会挡住画面，超出部分只显示总数。</p>
+	 */
+	public int monitorListItems = 5;
+	/**
 	 * 死亡后自动重生（不需要写脚本）。
 	 *
 	 * <p>只发一次重生请求，不做「复活后自动回到死亡点」之类的额外动作——
@@ -61,6 +67,12 @@ public final class TurboMCConfig {
 	 * 用原始类型则会静默变成 {@code false}，老用户升级后显示方式莫名其妙地变了。</p>
 	 */
 	public Boolean waitInSeconds = true;
+
+	/** 「走向」执行时是否把路线画到世界里。 */
+	public boolean showPath = true;
+
+	/** 是否在 HUD 显示寻路状态（目标、剩余距离、节点进度、规划耗时）。 */
+	public boolean showPathHud = true;
 
 	/**
 	 * 脚本禁止按下的键。为空列表表示不拦截任何键（不建议）。
@@ -88,6 +100,7 @@ public final class TurboMCConfig {
 	public boolean showWaitInSeconds() {
 		return waitInSeconds == null || waitInSeconds;
 	}
+
 
 	/**
 	 * 默认黑名单：聊天、命令、截图、全屏、暂停、进度、社交。

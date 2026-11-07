@@ -1,0 +1,151 @@
+{
+  "targets": [
+    {
+      "isStage": true,
+      "name": "Stage",
+      "variables": {
+        "var-score": [
+          "score",
+          0
+        ]
+      },
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {},
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "costume1",
+          "dataFormat": "svg",
+          "assetId": "cd21514d0531fdffb22204e0ec5ed84a",
+          "md5ext": "cd21514d0531fdffb22204e0ec5ed84a.svg",
+          "rotationCenterX": 0,
+          "rotationCenterY": 0
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 0,
+      "tempo": 60,
+      "videoTransparency": 50,
+      "videoState": "on",
+      "textToSpeechLanguage": null
+    },
+    {
+      "isStage": false,
+      "name": "Sprite1",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "b0": {
+          "opcode": "event_whenflagclicked",
+          "parent": null,
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 0,
+          "fields": {},
+          "inputs": {},
+          "next": "b1"
+        },
+        "b1": {
+          "opcode": "control_wait_until",
+          "parent": "b0",
+          "shadow": false,
+          "topLevel": false,
+          "fields": {},
+          "inputs": {
+            "CONDITION": [
+              2,
+              "b2"
+            ]
+          },
+          "next": "b3"
+        },
+        "b2": {
+          "opcode": "turbomc_mouseDown",
+          "parent": "b1",
+          "shadow": false,
+          "topLevel": false,
+          "fields": {},
+          "inputs": {
+            "BUTTON": [
+              1,
+              "b4"
+            ]
+          },
+          "next": null
+        },
+        "b4": {
+          "opcode": "turbomc_menu_mouseButton",
+          "parent": "b2",
+          "shadow": true,
+          "topLevel": false,
+          "fields": {
+            "mouseButton": [
+              "middle",
+              null
+            ]
+          },
+          "inputs": {},
+          "next": null
+        },
+        "b3": {
+          "opcode": "data_setvariableto",
+          "parent": "b1",
+          "shadow": false,
+          "topLevel": false,
+          "fields": {
+            "VARIABLE": [
+              "score",
+              "var-score"
+            ]
+          },
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "1"
+              ]
+            ]
+          },
+          "next": null
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "costume1",
+          "dataFormat": "svg",
+          "assetId": "cd21514d0531fdffb22204e0ec5ed84a",
+          "md5ext": "cd21514d0531fdffb22204e0ec5ed84a.svg",
+          "rotationCenterX": 0,
+          "rotationCenterY": 0
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    }
+  ],
+  "monitors": [],
+  "extensions": [
+    "turbomc"
+  ],
+  "meta": {
+    "semver": "3.0.0",
+    "vm": "0.2.0",
+    "agent": "turbomc"
+  }
+}

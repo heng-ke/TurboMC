@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 
 import java.io.IOException;
@@ -181,7 +182,10 @@ public final class PackStore {
 		if (hit != null && hit.modifiedAt() == modified) {
 			return hit.result();
 		}
+		long parseStart = PerfProbe.begin();
 		Sb3Importer.Result result = Sb3Importer.read(path);
+		// 缓存只在文件变动时失效，所以这里量到的是「真正解一次 sb3」的耗时
+		PerfProbe.end("pack.parse", parseStart);
 		cache.put(pack.fileName, new Cache(modified, result));
 		return result;
 	}

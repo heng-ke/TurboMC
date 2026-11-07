@@ -20,6 +20,7 @@ public final class Sb3Mapping {
 			Map.entry("event_whenflagclicked", "event.tick"),
 			Map.entry("event_whenkeypressed", "event.key"),
 			Map.entry("event_whenbroadcastreceived", "event.broadcast"),
+			Map.entry("event_whengreaterthan", "event.when_greater"),
 			Map.entry("turbomc_whenDamaged", "event.damage"),
 			Map.entry("turbomc_whenChat", "event.chat"),
 			Map.entry("turbomc_whenDeath", "event.death"),
@@ -33,6 +34,9 @@ public final class Sb3Mapping {
 			Map.entry("control_wait", "control.wait"),
 			Map.entry("control_wait_until", "control.wait_until"),
 			Map.entry("control_stop", "control.stop"),
+			// while / for_each 是纯 VM 控制流，宿主无需参与
+			Map.entry("control_while", "control.while"),
+			Map.entry("control_for_each", "control.for_each"),
 
 			// ---- 运算 ----
 			Map.entry("operator_lt", "operator.lt"),
@@ -58,6 +62,8 @@ public final class Sb3Mapping {
 			Map.entry("data_setvariableto", "data.set"),
 			Map.entry("data_variable", "data.get"),
 			Map.entry("data_changevariableby", "data.change"),
+			Map.entry("data_showvariable", "data.show_var"),
+			Map.entry("data_hidevariable", "data.hide_var"),
 
 			// ---- 列表 ----
 			Map.entry("data_addtolist", "list.add"),
@@ -70,9 +76,14 @@ public final class Sb3Mapping {
 			Map.entry("data_listcontainsitem", "list.contains"),
 			Map.entry("data_itemnumoflist", "list.item_num"),
 			Map.entry("data_listcontents", "list.contents"),
+			Map.entry("data_showlist", "data.show_list"),
+			Map.entry("data_hidelist", "data.hide_list"),
 
 			// ---- 自定义积木 ----
 			Map.entry("procedures_call", "func.call"),
+			// 参数由 VM 自身的 procedures 机制求值，这里只需让查看器认得
+			Map.entry("argument_reporter_string_number", "func.arg_string"),
+			Map.entry("argument_reporter_boolean", "func.arg_boolean"),
 
 			// ---- 广播 ----
 			Map.entry("event_broadcast", "action.broadcast"),
@@ -80,10 +91,14 @@ public final class Sb3Mapping {
 
 			// ---- 感知 ----
 			Map.entry("sensing_keypressed", "input.key_pressed"),
+			Map.entry("sensing_mousedown", "input.mouse_down"),
 			Map.entry("sensing_timer", "sensing.timer"),
 			Map.entry("sensing_resettimer", "sensing.reset_timer"),
 			Map.entry("sensing_current", "sensing.current"),
 			Map.entry("sensing_dayssince2000", "sensing.days_since_2000"),
+			Map.entry("sensing_username", "sensing.username"),
+			Map.entry("sensing_askandwait", "sensing.ask"),
+			Map.entry("sensing_answer", "sensing.answer"),
 
 			// ---- 输出（说 / 思考 → 动作栏 + 日志）----
 			Map.entry("looks_say", "debug.say"),
@@ -109,6 +124,7 @@ public final class Sb3Mapping {
 
 			// ---- 动作（扩展）----
 			Map.entry("turbomc_key", "action.key"),
+			Map.entry("turbomc_mouseDown", "input.mouse_button_down"),
 			Map.entry("turbomc_chat", "action.chat"),
 			Map.entry("turbomc_command", "action.command"),
 			Map.entry("turbomc_tap", "action.tap"),
@@ -125,6 +141,8 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_moveToward", "action.move_toward"),
 			Map.entry("turbomc_look", "action.look"),
 			Map.entry("turbomc_lookAt", "action.look_at"),
+			Map.entry("turbomc_lookSmooth", "action.look_smooth"),
+			Map.entry("turbomc_lookAtSmooth", "action.look_at_smooth"),
 			Map.entry("turbomc_stop", "action.stop"),
 
 			// ---- 物品与方块查询（扩展）----
@@ -164,16 +182,23 @@ public final class Sb3Mapping {
 	 *
 	 * <p>这是全项目唯一一份输入名映射，导入器直接调用。注意 ITEM 只在列表积木
 	 * （{@code data_*}）里改名为 VALUE；扩展积木 itemCount 的参数本身就叫 ITEM，不能一起改。</p>
+	 *
+	 * <p>算术积木用的是 {@code NUM1/NUM2}（不是 OPERAND1/OPERAND2），漏了这两个
+	 * 会让「加 / 减 / 乘 / 除 / 取余」的摘要显示成 {@code ? × ?}——模板里的
+	 * {@code {A}}、{@code {B}} 取不到参数。</p>
 	 */
 	public static String inputName(String opcode, String scratchName) {
 		return switch (scratchName) {
-			case "OPERAND1", "FROM", "NUM", "STRING1" -> "A";
-			case "OPERAND2", "TO", "STRING2" -> "B";
+			case "OPERAND1", "FROM", "NUM", "NUM1", "STRING1" -> "A";
+			case "OPERAND2", "TO", "NUM2", "STRING2" -> "B";
 			// letter_of 的 STRING 是第二个参数，length 的 STRING 是唯一参数
 			case "STRING" -> "operator_length".equals(opcode) ? "A" : "B";
 			case "LETTER" -> "A";
 			case "ITEM" -> opcode != null && opcode.startsWith("data_") ? "VALUE" : "ITEM";
 			case "BROADCAST_INPUT" -> "MSG";
+			// sensing_keypressed 的键是「输入」而不是字段（值装在下拉影子块 sensing_keyoptions 里），
+			// 不映射就凑不上模板的 {KEY}，会显示成「按下 ? ?」
+			case "KEY_OPTION" -> "KEY";
 			case "DURATION", "SECS" -> "TICKS";
 			case "MESSAGE" -> "TEXT";
 			case "ONOFF", "STATE" -> "PRESSED";
@@ -195,6 +220,7 @@ public final class Sb3Mapping {
 			case "OPERATOR" -> "OP";
 			case "CURRENTMENU" -> "UNIT";
 			case "STOP_OPTION" -> "OP";
+			case "WHENGREATERTHANMENU" -> "MENU";
 			default -> scratchName;
 		};
 	}

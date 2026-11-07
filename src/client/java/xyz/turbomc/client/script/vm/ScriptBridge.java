@@ -1,14 +1,22 @@
 package xyz.turbomc.client.script.vm;
 
+import net.minecraft.client.MinecraftClient;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.script.action.InputKeys;
 import xyz.turbomc.client.script.action.NativeRegistry;
+import xyz.turbomc.client.script.action.motion.TurnSession;
+import xyz.turbomc.client.script.action.path.PathFollower;
+import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.sb3.Sb3Mapping;
+import xyz.turbomc.client.script.ui.AskScreen;
+
+import java.util.function.Consumer;
 
 /**
  * JS 运行时与 Java 动作层之间的唯一桥。
@@ -52,6 +60,132 @@ public final class ScriptBridge {
 
 	public static int missCount() {
 		return misses;
+	}
+
+	/**
+	 * 「用户名」的宿主实现：当前登录账号名。
+	 *
+	 * <p>离线环境返回离线账号名。游戏未就绪时返回空串，避免积木拿到 null。</p>
+	 */
+	public static String username() {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null || client.getSession() == null) {
+			return "";
+		}
+		return client.getSession().getUsername();
+	}
+
+	// ---- 询问与监视器 ----
+
+	/** 待交给 VM 的回答；{@code null} 表示没有。空串是合法回答，故不能用空值表示「无」。 */
+	private static volatile String pendingAnswer;
+
+	/**
+	 * 打开询问界面的方式。
+	 *
+	 * <p>抽成接口是为了冒烟测试：纯 JVM 里没有 Minecraft 客户端，直接引用
+	 * {@code MinecraftClient} 会在类加载阶段就失败，问答链路就一条都测不到。</p>
+	 */
+	@FunctionalInterface
+	public interface AskPresenter {
+		void present(String question, Consumer<String> onAnswer);
+	}
+
+	private static AskPresenter presenter = ScriptBridge::openAskScreen;
+
+	/** 测试用：替换界面呈现方式；传 {@code null} 恢复默认。 */
+	public static void setPresenter(AskPresenter value) {
+		presenter = value == null ? ScriptBridge::openAskScreen : value;
+	}
+
+	private static void openAskScreen(String question, Consumer<String> onAnswer) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null) {
+			onAnswer.accept("");
+			return;
+		}
+		client.setScreen(new AskScreen(question, onAnswer));
+	}
+
+	/**
+	 * 「询问 [问题] 并等待」：弹出输入窗口。
+	 *
+	 * <p>由 JS 侧收到 {@code QUESTION} 事件后调用，此时仍在 VM 步进内，属于客户端主线程，
+	 * {@code setScreen} 合法。</p>
+	 */
+	public static void askQuestion(String question) {
+		String text = question == null ? "" : question;
+		try {
+			presenter.present(text, ScriptBridge::submitAnswer);
+		} catch (Throwable t) {
+			// 界面打不开（纯 JVM、渲染异常等）时给空回答：宁可少一次输入，
+			// 也不能让询问线程永久挂在 PROMISE_WAIT
+			LOG.warn("[vm] 打开询问界面失败，按空回答继续: {}", t.toString());
+			submitAnswer("");
+		}
+	}
+
+	/** 界面回调入口：把回答排进队列，由下一次 VM 步进统一交付。 */
+	public static void submitAnswer(String answer) {
+		pendingAnswer = answer == null ? "" : answer;
+	}
+
+	/**
+	 * 取走待交付的回答；没有则返回 {@code null}。
+	 *
+	 * <p>不在界面回调里直接 emit：emit 会推动 VM 的线程状态，放在一次 step 的边界更安全。</p>
+	 */
+	public static String takeAnswer() {
+		String value = pendingAnswer;
+		pendingAnswer = null;
+		return value;
+	}
+
+	/** 引擎停止或切换工程时丢弃残留回答，避免下一份工程收到上一份的输入。 */
+	public static void clearPendingAnswer() {
+		pendingAnswer = null;
+	}
+
+	/** 「显示 / 隐藏 变量、列表」的宿主入口：登记到 HUD 监视器。 */
+	public static void monitor(String kind, String name, boolean visible) {
+		MonitorStore.Kind type = "list".equalsIgnoreCase(kind)
+				? MonitorStore.Kind.LIST
+				: MonitorStore.Kind.VARIABLE;
+		MonitorStore.set(type, name, visible);
+	}
+
+	/**
+	 * 「鼠标按下?」（Scratch 原生积木）的宿主实现，由 JS 侧的鼠标设备转发而来。
+	 *
+	 * <p>与「按下 [键]?」同理：读物理状态、不做边沿检测。Scratch 该积木不分按钮，
+	 * 因此这里同样按「任意键按下」判定（{@code any}）。</p>
+	 */
+	public static boolean mouseDown(String button) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null || client.getWindow() == null) {
+			return false;
+		}
+		return InputKeys.isMouseDown(client, button);
+	}
+
+	/**
+	 * 「按下 [键]?」的宿主实现，由 JS 侧的键盘设备转发而来。
+	 *
+	 * <p>与事件侧的 {@code TriggerDispatcher} 共用 {@link InputKeys}，区别在于这里是
+	 * <b>电平读取</b>——按住期间持续为真，不做边沿检测。读的是 GLFW 物理键盘状态，
+	 * 因此界面打开时同样有效（打开界面不影响按键扫描）。</p>
+	 *
+	 * <p>{@code any} 与事件侧同义：任意键按下即为真（已排除 ESC / F6 / F7）。</p>
+	 */
+	public static boolean keyDown(String key) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null || client.getWindow() == null) {
+			return false;
+		}
+		if (key == null || "any".equalsIgnoreCase(key.trim())) {
+			return InputKeys.anyDown(client);
+		}
+		return InputKeys.isDown(client, key);
 	}
 
 	/**
@@ -132,6 +266,12 @@ public final class ScriptBridge {
 	 * @return {@code true} 表示等待结束（成功、失败或放弃都算结束）
 	 */
 	public static boolean poll(String key) {
+		if ("move".equals(key)) {
+			return PathFollower.finished();
+		}
+		if ("turn".equals(key)) {
+			return TurnSession.finished();
+		}
 		if (!"break".equals(key)) {
 			return true;
 		}

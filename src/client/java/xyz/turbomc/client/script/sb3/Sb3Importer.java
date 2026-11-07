@@ -43,6 +43,16 @@ public final class Sb3Importer {
 	private Sb3Importer() {
 	}
 
+	/**
+	 * 积木树的递归深度上限。
+	 *
+	 * <p>sb3 的 {@code next} 链长度没有任何限制，几千个积木串成一条就是几千层递归；
+	 * 每层还压着 {@code JsonObject}、{@code BlockNode}、{@code Slot}，Java 默认线程栈
+	 * （512 KB–1 MB）几千层就会 {@code StackOverflowError}。512 层对正常工程绰绰有余，
+	 * 真有超长链也只是截断并在「不支持的积木」里记一条，不会把游戏打崩。</p>
+	 */
+	private static final int MAX_CONVERT_DEPTH = 512;
+
 	/** 读取 sb3 压缩包并解析其中的 project.json。 */
 	public static Result read(Path file) {
 		try (ZipFile zip = new ZipFile(file.toFile())) {
@@ -58,6 +68,10 @@ public final class Sb3Importer {
 			return new Result(List.of(), List.of(), "读取失败：" + e.getMessage());
 		} catch (RuntimeException e) {
 			return new Result(List.of(), List.of(), "解析失败：" + e.getMessage());
+		} catch (StackOverflowError e) {
+			// 深度保护失效时的最后一道保险：错误必须变成一条可读提示，
+			// 而不是让 Error 冒到 GUI 的点击回调里把客户端带崩。
+			return new Result(List.of(), List.of(), "脚本嵌套过深，无法解析");
 		}
 	}
 
@@ -145,7 +159,10 @@ public final class Sb3Importer {
 		}
 
 		boolean isGlobal(String id) {
-			return !localVariables.containsKey(id) && globalVariables.containsKey(id);
+			// 变量和列表各有自己的映射：只查 variables 会把舞台上的列表误判成局部，
+			// 「数据」这类全局列表就会被标成「仅适用于当前角色」
+			return !localVariables.containsKey(id) && !localLists.containsKey(id)
+					&& (globalVariables.containsKey(id) || globalLists.containsKey(id));
 		}
 
 		String listName(String id) {
@@ -172,6 +189,18 @@ public final class Sb3Importer {
 	 */
 	private static BlockNode convert(JsonObject blocks, String id, Scope scope,
 			List<String> unsupported, Set<String> visiting) {
+		return convert(blocks, id, scope, unsupported, visiting, 0);
+	}
+
+	private static BlockNode convert(JsonObject blocks, String id, Scope scope,
+			List<String> unsupported, Set<String> visiting, int depth) {
+		if (depth > MAX_CONVERT_DEPTH) {
+			String warning = "积木嵌套超过 " + MAX_CONVERT_DEPTH + " 层，已截断";
+			if (!unsupported.contains(warning)) {
+				unsupported.add(warning);
+			}
+			return null;
+		}
 		if (id == null || id.isEmpty() || !blocks.has(id)) {
 			return null;
 		}
@@ -179,80 +208,95 @@ public final class Sb3Importer {
 		if (!visiting.add(id)) {
 			return null;
 		}
-		JsonElement element = blocks.get(id);
-		if (!element.isJsonObject()) {
-			return null;
-		}
-		JsonObject block = element.getAsJsonObject();
-		String opcode = string(block, "opcode", "");
+		try {
+			JsonElement element = blocks.get(id);
+			if (!element.isJsonObject()) {
+				return null;
+			}
+			JsonObject block = element.getAsJsonObject();
+			String opcode = string(block, "opcode", "");
 
-		// 原型块只是定义的影子输入，不单独展示；定义块本身要留，否则函数体没有归属
-		if (opcode.startsWith("procedures_prototype")) {
-			return convert(blocks, nextId(block), scope, unsupported, visiting);
-		}
-		if (opcode.startsWith("procedures_definition")) {
-			BlockNode define = new BlockNode("procedures.definition");
-			define.fields.put("NAME", procedureCode(blocks, block));
-			define.next = convert(blocks, nextId(block), scope, unsupported, visiting);
+			// 原型块只是定义的影子输入，不单独展示；定义块本身要留，否则函数体没有归属
+			if (opcode.startsWith("procedures_prototype")) {
+				return convert(blocks, nextId(block), scope, unsupported, visiting, depth + 1);
+			}
+			if (opcode.startsWith("procedures_definition")) {
+				BlockNode define = new BlockNode("procedures.definition");
+				define.fields.put("NAME", procedureCode(blocks, block));
+				define.next = convert(blocks, nextId(block), scope, unsupported, visiting, depth + 1);
+				return define;
+			}
+
+			BlockNode node = new BlockNode(editorType(opcode, block));
+			if (!BlockRegistry.exists(node.type)) {
+				unsupported.add(opcode + " → " + node.type);
+			}
+
+			// 字段：变量/列表保存的是名字，其余取首元素
+			if (block.has("fields") && block.get("fields").isJsonObject()) {
+				for (Map.Entry<String, JsonElement> entry : block.getAsJsonObject("fields").entrySet()) {
+					String name = reverseFieldName(opcode, entry.getKey());
+					String value = firstOf(entry.getValue());
+					if (value == null) {
+						continue;
+					}
+					node.fields.put(name, value);
+					// 变量/列表字段的第二项是 ID，据此还原「仅适用于当前角色 / 所有角色」
+					if ("VAR".equals(name) || "LIST".equals(name)) {
+						String varId = secondOf(entry.getValue());
+						if (varId != null) {
+							node.fields.put("SCOPE", scope.isGlobal(varId) ? "global" : "local");
+						}
+					}
+				}
+			}
+
+			// 输入：字面量、变量引用或嵌套积木
+			if (block.has("inputs") && block.get("inputs").isJsonObject()) {
+				for (Map.Entry<String, JsonElement> entry : block.getAsJsonObject("inputs").entrySet()) {
+					String scratchName = entry.getKey();
+					String internal = reverseInputName(opcode, scratchName);
+					Slot slot = readSlot(blocks, entry.getValue(), scope, unsupported, visiting, depth + 1);
+					if (slot == null) {
+						continue;
+					}
+					if ("SUBSTACK".equals(scratchName) || "SUBSTACK2".equals(scratchName)) {
+						// 分支不是输入槽，改放 branches
+						if (slot.hasBlock()) {
+							node.branches.put(scratchName, slot.block);
+						}
+						continue;
+					}
+					// sb3 用秒，界面按 tick 显示
+					if ("TICKS".equals(internal) && !slot.hasBlock()) {
+						slot = Slot.literal(scaleToTicks(slot.literal));
+					}
+					node.inputs.put(internal, slot);
+				}
+			}
+
+			// 自定义积木调用：函数名与参数个数只写在 mutation 里（proccode / argumentids），
+			// 不读的话查看器只剩「调用函数 参数1=…」，看不出调的是哪个函数。放在输入之后，
+			// 是因为参数个数缺 mutation.argumentids 时要靠已收好的 P1..Pn 兜底
+			if ("func.call".equals(node.type)) {
+				boolean hasMutation = block.has("mutation") && block.get("mutation").isJsonObject();
+				JsonObject mutation = hasMutation ? block.getAsJsonObject("mutation") : null;
+				if (mutation != null) {
+					node.fields.put("NAME", proccodeName(string(mutation, "proccode", "")));
+				}
+				node.fields.put("ARGC", String.valueOf(callArgCount(mutation, node)));
+			}
+
+			node.next = convert(blocks, nextId(block), scope, unsupported, visiting, depth + 1);
+			return node;
+		} finally {
+			// 所有分支统一清理：原型分支早先是直接 return，id 会永久留在 visiting 里
 			visiting.remove(id);
-			return define;
 		}
-
-		BlockNode node = new BlockNode(editorType(opcode, block));
-		if (!BlockRegistry.exists(node.type)) {
-			unsupported.add(opcode + " → " + node.type);
-		}
-
-		// 字段：变量/列表保存的是名字，其余取首元素
-		if (block.has("fields") && block.get("fields").isJsonObject()) {
-			for (Map.Entry<String, JsonElement> entry : block.getAsJsonObject("fields").entrySet()) {
-				String name = reverseFieldName(opcode, entry.getKey());
-				String value = firstOf(entry.getValue());
-				if (value == null) {
-					continue;
-				}
-				node.fields.put(name, value);
-				// 变量/列表字段的第二项是 ID，据此还原「仅适用于当前角色 / 所有角色」
-				if ("VAR".equals(name) || "LIST".equals(name)) {
-					String varId = secondOf(entry.getValue());
-					if (varId != null) {
-						node.fields.put("SCOPE", scope.isGlobal(varId) ? "global" : "local");
-					}
-				}
-			}
-		}
-
-		// 输入：字面量、变量引用或嵌套积木
-		if (block.has("inputs") && block.get("inputs").isJsonObject()) {
-			for (Map.Entry<String, JsonElement> entry : block.getAsJsonObject("inputs").entrySet()) {
-				String scratchName = entry.getKey();
-				String internal = reverseInputName(opcode, scratchName);
-				Slot slot = readSlot(blocks, entry.getValue(), scope, unsupported, visiting);
-				if (slot == null) {
-					continue;
-				}
-				if ("SUBSTACK".equals(scratchName) || "SUBSTACK2".equals(scratchName)) {
-					// 分支不是输入槽，改放 branches
-					if (slot.hasBlock()) {
-						node.branches.put(scratchName, slot.block);
-					}
-					continue;
-				}
-				// sb3 用秒，界面按 tick 显示
-				if ("TICKS".equals(internal) && !slot.hasBlock()) {
-					slot = Slot.literal(scaleToTicks(slot.literal));
-				}
-				node.inputs.put(internal, slot);
-			}
-		}
-
-		node.next = convert(blocks, nextId(block), scope, unsupported, visiting);
-		visiting.remove(id);
-		return node;
 	}
 
 	private static Slot readSlot(JsonObject blocks, JsonElement value, Scope scope,
-			List<String> unsupported, Set<String> visiting) {
+			List<String> unsupported, Set<String> visiting, int depth) {
 		if (value == null || !value.isJsonArray()) {
 			return null;
 		}
@@ -268,7 +312,11 @@ public final class Sb3Importer {
 		if (second != null && second.isJsonPrimitive() && second.getAsJsonPrimitive().isString()) {
 			String blockId = second.getAsString();
 			if (blocks.has(blockId)) {
-				BlockNode child = convert(blocks, blockId, scope, unsupported, visiting);
+				Slot menu = menuLiteral(blocks, blockId);
+				if (menu != null) {
+					return menu;
+				}
+				BlockNode child = convert(blocks, blockId, scope, unsupported, visiting, depth);
 				return child == null ? null : Slot.of(child);
 			}
 			return Slot.literal("");
@@ -416,10 +464,75 @@ public final class Sb3Importer {
 			}
 			JsonObject proto = blocks.getAsJsonObject(protoId);
 			if (proto.has("mutation") && proto.getAsJsonObject("mutation").has("proccode")) {
-				return proto.getAsJsonObject("mutation").get("proccode").getAsString();
+				return proccodeName(proto.getAsJsonObject("mutation").get("proccode").getAsString());
 			}
 		}
 		return "";
+	}
+
+	/**
+	 * 下拉菜单的影子积木（{@code sensing_keyoptions}、{@code turbomc_menu_mouseButton} 等）
+	 * 只承载一个字段，那个值就是该参数位上要显示的文字。
+	 *
+	 * <p>不展开它，查看器会把整块菜单当成「嵌套积木」来渲染，屏幕上出现的是原始 opcode
+	 * （形如 {@code block.turbomc.turbomc_menu_mouseButton mouseButton=middle}）。
+	 * 判定条件刻意收紧到「影子 + 无输入 + 恰好一个字段」，避免误伤真正的表达式积木。</p>
+	 *
+	 * @return 菜单值；不是菜单积木时返回 {@code null}
+	 */
+	private static Slot menuLiteral(JsonObject blocks, String id) {
+		JsonElement element = blocks.get(id);
+		if (element == null || !element.isJsonObject()) {
+			return null;
+		}
+		JsonObject menu = element.getAsJsonObject();
+		if (!bool(menu, "shadow")) {
+			return null;
+		}
+		if (menu.has("inputs") && menu.get("inputs").isJsonObject()
+				&& !menu.getAsJsonObject("inputs").isEmpty()) {
+			return null;
+		}
+		if (!menu.has("fields") || !menu.get("fields").isJsonObject()) {
+			return null;
+		}
+		JsonObject fields = menu.getAsJsonObject("fields");
+		if (fields.size() != 1) {
+			return null;
+		}
+		String value = firstOf(fields.entrySet().iterator().next().getValue());
+		return Slot.literal(value == null ? "" : value);
+	}
+
+	/**
+	 * 自定义积木的显示名：{@code addscore %s} → {@code addscore}。
+	 *
+	 * <p>proccode 里的 {@code %s}/{@code %b} 是参数占位符，直接显示会变成
+	 * 「定义 addscore %s」，看着像工程文件漏了字。</p>
+	 */
+	private static String proccodeName(String proccode) {
+		if (proccode == null || proccode.isEmpty()) {
+			return "";
+		}
+		return proccode.replaceAll("%[sb]", "").replaceAll("\\s{2,}", " ").trim();
+	}
+
+	/** 调用时的参数个数：优先 {@code mutation.argumentids}，缺失时按已收好的 P1..Pn 兜底。 */
+	private static int callArgCount(JsonObject mutation, BlockNode node) {
+		if (mutation != null && mutation.has("argumentids")) {
+			String ids = string(mutation, "argumentids", "");
+			if (ids.startsWith("[") && ids.endsWith("]")) {
+				String body = ids.substring(1, ids.length() - 1).trim();
+				return body.isEmpty() ? 0 : body.split(",").length;
+			}
+		}
+		int count = 0;
+		for (int i = 1; i <= 5; i++) {
+			if (node.inputs.containsKey("P" + i)) {
+				count = i;
+			}
+		}
+		return count;
 	}
 
 	private static String nextId(JsonObject block) {

@@ -20,11 +20,11 @@ import java.util.Set;
  * 少了后者，「按下 W」之后关掉引擎，角色会一直往前走——因为 {@code KeyBindingMixin} 只看本表，
  * 不看引擎是否在运行。</p>
  *
- * <p>同一个键被多个脚本按下时用引用计数，全部释放才真正松开。
- * {@code ticks} 为负表示一直按住，非负表示剩余 tick（用于「吃食物」这类持续动作）。</p>
+ * <p>{@code ticks} 为负表示一直按住，非负表示剩余 tick（用于「吃食物」这类持续动作）。</p>
  */
 public final class ScriptKeys {
-	private record Hold(int refs, int ticksLeft) {
+	/** 只记剩余 tick：{@code -1} 表示一直按住。 */
+	private record Hold(int ticksLeft) {
 	}
 
 	private static final Map<KeyBinding, Hold> HELD = new LinkedHashMap<>();
@@ -36,10 +36,22 @@ public final class ScriptKeys {
 
 	/**
 	 * 按住某个键。{@code ticks < 0} 表示不自动松开。
+	 *
+	 * <p><b>幂等</b>：键已在表里时不累加计数，只延长到期时间。早先这里是引用计数
+	 * （每次 {@code +1}、每次 {@link #release} 减一），但动作层的 owner 恒为 {@code null}
+	 * （见 {@code ScriptContext#currentInstance()}），既分不清是谁按的，也保证不了
+	 * 「N 次按下配 N 次松开」——「重复执行 { 按下 W }」会在一秒内累积二十次引用，
+	 * 而「松开 W」只抵消一次，键就再也抬不起来。改成幂等后，重复按下等价于
+	 * 「继续保持按下」，一次松开即抬起。</p>
+	 *
+	 * <p>代价：两个脚本同时按住同一个键时只算一次，其中一个松开就会抬键。旧实现虽然
+	 * 计数，但因为 owner 为空，任意一次 release 同样分不清归属——幂等至少不会无限增长。</p>
 	 */
 	public static void hold(Object owner, KeyBinding key, int ticks) {
+		if (key == null) {
+			return;
+		}
 		Hold current = HELD.get(key);
-		int refs = current == null ? 1 : current.refs() + 1;
 		int ticksLeft;
 		if (ticks < 0) {
 			ticksLeft = -1;
@@ -51,7 +63,7 @@ public final class ScriptKeys {
 		} else {
 			ticksLeft = Math.max(current.ticksLeft(), ticks);
 		}
-		HELD.put(key, new Hold(refs, ticksLeft));
+		HELD.put(key, new Hold(ticksLeft));
 		if (owner != null) {
 			OWNED.computeIfAbsent(owner, ignored -> new HashSet<>()).add(key);
 		}
@@ -59,7 +71,9 @@ public final class ScriptKeys {
 	}
 
 	/**
-	 * 松开某个键（仅减少一次引用）。
+	 * 松开某个键。
+	 *
+	 * <p>因为 {@link #hold} 已幂等，这里直接整条移除，不再做「减少一次引用」。</p>
 	 */
 	public static void release(Object owner, KeyBinding key) {
 		if (owner != null) {
@@ -124,7 +138,7 @@ public final class ScriptKeys {
 			}
 			int left = hold.ticksLeft() - 1;
 			if (left > 0) {
-				entry.setValue(new Hold(hold.refs(), left));
+				entry.setValue(new Hold(left));
 				continue;
 			}
 			KeyBinding key = entry.getKey();
@@ -135,17 +149,11 @@ public final class ScriptKeys {
 	}
 
 	private static void dropOne(KeyBinding key) {
-		Hold current = HELD.get(key);
-		if (current == null) {
+		if (HELD.remove(key) == null) {
 			return;
 		}
-		if (current.refs() <= 1) {
-			HELD.remove(key);
-			key.setPressed(false);
-			forget(key);
-		} else {
-			HELD.put(key, new Hold(current.refs() - 1, current.ticksLeft()));
-		}
+		key.setPressed(false);
+		forget(key);
 	}
 
 	/** 键盘表里已不再持有该键，把它从各 owner 的归属列表中摘掉（归属表当前为空，等于空转）。 */

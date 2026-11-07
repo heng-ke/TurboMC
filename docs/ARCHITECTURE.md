@@ -73,7 +73,16 @@ src/client/java/xyz/turbomc/client/
     │   ├── WorldQueries.java    世界查询（方块、实体、时间……）
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
-    │   └── NativeRegistry.java  opcode → 动作的注册表
+    │   ├── NativeRegistry.java  opcode → 动作的注册表
+    │   ├── path/                「走向」的移动会话（见 PATHFINDING.md）
+    │   │   ├── PathActions.java    解析 x/y/z，启动会话
+    │   │   ├── PathFollower.java   每 tick 驱动：转向 / 前进 / 跳跃 / 卡住
+    │   │   ├── PathPlanner.java    假僵尸 + 原版 A*（LandPathNodeMaker + PathNodeNavigator）
+    │   │   └── MoveTarget.java     目标坐标（三轴全部来自积木）
+    │   └── motion/              朝向平滑（寻路与「平滑看向」积木共用）
+    │       ├── TurnMath.java       比例收敛步进：gain / 限幅 / 死区
+    │       ├── TurnSession.java    转向会话：目标 yaw/pitch、超时、中止
+    │       └── TurnActions.java    注册两个平滑积木
     ├── runtime/                 宿主上下文
     │   ├── ScriptContext.java   每 tick 重建的宿主环境（含等待请求通道）
     │   ├── TriggerDispatcher.java 按键 / 受伤 / 死亡事件源
@@ -82,6 +91,8 @@ src/client/java/xyz/turbomc/client/
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
     │   └── *SmokeTest.java      纯 JVM 冒烟（不发布）
+    ├── render/                  世界渲染出口
+    │   └── PathRenderer.java    「走向」的路线：折线 + 当前节点框 + 终点框
     ├── sb3/
     │   ├── Sb3Mapping.java      opcode ↔ 内部类型、字段/输入改名（全项目唯一一份）
     │   └── Sb3Importer.java     sb3 → 积木树（只读查看用）
@@ -129,6 +140,21 @@ scratch-vm 见到 primitive 返回 thenable 就把线程置为 `PROMISE_WAIT`。
 脚本只能看到 `vm` 包的桥类，外加 6 个装箱类型的精确白名单（String/Double/Boolean/
 Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就能摸到 `Runtime`。
 
+### 3.1 标量必须以原生 JS 值进入 VM
+
+`ScriptBridge.call` 的返回类型是 `Object`，Rhino 默认会把 `Double` 封装成
+`NativeJavaObject`。而上游 `Cast.toString` 的实现就是 `String(e)`——对封装对象
+取到的是 **Java 的 `Double.toString`**，于是生命值 20.0 拼进字符串会得到
+`"20.0"`（Scratch 期望 `"20"`），`1e-5` 得到 `"1.0E-5"`（期望 `"0.00001"`）。
+数值运算本身没错（`Number()` 会解包），**错的只是字符串化**。
+
+修法是 `RhinoVm.ScalarWrapFactory`：覆写 `WrapFactory.wrap`，让 `Double` /
+`Boolean` / `String` 直接以原生 JS 值进入 VM，`String(e)` 于是走 ECMAScript 的
+`String(number)`。只放行这三个类型——脚本的值域本来只有这三种，其余类型
+（数组、对象）封成 `NativeJavaObject` 才是正确行为。
+
+这条由 `./gradlew vmNumberFormat` 守住。
+
 ### 4. 时间单位
 
 编辑器概念里的 `TICKS` 按 tick 计（20 tick = 1 秒），sb3 的 `control_wait` 用
@@ -145,6 +171,24 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 `Sb3Mapping.TYPES` 里一个内部类型只能对应一个 opcode。曾经把
 `data_changevariableby` 和 `data_setvariableto` 都映射到 `data.set`，结果
 「将 i 增加 1」在查看器里显示成「将 i 设为 1」。这类错误不报错，只是语义悄悄偏移。
+
+### 6.1 扩展积木的参数名来自显示文本的占位符
+
+积木方法体转发到 Java 时，实参按**位置**取（Java 侧读 `args.<名字>`），而位置
+来自积木显示文本里的 `[NAME]` 占位符——`vm-bootstrap.js` 的 `__tmcArgNames`
+用正则提取。这是唯一与 `arguments` 一一对应且顺序可靠的来源（对象 key 顺序在
+ES5 里不保证）。
+
+代价是：**改写显示文案时若动了占位符的拼写或顺序，实参会静默错位**，不报错，
+只是某个积木的参数语义悄悄偏移。
+
+`RhinoVm.argsSelfTest()` 交叉校验两边数量：扩展侧的占位符数（JS 侧经
+`__tmcArgNamesDump` 暴露）与查看器侧登记的参数数（`BlockRegistry`）必须相等。
+数量对不上，参数就一定错位。这条由 `./gradlew vmSmoke` 守住。
+
+> 它已经抓到过一次真实漂移：查看器给 `action.break_wait` 登记了 `TICKS` 参数，
+> 而扩展里的 `breakWait` 早已无参数（上限由宿主侧固定）。运行路径一直是对的，
+> 错的是查看器多显示了一个不存在的参数。
 
 ### 7. 脚本按下的键必须在引擎停止时统一释放
 
@@ -212,9 +256,79 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 `KeyBinding.onKeyPressed` → 原版 `doAttack()`，客户端自己做射线与距离判定，
 服务端收到的与手点一模一样。
 
+### 13. 「走向」是会话，不是一次调用
+
+`走向 x y z` 不返回估算时长，而是启动一个跨 tick 的移动会话，脚本靠
+`requestWaitUntil("move", …)` + `ScriptBridge.poll("move")` 挂起。三条必须守住的规矩：
+
+1. **按键按状态变化收发**：`ScriptKeys.hold` 是**幂等**的（重复按下只延长到期时间，不累加计数），
+   所以每 tick 重复调用不会把键卡住。跟随器仍走 `setForward` / `setJump` 这种"状态变了才动"的包装：
+   少做无谓的 `setPressed`，也让内部状态位始终等于我们以为的物理状态。
+   注意 `ticks = -1` 的长按键不会自动到期，收尾只能靠 `abort()` 或引擎停止时的统一释放。
+2. **JS 等待上限要比 Java 超时大 40 tick**：`__tmcWaitUntil` 到点会自行 resolve、不通知 Java；
+   两边相等时脚本会先往下跑，而角色还在走。
+3. **`halted`（停止全部）分支必须 `abort()`**：该分支在 `tick` 里直接 return，
+   跟随器不再被驱动，不补就是前进键永不松开。
+
+寻路本身复用原版僵尸的 A\*，但**只复用"找路"**：`MoveControl` 是给 `MobEntity` 直接写移动向量的，
+玩家没有，位移只能靠按键。细节与选型见 [PATHFINDING.md](PATHFINDING.md)。
+
+同理，「平滑转向」也是会话：`TurnSession` 每 tick 走掉剩余角度的一部分，脚本用
+`requestWaitUntil("turn", …)` 挂起。它与 `PathFollower` 共享 `TurnMath`——两份平滑实现迟早会走偏。
+`TurnSession.isActive()` 为真时 `PathFollower` 让出 yaw，否则两边每 tick 各写一次、互相抵消。
+
+朝向必须**比例收敛**（每 tick 走剩余角度的 45%，限幅 12°），不能用固定角速度：
+`ClientPlayerEntity.getYaw(float)` 直接返回原始 yaw，相机不做 tick 内插值，所以每一步都当场可见，
+而恒定的 30.000°/tick 在反作弊里是一条标准直线特征。
+
+### 14. 寻路有两处输出：世界里的路线 + HUD 的状态行
+
+路线走世界渲染（`PathRenderer`），状态行走 HUD（`ScriptHudElement` 加两行）。
+两者都只读 `PathFollower` 的快照（`nodeView()` / `status()`），不反向驱动会话。
+
+HUD 的文本要按「内容变化才重建」处理：距离每 tick 变，取到 0.1 格后约 5 tick 变一次，
+中间复用同一对 `Text`。
+
+路线用 `PathRenderer`，挂在 `WorldRenderEvents.AFTER_ENTITIES`，读 `PathFollower.nodeView()` 的**不可变快照**
+（`volatile` 整体替换）。渲染线程不遍历可变的 `Path`、不分配集合——那是客户端线程的对象。
+
+线层用 `RenderLayers.lines()`，带深度测试：被墙挡住的段落看不见，这是有意的，
+能直接暴露"路径穿墙"。
+
+### 15. 引擎停下后不再接受任何外部触发
+
+`ScriptEngine.active()`（`running && !halted && healthy`）是唯一入口守卫，`fire` / `fireKey` /
+`fireChat` 都先过它。少了这道判断，引擎停止后按键与聊天仍会 `startHat`：线程被压进
+`runtime.threads` 而 `_step` 不再调用——只进不出，长时间挂机会持续涨内存。
+`stop()` 还必须清空 `cachedTriggerKeys`：键表留着，分发器仍会按旧键逐 tick 派发。
+
+### 16. 「停止全部」要自己订阅 `PROJECT_STOP_ALL`
+
+scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订阅就完全不知情：
+脚本已经停了，「走向」会话还在每 tick 按前进键，最长走满 `MAX_TICKS`。
+`vm-bootstrap.js` 把事件计成计数器，`ScriptEngine` 每 tick 取走，>0 就置 `halted` 并收尾。
+
+**启动流程必须清一次计数**：`greenFlag()` 内部也会 `stopAll`，不清就会在进入世界的第一帧
+被误判成玩家执行了停止全部。`vmSmoke` 有一条断言钉住这点（计数 ≥1、再取为 0）。
+
+### 17. 列表与变量同存 `target.variables`，用 `type` 区分
+
+这套 scratch-vm 不再把列表放在 `target.lists`：`lookupOrCreateList` 先按 id 在 `variables`
+里找，再按名字 + `LIST_TYPE`（字面值 `"list"`）找。所以读列表必须遍历 `variables` 并检查
+`type === 'list'`——只看 `target.lists` 会永远拿到空数组，表现为「HUD 上的列表一直是空的」。
+`__tmcGetList` 两个位置都看，兼容旧数据模型。
+
+### 18. VM 在标题界面预热，不在进世界时初始化
+
+`init()` 约 0.6–0.7 秒（解析 1.5 MB VM 脚本），首次 `loadProject` 还有约 0.3 秒冷路径，
+两者都在主线程。放标题界面用空工程走一遍，进世界只剩几十毫秒（实测 331 ms → 37 ms）。
+预热失败不拖累客户端：`start()` 会再试一次，异常只让脚本暂时不可用；
+引擎关闭时不预热——不为用不上的 VM 付这 0.6 秒。
+
 ## 六、HUD
 
-两行内容：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡。
+基础两行：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡；
+寻路进行时在其下追加两行状态（目标 / 距离 / 节点进度 / 规划耗时），受 `showPathHud` 控制。
 
 这里补的是一个真实缺口：`looks_say` / `looks_think` 是 scratch-vm 的原生积木，
 游戏内原本**没有任何渲染出口**——不补的话脚本永远无法对外表达。
@@ -236,13 +350,41 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | 任务 | 作用 |
 |---|---|
 | `./gradlew vmSmoke` | 载入 project.json，验证顺序执行 |
-| `./gradlew vmSmoke -PvmMode=hat` | 验证事件触发帽子积木 |
-| `./gradlew vmSmoke -PvmMode=block` | 验证阻塞动作按时长挂起 |
+| `./gradlew vmSmoke -PvmMode=hat -PvmProject=hat-project.json` | 验证事件触发帽子积木 |
+| `./gradlew vmSmoke -PvmMode=block -PvmProject=block-project.json` | 验证阻塞动作按时长挂起 |
 | `./gradlew vmImport` | 验证 sb3 能解析成树，并被 VM 执行 |
 | `./gradlew vmChat` | 验证聊天帽子一条消息只触发一次、关键词能过滤、自己发的聊天不回声 |
+| `./gradlew vmNumberFormat` | 验证数值积木的字符串化是 ECMAScript 格式（`20` 而非 `20.0`） |
+| `./gradlew vmKeyHat` | 验证「当按下 [键]」按 `KEY_OPTION` 正确派发：对得上起 1 个线程、对不上起 0 个 |
+| `./gradlew vmList` | 验证 HUD 能读到列表内容，以及算术积木的 `NUM1/NUM2` 映射成 `A/B`；`-PlistProject=路径` 可换成任意工程 |
+| `./gradlew vmDepth` | 验证超长 `next` 链被深度保护截断，而不是打穿线程栈 |
+| `./gradlew vmPreload -Pmode=preload` | 测量预热前后首次载入工程的耗时（`cold` 为对照） |
+| `./gradlew exportSmoke` | 验证扩展释放：创建 / 内容一致不动 / 旧版覆盖 |
 
-`vmImport` 默认读 `run/turbomc-vm/fixture.sb3`，可用
-`-Psb3=路径` 指定其他工程。
+**夹具在 `src/test/resources/turbomc-vm/`，进版本控制**——CI 上只有这一份，
+放在 `run/` 下会因被 gitignore 而在 CI 上消失。
+
+读取顺序：`-P` 参数指定的路径 → classpath 里的同名夹具。常用夹具：
+`project.json`（顺序执行）、`hat-project.json`（聊天帽子）、`keyhat-project.json`（按键帽子）、
+`list-project.json`（列表监视器）、`block-project.json`（条件等待）、`ask-project.json`（询问链路）、
+`fixture.sb3`（sb3 导入）。
+
+> **`hat` 与 `block` 模式必须显式指定 `-PvmProject`**：默认的 `project.json`
+> 里没有对应的帽子积木，`startHat` 会起 0 个线程——那是**假失败**，不是真问题。
+
+### 单元测试
+
+`./gradlew test`（已挂在 `build` 上，CI 自动执行）。只放**不依赖 Minecraft 客户端**
+的纯逻辑，覆盖最容易悄悄回归的几处：
+
+| 测试类 | 守住什么 |
+|---|---|
+| `ScratchCastTest` | Scratch 弱类型转换规则（非数字串得 0、`" false "` 为真、数字转字符串按 ECMAScript） |
+| `ChatGateTest` | 同一条聊天只触发一次：有签名按签名去重、无签名按正文 + 1 秒窗口 |
+| `TurnMathTest` | 转向步进的限幅 / 死区 / 最短路径，以及 NaN 输入得 0 |
+
+涉及客户端的验证一律走冒烟任务——纯 JVM 里没有客户端，动作会抛 NPE 被桥吞成
+`null`，测不到真实行为。
 
 ## 八、使用流程
 
@@ -266,4 +408,10 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `[vm] 单帧执行超出预算……已跳过该帧并继续运行` | 某帧超时（多为 GC 或同步发聊天），不影响后续 |
 | `[vm] 未映射的扩展积木: xxx` | 扩展里有积木没进 `Sb3Mapping`，调用返回空值 |
 | `[vm] 积木 xxx 已映射为 xxx，但动作层没有实现` | 映射到了类型，但 `NativeRegistry` 里没有对应实现 |
+| `[script] VM 预热完成，进世界只需载入工程` | 标题界面的预热跑完了（正常应出现一次） |
+| `[script] VM 预热失败，进世界后再试：…` | 预热出错，但进世界时 `start()` 会再 init 一次 |
+| `[script] 检测到「停止全部」，已收尾，等待玩家按 F6 重新开启` | 脚本执行了停止全部，会话与按键已收尾 |
+| `[script] 按键「x」派发帽子但没起线程（工程里没有这个键的帽子？）` | 键名收集到了但 `startHats` 匹配不上 |
+| `[perf] 最近一窗（30000 ms）：…` | 每 30 秒一条的性能汇总（`vm.step` / `path.plan` / `hud.read` 等） |
+| `[perf] xxx 单次 N ms（≥33 ms…）` | 某一次调用超过两帧，卡顿就发生在这一下 |
 | `[script] 容器距离 N 格超过交互上限` | 服务端会静默拒绝，所以这里提前说明 |

@@ -57,6 +57,11 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmSmoke -PvmMode=block   # 阻塞动作
 ./gradlew vmImport                 # sb3 解析 + 执行
 ./gradlew vmChat                   # 聊天帽子：一次事件只触发一次、关键词过滤
+./gradlew vmKeyHat                 # 按键帽子：对得上起 1 个线程、对不上起 0 个
+./gradlew vmList                   # HUD 读列表 + 算术积木参数名映射
+./gradlew vmDepth                  # 超长积木链的深度保护
+./gradlew vmNumberFormat           # 数值字符串化是 ECMAScript 格式
+./gradlew vmPreload -Pmode=preload # 预热前后首次载入工程的耗时对比
 ./gradlew exportSmoke              # 扩展释放：创建 / 内容一致不动 / 旧版覆盖
 ```
 

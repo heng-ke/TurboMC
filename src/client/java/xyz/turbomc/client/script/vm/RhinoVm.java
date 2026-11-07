@@ -10,9 +10,11 @@ import org.mozilla.javascript.Function;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.WrapFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.action.WorldQueries;
+import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 
 import java.io.IOException;
@@ -40,6 +42,8 @@ public final class RhinoVm {
 	private static final int PROMISE_ROUNDS = 200_000;
 
 	private static final String RESOURCE_PREFIX = "/assets/turbomc/vm/";
+	/** 预热用的空工程：只有一个没有积木的舞台，用来走一遍首次反序列化。 */
+	private static final String PRELOAD_PROJECT = "preload-project.json";
 	/** 加载顺序不可调换：shim 提供 Promise 与定时器，全局对象必须先于扩展，bootstrap 最后覆盖方法体。 */
 	private static final String[] SCRIPTS = {
 			"shim-globals.js",
@@ -53,6 +57,7 @@ public final class RhinoVm {
 	private final VmContextFactory factory = new VmContextFactory();
 	private Scriptable scope;
 	private boolean ready;
+	private int budgetMs = DEFAULT_BUDGET_MS;
 	private long budgetNanos = DEFAULT_BUDGET_MS * 1_000_000L;
 	/**
 	 * 冷启动帧豁免计数。
@@ -83,8 +88,19 @@ public final class RhinoVm {
 		return ready;
 	}
 
+	/**
+	 * 设置单帧预算（毫秒）。
+	 *
+	 * <p>引擎每 tick 都会调一次，但配置极少变。值没变时直接返回：省掉一次
+	 * {@code enterContext} 与 JS 调用，也避免在 Rhino 的观察器窗口里插入额外工作。</p>
+	 */
 	public void setBudgetMs(int ms) {
-		budgetNanos = Math.max(1, ms) * 1_000_000L;
+		int value = Math.max(1, ms);
+		if (value == budgetMs) {
+			return;
+		}
+		budgetMs = value;
+		budgetNanos = value * 1_000_000L;
 		if (ready) {
 			Context cx = factory.enterContext();
 			try {
@@ -96,7 +112,11 @@ public final class RhinoVm {
 	}
 
 	/**
-	 * 加载全部脚本并实例化 VM。首次调用约需 1–2 秒，应在进入世界后触发，不要放在模组初始化里。
+	 * 加载全部脚本并实例化 VM，约 0.6–0.7 秒（解析 1.5 MB 的 VM 脚本）。
+	 *
+	 * <p>正常路径由 {@link #preload()} 在标题界面调用；若等到进世界才首次初始化，
+	 * 这一下会直接卡在玩家脸上。也不要放在模组初始化阶段——那时做重活会拖慢启动，
+	 * 异常还会连累整个客户端起不来。</p>
 	 */
 	public synchronized void init() {
 		if (ready) {
@@ -128,6 +148,7 @@ public final class RhinoVm {
 		}
 		LOG.info("[vm] 初始化完成，耗时 {} ms，积木 {} 个",
 				(System.nanoTime() - start) / 1_000_000L, blockCount());
+		PerfProbe.end("vm.init", start);
 	}
 
 	/** VM 认识的积木数量，用于日志与冒烟测试断言。 */
@@ -135,8 +156,93 @@ public final class RhinoVm {
 		return toInt(callQuietly("__tmcBlockCount", new Object[0]), 0);
 	}
 
+	/**
+	 * 预热：初始化 VM 并载入一个空工程，把「首次反序列化」的冷路径提前走掉。
+	 *
+	 * <p><b>为什么要连空工程一起 load</b>：单次实测里 {@code init()} 663 ms、
+	 * <b>首次</b> {@code loadProject} 307 ms、第二次只有 8–10 ms。那 307 ms 花在
+	 * scratch-vm 的首次反序列化与 JIT 预热上，跟工程规模几乎无关——所以先用空工程
+	 * 走一遍，玩家真正进世界时载入自己的工程就落到热路径上。</p>
+	 *
+	 * <p><b>为什么放在标题界面而不是模组初始化</b>：模组初始化阶段做重活会拖慢启动，
+	 * 且抛出异常会连累整个客户端起不来；放在标题界面最多让脚本不可用，
+	 * 进世界时 {@code start()} 还会再试一次。</p>
+	 *
+	 * <p>只应由主线程调用。重复调用是安全的：VM 已就绪时直接返回。</p>
+	 */
+	public void preload() {
+		if (ready) {
+			return;
+		}
+		init();
+		loadProject(read(PRELOAD_PROJECT));
+		// 空工程的载入可能带出一次 stopAll，计数不能留给「进入世界」的第一次判定
+		takeProjectStops();
+	}
+
+	/**
+	 * 「按下 [键]?」的键盘钩子是否已安装到 VM 的键盘设备上。
+	 *
+	 * <p>供冒烟测试断言。只看有没有警告日志不足以证明覆写生效——原型的
+	 * {@code getKeyIsDown} 一直存在，漏装时积木会静默返回 false。</p>
+	 */
+	public boolean keyboardHooked() {
+		return Boolean.TRUE.equals(callQuietly("__tmcKeyboardHooked", new Object[0]));
+	}
+
+	/** 「鼠标按下?」的鼠标钩子是否已安装（同上，供冒烟测试断言）。 */
+	public boolean mouseHooked() {
+		return Boolean.TRUE.equals(callQuietly("__tmcMouseHooked", new Object[0]));
+	}
+
+	/** 「用户名」钩子是否已安装（同上）。 */
+	public boolean userHooked() {
+		return Boolean.TRUE.equals(callQuietly("__tmcUserHooked", new Object[0]));
+	}
+
+	/** 「询问并等待」的 QUESTION 监听是否已装上（同上）。 */
+	public boolean askHooked() {
+		return Boolean.TRUE.equals(callQuietly("__tmcAskHooked", new Object[0]));
+	}
+
+	/** 「显示 / 隐藏 变量」的原生积木钩子是否已装上（同上）。 */
+	public boolean monitorHooked() {
+		return Boolean.TRUE.equals(callQuietly("__tmcMonitorHooked", new Object[0]));
+	}
+
+	/** 读取列表内容的 JSON 字符串，供 HUD 监视器显示；VM 未就绪时返回空数组。 */
+	public String getList(String name) {
+		Object value = callQuietly("__tmcGetList", new Object[]{name});
+		return value == null ? "[]" : value.toString();
+	}
+
+	/**
+	 * 布尔归一化自检。
+	 *
+	 * <p>桥返回的 {@code Boolean} 会被 Rhino 包成对象，而 scratch 的
+	 * {@code Cast.toBoolean} 对对象一律判真——归一化一旦写错，所有「是/否」积木
+	 * 都会恒真，且不会有任何报错。</p>
+	 */
+	public boolean booleanNormalizeOk() {
+		return Boolean.TRUE.equals(callQuietly("__tmcBooleanSelfTest", new Object[0]));
+	}
+
 	public int threadCount() {
 		return toInt(callQuietly("__tmcThreadCount", new Object[0]), 0);
+	}
+
+	/**
+	 * 取走自上次调用以来「停止全部」发生的次数。
+	 *
+	 * <p>scratch-vm 的 {@code runtime.stopAll()} 会清空线程并发出 {@code PROJECT_STOP_ALL}，
+	 * 但宿主没有订阅点：脚本执行「停止全部」后，Java 侧的「走向」会话与脚本按下的键
+	 * 仍在每 tick 驱动。计数搬到 Java 侧之后，由 {@code ScriptEngine} 决定是否收尾。</p>
+	 *
+	 * <p>注意 {@code greenFlag()} 内部也会 {@code stopAll}，启动流程里必须调用一次把它清掉，
+	 * 否则进入世界的第一个 tick 会被误判成「玩家执行了停止全部」。</p>
+	 */
+	public int takeProjectStops() {
+		return toInt(callQuietly("__tmcTakeProjectStops", new Object[0]), 0);
 	}
 
 	/** 读取 Stage 上的全局变量，供宿主/测试观测脚本状态。 */
@@ -204,6 +310,7 @@ public final class RhinoVm {
 			factory.armDeadline(System.nanoTime() + budgetNanos * DEADLINE_SLACK);
 		}
 		Context cx = factory.enterContext();
+		long perf = PerfProbe.begin();
 		try {
 			call(cx, "__tmcStep", new Object[0]);
 		} catch (EvaluatorException e) {
@@ -220,10 +327,70 @@ public final class RhinoVm {
 			LOG.error("[vm] 执行异常，已停止全部脚本", e);
 			stopAll(cx);
 		} finally {
+			// 超时帧同样记一次：它正是「这一帧卡了」的直接证据
+			PerfProbe.end("vm.step", perf);
 			ScriptBridge.clearContext();
 			factory.disarmDeadline();
 			Context.exit();
 		}
+	}
+
+	/**
+	 * 扩展积木的参数名自检：占位符数量必须与查看器侧登记的参数数量一致。
+	 *
+	 * <p><b>要防的是什么</b>：积木方法体转发到 Java 时，实参按<b>位置</b>取
+	 * （Java 侧读 {@code args.<名字>}），而位置来自积木显示文本里的 {@code [NAME]}
+	 * 占位符。改写文案时若动了占位符的拼写或顺序，实参会静默错位——不报错，
+	 * 只是某个积木的参数语义悄悄偏移。</p>
+	 *
+	 * <p>两边数一遍就能发现：扩展侧的占位符数（JS 侧暴露）与查看器侧登记的
+	 * 参数数（{@code BlockRegistry}）必须相等。数量对不上，参数就一定错位。</p>
+	 *
+	 * @return 不一致时给出说明；一致则返回空串
+	 */
+	public String argsSelfTest() {
+		Object raw = callQuietly("__tmcArgNamesDump", new Object[0]);
+		if (raw == null) {
+			return "扩展参数清单取不到";
+		}
+		String dump = String.valueOf(raw);
+		if (dump.isEmpty()) {
+			return "扩展参数清单取不到";
+		}
+		xyz.turbomc.client.script.block.BlockRegistry.bootstrapOnce();
+		StringBuilder problems = new StringBuilder();
+		for (String entry : dump.split(";")) {
+			if (entry.isEmpty()) {
+				continue;
+			}
+			int split = entry.indexOf('=');
+			if (split < 0) {
+				continue;
+			}
+			String opcode = entry.substring(0, split);
+			String names = entry.substring(split + 1);
+			int count = names.isEmpty() ? 0 : names.split(",", -1).length;
+
+			// 扩展侧的 opcode 没有前缀，sb3 里是 turbomc_<name>（见 ARCHITECTURE 第 10 条）
+			String sb3Opcode = opcode.startsWith("turbomc_") ? opcode : "turbomc_" + opcode;
+			String type = xyz.turbomc.client.script.sb3.Sb3Mapping.typeOf(sb3Opcode);
+			if (type == null) {
+				problems.append(opcode).append("(未映射) ");
+				continue;
+			}
+			xyz.turbomc.client.script.block.BlockType block =
+					xyz.turbomc.client.script.block.BlockRegistry.get(type);
+			if (block == null) {
+				problems.append(opcode).append("(类型未登记) ");
+				continue;
+			}
+			int expected = block.params().size();
+			if (count != expected) {
+				problems.append(opcode).append("(占位符 ").append(count)
+						.append("≠参数 ").append(expected).append(") ");
+			}
+		}
+		return problems.toString();
 	}
 
 	/** 触发帽子积木，返回新起的线程数。 */
@@ -381,6 +548,7 @@ public final class RhinoVm {
 			cx.setOptimizationLevel(-1);
 			cx.setInstructionObserverThreshold(10_000);
 			cx.setClassShutter(new BridgeOnlyShutter());
+			cx.setWrapFactory(new ScalarWrapFactory());
 			return cx;
 		}
 
@@ -399,6 +567,43 @@ public final class RhinoVm {
 				deadline = 0L;
 				throw new EvaluatorException("脚本执行超出单帧时间预算，已中断");
 			}
+		}
+	}
+
+	/**
+	 * 让 Java 侧的标量以原生 JS 值进入 VM，而不是被包成 {@code NativeJavaObject}。
+	 *
+	 * <p><b>为什么必须这样</b>：{@link ScriptBridge#call} 的返回类型是 {@code Object}，
+	 * Rhino 默认会把 {@code Double} 封装成 {@code NativeJavaObject}。而上游
+	 * {@code Cast.toString} 的实现就是 {@code String(e)}——对封装对象取到的是
+	 * <b>Java 的 {@code Double.toString}</b>，于是数值积木一旦参与字符串拼接就带上
+	 * Java 格式：生命值 20.0 变成 {@code "20.0"}（Scratch 期望 {@code "20"}），
+	 * {@code 1e-5} 变成 {@code "1.0E-5"}（期望 {@code "0.00001"}）。
+	 * 数值运算本身没错（{@code Number()} 会解包），错的是字符串化。</p>
+	 *
+	 * <p>覆写后 {@code Double} 直接成为 JS number，{@code String(e)} 走的就是
+	 * ECMAScript 的 {@code String(number)}，格式与浏览器里的 Scratch 完全一致。</p>
+	 *
+	 * <p><b>为什么只放行这三个类型</b>：脚本的��值域本来只有 string / number / boolean
+	 * 三种，其余类型（数组、对象）封成 {@code NativeJavaObject} 才是正确行为——
+	 * 那样 JS 侧能看见它的方法，语义与浏览器一致。</p>
+	 *
+	 * <p>与 {@link BridgeOnlyShutter} 互不影响：类可见性由 ClassShutter 决定，
+	 * 装箱由 WrapFactory 决定，是两套独立机制。</p>
+	 */
+	private static final class ScalarWrapFactory extends WrapFactory {
+		@Override
+		public Object wrap(Context cx, Scriptable scope, Object obj, Class<?> staticType) {
+			if (obj instanceof Double value) {
+				return value;
+			}
+			if (obj instanceof Boolean value) {
+				return value;
+			}
+			if (obj instanceof String value) {
+				return value;
+			}
+			return super.wrap(cx, scope, obj, staticType);
 		}
 	}
 

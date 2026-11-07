@@ -1,5 +1,7 @@
 package xyz.turbomc.client.script.action;
 
+import xyz.turbomc.client.script.action.motion.TurnActions;
+import xyz.turbomc.client.script.action.path.PathActions;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 
 import java.util.HashMap;
@@ -48,6 +50,8 @@ public final class NativeRegistry {
 		}
 		bootstrapped = true;
 		GameActions.registerAll();
+		PathActions.registerAll();
+		TurnActions.registerAll();
 		ContainerActions.registerAll();
 		WorldQueries.registerAll();
 	}

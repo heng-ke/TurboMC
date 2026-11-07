@@ -7,6 +7,7 @@ import xyz.turbomc.client.script.node.Slot;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 import xyz.turbomc.client.script.store.ScriptDefinition;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,20 +32,36 @@ public final class ImportSmokeTest {
 	private ImportSmokeTest() {
 	}
 
+	/** 夹具在 classpath 中的位置；与 src/test/resources/turbomc-vm/ 一一对应。 */
+	private static final String FIXTURE_ROOT = "/turbomc-vm/";
+
 	public static void main(String[] args) throws Exception {
 		NativeRegistry.bootstrapOnce();
 		BlockRegistry.bootstrapOnce();
-		Path source = Path.of(args.length > 0 ? args[0]
-				: "run/config/turbomc/imports/imported/作品.sb3");
+		String source = args.length > 0 ? args[0] : "fixture.sb3";
+		// sb3 既可能是磁盘路径，也可能是 classpath 里的版本控制内夹具。
+		// classpath 来源先落到临时文件，之后统一按路径处理——sb3 是 zip，
+		// 需要随机访问，字节流喂不进 ZipFile。
+		Path file = Path.of(source);
+		if (!Files.isRegularFile(file)) {
+			byte[] bytes = classpathEntry(source);
+			if (bytes == null) {
+				System.out.println("[import] 找不到 sb3: " + source);
+				System.out.println("IMPORT SMOKE FAIL");
+				System.exit(1);
+			}
+			file = Files.createTempFile("turbomc-import", ".sb3");
+			Files.write(file, bytes);
+		}
 
-		Sb3Importer.Result parsed = Sb3Importer.readFile(source);
+		Sb3Importer.Result parsed = Sb3Importer.readFile(file);
 		if (!parsed.ok()) {
 			System.out.println("[import] 解析失败: " + parsed.error());
 			System.out.println("IMPORT SMOKE FAIL");
 			System.exit(1);
 		}
 
-		System.out.println("[import] 文件: " + source.getFileName()
+		System.out.println("[import] 文件: " + source
 				+ "，脚本 " + parsed.scripts().size() + " 份");
 		System.out.print(Sb3Importer.describe(parsed.scripts()));
 		if (!parsed.unsupported().isEmpty()) {
@@ -54,7 +71,7 @@ public final class ImportSmokeTest {
 		boolean hasCustom = parsed.scripts().stream().anyMatch(item -> contains(item.hat, "procedures.definition"));
 		System.out.println("[import] 可查看=" + viewable + " 含自定义积木=" + hasCustom);
 
-		String json = readProjectJson(source);
+		String json = readProjectJson(file);
 		boolean canRead = json != null;
 
 		RhinoVm vm = RhinoVm.get();
@@ -93,6 +110,22 @@ public final class ImportSmokeTest {
 			try (InputStream in = zip.getInputStream(entry)) {
 				return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			}
+		}
+	}
+
+	/**
+	 * 读 classpath 里的夹具。
+	 *
+	 * <p>sb3 是 zip，需要随机访问，classpath 资源读出来是字节流，
+	 * 因此由调用方落到临时文件后再处理。</p>
+	 */
+	private static byte[] classpathEntry(String source) throws IOException {
+		String resource = source.startsWith("/") ? source : FIXTURE_ROOT + source;
+		try (InputStream in = ImportSmokeTest.class.getResourceAsStream(resource)) {
+			if (in == null) {
+				return null;
+			}
+			return in.readAllBytes();
 		}
 	}
 

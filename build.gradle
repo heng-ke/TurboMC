@@ -45,6 +45,12 @@ dependencies {
 	// 用独立配置打包进 mod jar，避免把 Minecraft / Fabric 一起卷进来。
 	embed "org.mozilla:rhino:1.7.15"
 
+	// JUnit：只用于单元测试，不进发布 jar（test 配置本就不参与 jar 打包）。
+	// 覆盖纯逻辑层——类型转换、聊天去重、平滑转向——这些最容易悄悄回归。
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
 	// Mod Menu: 仅客户端，软依赖（编译期可见 + 开发环境本地运行时加载，不写进发布依赖）
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
@@ -79,6 +85,16 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.encoding = "UTF-8"
 }
 
+// 单元测试：用 JUnit Platform 跑 src/test/java 下的用例。
+// 这里只放纯逻辑（不依赖 Minecraft 客户端）的测试；涉及客户端的验证走冒烟任务。
+tasks.named('test', Test) {
+	useJUnitPlatform()
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+		showStandardStreams = false
+	}
+}
+
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
 	// if it is present.
@@ -109,14 +125,21 @@ jar {
 }
 
 // VM 后端的冒烟测试：不启动客户端，直接验证 Rhino + scratch-vm 链路
+//
+// 夹具放在 src/test/resources/turbomc-vm/（进版本控制，CI 上才存在）。
+// 读取顺序：-PvmProject 指定的路径 → classpath 里的同名夹具。
+// 换夹具不必改代码：把文件丢进 src/test/resources/turbomc-vm/ 即可。
 tasks.register('vmSmoke', JavaExec) {
 	group = 'verification'
 	description = '在纯 JVM 中跑通 VM 后端（-PvmProject=路径 -PvmMode=hat）'
 	mainClass = 'xyz.turbomc.client.script.vm.VmSmokeTest'
-	classpath = sourceSets.client.runtimeClasspath
-	def projectPath = providers.gradleProperty('vmProject').getOrElse('run/turbomc-vm/project.json')
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	def projectPath = providers.gradleProperty('vmProject').getOrElse('project.json')
 	def mode = providers.gradleProperty('vmMode').getOrElse('')
+	// -PperfWindow=50 把性能汇总窗口缩到 50 ms，便于冒烟里验证打点本身
+	def perfWindow = providers.gradleProperty('perfWindow').getOrElse('30000')
 	args = mode.isEmpty() ? [projectPath] : [projectPath, mode]
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', "-Dturbomc.perf.windowMs=${perfWindow}"
 }
 
 // 往返冒烟：编辑器积木树 → project.json → VM 执行
@@ -125,8 +148,8 @@ tasks.register('vmImport', JavaExec) {
 	group = 'verification'
 	description = '验证 sb3 能解析成可查看的积木树并被 VM 执行（-Psb3=路径）'
 	mainClass = 'xyz.turbomc.client.script.vm.ImportSmokeTest'
-	classpath = sourceSets.client.runtimeClasspath
-	def sb3Path = providers.gradleProperty('sb3').getOrElse('run/turbomc-vm/fixture.sb3')
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	def sb3Path = providers.gradleProperty('sb3').getOrElse('fixture.sb3')
 	args = [sb3Path]
 	// 积木树是中文，控制台默认 GBK 会乱码
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
@@ -137,8 +160,58 @@ tasks.register('vmChat', JavaExec) {
 	group = 'verification'
 	description = '验证聊天帽子每次事件只触发一次，且关键词能过滤'
 	mainClass = 'xyz.turbomc.client.script.vm.ChatHatTest'
-	classpath = sourceSets.client.runtimeClasspath
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8' 
+}
+
+// 数值字符串化冒烟：守住「标量以原生 JS 值进入 VM」这条修复
+tasks.register('vmNumberFormat', JavaExec) {
+	group = 'verification'
+	description = '验证数值积木的字符串化是 ECMAScript 格式（20 而非 20.0）'
+	mainClass = 'xyz.turbomc.client.script.vm.NumberFormatSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
+// 列表监视器冒烟：HUD 读列表必须拿到数据，算术积木参数名必须是 A/B
+tasks.register('vmList', JavaExec) {
+	group = 'verification'
+	description = '验证「显示列表」能被 HUD 读到，以及 NUM1/NUM2 正确映射为 A/B'
+	mainClass = 'xyz.turbomc.client.script.vm.ListMonitorSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	// -PlistProject=路径 可以换成玩家自己的工程（需先解出 project.json）
+	def listProject = providers.gradleProperty('listProject').getOrElse('')
+	args = listProject.isEmpty() ? [] : [listProject]
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
+// AT 预热测量：首次 loadProject 的冷路径能否被「init + 空工程」吃掉
+tasks.register('vmPreload', JavaExec) {
+	group = 'verification'
+	description = '测量预热前后首次载入工程的耗时（-Pmode=cold|preload）'
+	mainClass = 'xyz.turbomc.client.script.vm.PreloadSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	def preloadMode = providers.gradleProperty('mode').getOrElse('cold')
+	args = [preloadMode]
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
+// 按键帽子冒烟：startHats 的字段匹配对得上要起线程、对不上要起 0 个
+tasks.register('vmKeyHat', JavaExec) {
+	group = 'verification'
+	description = '验证「当按下 [键]」帽子按 KEY_OPTION 正确派发'
+	mainClass = 'xyz.turbomc.client.script.vm.KeyHatSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
+// 深度保护冒烟：超长 next 链必须被截断，而不是栈溢出
+tasks.register('vmDepth', JavaExec) {
+	group = 'verification'
+	description = '验证 sb3 的超长积木链会被深度保护截断，而不是打穿线程栈'
+	mainClass = 'xyz.turbomc.client.script.vm.DepthSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
 // TurboWarp 扩展释放冒烟：创建 → 内容一致不动 → 内容过期覆盖
@@ -146,7 +219,7 @@ tasks.register('exportSmoke', JavaExec) {
 	group = 'verification'
 	description = '验证 jar 内的 TurboWarp 扩展能正确释放到 config/turbomc/'
 	mainClass = 'xyz.turbomc.client.script.vm.ExtensionExportSmokeTest'
-	classpath = sourceSets.client.runtimeClasspath
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 

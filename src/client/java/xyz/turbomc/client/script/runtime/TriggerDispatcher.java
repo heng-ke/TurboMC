@@ -14,6 +14,10 @@ import java.util.Map;
  *
  * <p>按键用边沿检测（上一 tick 未按下 → 本 tick 按下）；受伤用血量下降判断。
  * 聊天事件由 {@code TurboMCClient} 直接注册回调，不经过本类。</p>
+ *
+ * <p>界面打开、或引擎没在跑时，只更新边沿与血量基线、不派发：否则关掉界面那一下会把
+ * 仍按着的键当成「新按下」，死亡那一 tick 会把「受伤 + 死亡」叠在一起，
+ * 引擎停着还会往一个不再推进的 VM 里塞线程。</p>
  */
 public final class TriggerDispatcher {
 	private final Map<String, Boolean> keyStates = new HashMap<>();
@@ -27,14 +31,16 @@ public final class TriggerDispatcher {
 			return;
 		}
 		// 死亡时客户端会弹出死亡界面，而「有界面就跳过」正是会让死亡事件永远不触发的那条判断，
-		// 所以死亡检测必须放在它前面。
+		// 所以死亡检测必须放在它前面。「死亡后自动重生」是独立配置（不需要写脚本），
+		// 不能跟着引擎开关失效；它派发的「当死亡」事件本身由 active() 拦住。
 		dispatchDeath(client);
-		if (client.currentScreen != null) {
-			reset();
-			return;
-		}
-		dispatchKeys(client);
+		// 受伤比较的是「上一 tick 的血量」，属于物理世界状态，与界面无关：
+		// 打开背包时被怪打，这一击不能因为界面上盖了一层就丢掉。
 		dispatchDamage(client);
+		// 界面只决定「能不能触发帽子」，不决定「要不要记录按键状态」。
+		// 界面里按下的键照样更新边沿状态，否则关掉界面时仍按着的 W 会被当成新按下，
+		// 重复触发一次「当按下 W」。引擎没在跑时同理：只记账，不派发。
+		dispatchKeys(client, ScriptEngine.get().active() && client.currentScreen == null);
 	}
 
 	/**
@@ -51,13 +57,13 @@ public final class TriggerDispatcher {
 		wasDead = dead;
 	}
 
-	private void dispatchKeys(MinecraftClient client) {
+	private void dispatchKeys(MinecraftClient client, boolean allowFire) {
 		for (String key : ScriptEngine.get().triggerKeys()) {
 			boolean down = "any".equalsIgnoreCase(key)
 					? InputKeys.anyDown(client)
 					: InputKeys.isDown(client, key);
 			boolean wasDown = keyStates.getOrDefault(key, false);
-			if (down && !wasDown) {
+			if (allowFire && down && !wasDown) {
 				// 按键过滤交给 VM：startHats 按 KEY_OPTION 字段精确匹配，
 				// 只有绑定该键的脚本会启动
 				ScriptEngine.get().fireKey(key);
@@ -67,6 +73,12 @@ public final class TriggerDispatcher {
 	}
 
 	private void dispatchDamage(MinecraftClient client) {
+		// 死亡那一 tick 血量必然是 0，先报「受伤」会和「死亡」叠在一起；
+		// 死亡语义由 dispatchDeath 单独负责，这里只把基线清掉，复活后重新建立。
+		if (client.player.isDead()) {
+			lastHealth = -1f;
+			return;
+		}
 		float health = client.player.getHealth();
 		if (lastHealth >= 0f && health < lastHealth - 0.01f) {
 			ScriptEngine.get().fire("event.damage", hat -> true);
@@ -77,5 +89,6 @@ public final class TriggerDispatcher {
 	private void reset() {
 		keyStates.clear();
 		lastHealth = -1f;
+		wasDead = false;
 	}
 }

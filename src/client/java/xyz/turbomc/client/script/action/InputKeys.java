@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -88,5 +89,84 @@ public final class InputKeys {
 			}
 		}
 		return false;
+	}
+
+	// ---- 鼠标：与键盘是两条读取通道，不能混用 ----
+
+	/**
+	 * 鼠标按钮名 → GLFW 按钮号；无法识别返回 -1。
+	 *
+	 * <p>接受 {@code left / right / middle}，也接受 {@code mouse.left} 这类写法——
+	 * 与 {@code KeyNames} 的键名习惯保持一致，免得两个体系写法不同。</p>
+	 */
+	public static int mouseButton(String scratchName) {
+		if (scratchName == null) {
+			return -1;
+		}
+		String key = scratchName.trim().toLowerCase(Locale.ROOT);
+		if (key.startsWith("mouse.")) {
+			key = key.substring("mouse.".length());
+		}
+		return switch (key) {
+			case "left", "lmb" -> GLFW.GLFW_MOUSE_BUTTON_LEFT;
+			case "right", "rmb" -> GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+			case "middle", "mmb" -> GLFW.GLFW_MOUSE_BUTTON_MIDDLE;
+			default -> -1;
+		};
+	}
+
+	/**
+	 * 任一鼠标键按下。
+	 *
+	 * <p>这是 Scratch「鼠标按下?」的原义：浏览器里任何按钮的 mousedown 都会让该积木为真，
+	 * 它本身不区分按钮。</p>
+	 */
+	public static boolean anyMouseDown(MinecraftClient client) {
+		return isMouseDown(client, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+				|| isMouseDown(client, GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+				|| isMouseDown(client, GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
+	}
+
+	/**
+	 * 读取鼠标按钮的物理状态。
+	 *
+	 * <p>不能复用 {@link InputUtil#isKeyPressed}：它内部只调 {@code glfwGetKey}，
+	 * 把 0/1/2 这类按钮码当键盘码查，结果恒为「未按下」。鼠标必须走
+	 * {@code glfwGetMouseButton}。物理状态不受界面是否打开影响。</p>
+	 */
+	public static boolean isMouseDown(MinecraftClient client, int button) {
+		if (client == null || client.getWindow() == null || button < 0) {
+			return false;
+		}
+		return GLFW.glfwGetMouseButton(client.getWindow().getHandle(), button) == GLFW.GLFW_PRESS;
+	}
+
+	/**
+	 * 名字入口：只有显式 {@code any} 才表示任一键。
+	 *
+	 * <p><b>参数为空时返回假，不回退到「任意键」</b>：空值意味着积木的按钮参数没送到
+	 * （菜单值丢失、字段名漂移、老工程），此时若乐观放行成「任意键」，
+	 * 「等待按下鼠标 [中键]?」会在玩家按住左键挖矿时立刻通过——看起来就是恒真。
+	 * 名字无法识别与取值为空同属「参数没传对」，两者都应判假并留痕。</p>
+	 */
+	public static boolean isMouseDown(MinecraftClient client, String scratchName) {
+		if (scratchName != null && "any".equalsIgnoreCase(scratchName.trim())) {
+			return anyMouseDown(client);
+		}
+		if (scratchName == null || scratchName.isBlank()) {
+			if (WARNED.add("mouse:<empty>")) {
+				LOG.warn("[script] 鼠标积木没拿到按钮名（参数为空），判断恒为假；"
+						+ "若本意是「任意键」请显式选 any");
+			}
+			return false;
+		}
+		int button = mouseButton(scratchName);
+		if (button < 0) {
+			if (WARNED.add("mouse:" + scratchName)) {
+				LOG.warn("[script] 无法识别的鼠标键名 \"{}\"，鼠标判断将恒为假", scratchName);
+			}
+			return false;
+		}
+		return isMouseDown(client, button);
 	}
 }

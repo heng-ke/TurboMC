@@ -50,8 +50,11 @@ public final class ParamLabels {
 	}
 
 	public static String label(String key) {
-		String translated = I18n.translate("param.turbomc." + key);
-		return translated == null || translated.isBlank() ? key : translated;
+		String full = "param.turbomc." + key;
+		String translated = I18n.translate(full);
+		// 缺键时 I18n.translate 原样返回键名（非 null、非空白），只看 isBlank 会把
+		// "param.turbomc.xxx" 直接摆到界面上；这里比对键名，缺键就退回参数名。
+		return translated == null || translated.isBlank() || full.equals(translated) ? key : translated;
 	}
 
 	public static String value(String key, String value) {
@@ -62,20 +65,43 @@ public final class ParamLabels {
 		if ("TICKS".equals(key)) {
 			return WaitUnit.format(value);
 		}
-		String translationKey = switch (key) {
-			case "SCOPE" -> "value.turbomc.scope." + value;
-			case "DIRECTION" -> "value.turbomc.direction." + value;
-			case "KEY" -> "value.turbomc.key." + value;
-			case "OP" -> "value.turbomc.mathop." + value.replace(' ', '_');
-			case "UNIT" -> "value.turbomc.unit." + value.toLowerCase(java.util.Locale.ROOT);
-			case "PRESSED" -> "value.turbomc.onoff." + value.toLowerCase(java.util.Locale.ROOT);
-			case "BUTTON" -> "value.turbomc.mouse." + value.toLowerCase(java.util.Locale.ROOT);
-			default -> null;
-		};
+		String translationKey = translationKey(key, value);
 		if (translationKey == null) {
 			return value;
 		}
 		String translated = I18n.translate(translationKey);
-		return translated == null || translated.isBlank() ? value : translated;
+		// 同上：缺键时 translate 返回键名本身，必须比对才能退回原始值
+		return translated == null || translated.isBlank() || translationKey.equals(translated)
+				? value
+				: translated;
+	}
+
+	/**
+	 * 参数值 → 语言键。查不到对应键时返回 {@code null}（调用方回落成原始值）。
+	 *
+	 * <p><b>键名归一化规则必须与取值表一致</b>：枚举值里有多词的（Scratch 的方向键是
+	 * {@code up arrow}，快捷键是 {@code left shift}），语言键统一写成小写 + 下划线。
+	 * 少了这一步，{@code up arrow} 会拼成 {@code value.turbomc.key.up arrow} 查不到，
+	 * 屏幕上就退回英文原值——「按下 up arrow?」。单字值（{@code space}）看不出问题，
+	 * 所以这类缺陷特别容易漏。</p>
+	 */
+	static String translationKey(String key, String value) {
+		return switch (key) {
+			case "SCOPE" -> "value.turbomc.scope." + normalize(value);
+			case "DIRECTION" -> "value.turbomc.direction." + normalize(value);
+			case "KEY" -> "value.turbomc.key." + normalize(value);
+			case "OP" -> "value.turbomc.mathop." + normalize(value);
+			case "UNIT" -> "value.turbomc.unit." + normalize(value);
+			// 「当 [计时器/响度] > …」的菜单项
+			case "MENU" -> "value.turbomc.menu." + normalize(value);
+			case "PRESSED" -> "value.turbomc.onoff." + normalize(value);
+			case "BUTTON" -> "value.turbomc.mouse." + normalize(value);
+			default -> null;
+		};
+	}
+
+	/** 枚举值 → 语言键后缀：小写 + 空格换下划线（{@code up arrow} → {@code up_arrow}）。 */
+	private static String normalize(String value) {
+		return value.toLowerCase(java.util.Locale.ROOT).replace(' ', '_');
 	}
 }

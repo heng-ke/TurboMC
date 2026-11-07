@@ -85,6 +85,18 @@
 					}
 					},
 					{
+						opcode: 'mouseDown',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('mouse [BUTTON] pressed?', '按下鼠标 [BUTTON]?'),
+						arguments: {
+							BUTTON: {
+								type: Scratch.ArgumentType.STRING,
+								defaultValue: 'left',
+								menu: 'mouseButton'
+					}
+					}
+					},
+					{
 						opcode: 'tap',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('tap [KEY] for [HOLD] ticks', '点按 [KEY] 按住 [HOLD] tick'),
@@ -103,9 +115,10 @@
 					{
 						opcode: 'moveToward',
 						blockType: Scratch.BlockType.COMMAND,
-						text: T('move toward x:[X] z:[Z]', '走向 x:[X] z:[Z]'),
+						text: T('go to x:[X] y:[Y] z:[Z]', '走向 x:[X] y:[Y] z:[Z]'),
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 					}
 					},
@@ -122,6 +135,26 @@
 						opcode: 'lookAt',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('look at x:[X] y:[Y] z:[Z]', '看向 x:[X] y:[Y] z:[Z]'),
+						arguments: {
+							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
+							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+					}
+					},
+					{
+						opcode: 'lookSmooth',
+						blockType: Scratch.BlockType.COMMAND,
+						// 阻塞到转到位：转多少由宿主的比例收敛决定，不是瞬移
+						text: T('turn smoothly to yaw:[YAW] pitch:[PITCH]', '平滑转到视角 水平:[YAW] 俯仰:[PITCH]'),
+						arguments: {
+							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+					}
+					},
+					{
+						opcode: 'lookAtSmooth',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('look smoothly at x:[X] y:[Y] z:[Z]', '平滑看向 x:[X] y:[Y] z:[Z]'),
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -561,13 +594,17 @@
 		// ---- 输入 ----
 		key(args) { this.preview('key ' + args.KEY + ' ' + args.STATE); }
 		click(args) { this.preview('click ' + args.BUTTON); }
+		// 浏览器里读不到物理鼠标，返回假值；游戏内由 vm-bootstrap 转发到宿主
+		mouseDown(args) { return false; }
 		tap(args) { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }
 		stop() { this.preview('stop'); }
 
 		// ---- 移动与视角 ----
-		moveToward(args) { this.preview('moveToward ' + args.X + ',' + args.Z); }
+		moveToward(args) { this.preview('moveToward ' + args.X + ',' + args.Y + ',' + args.Z); }
 		look(args) { this.preview('look ' + args.YAW + ',' + args.PITCH); }
 		lookAt(args) { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }
+		lookSmooth(args) { this.preview('lookSmooth ' + args.YAW + ',' + args.PITCH); }
+		lookAtSmooth(args) { this.preview('lookAtSmooth ' + args.X + ',' + args.Y + ',' + args.Z); }
 
 		// ---- 方块与挖掘 ----
 		breakWait() { this.preview('breakWait'); }

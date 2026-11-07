@@ -11,12 +11,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.config.KeyNames;
+import xyz.turbomc.client.script.action.motion.TurnSession;
+import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.Values;
 
 import java.util.Locale;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -79,7 +83,6 @@ public final class GameActions {
 
 	public static void registerAll() {
 		NativeRegistry.action("action.key", GameActions::key);
-		NativeRegistry.action("action.move_toward", GameActions::moveToward);
 		NativeRegistry.action("action.stop", GameActions::stop);
 		NativeRegistry.action("action.look", GameActions::look);
 		NativeRegistry.action("action.look_at", GameActions::lookAt);
@@ -90,7 +93,30 @@ public final class GameActions {
 		NativeRegistry.action("action.click", GameActions::click);
 		NativeRegistry.action("action.respawn", GameActions::respawn);
 		NativeRegistry.action("action.break_wait", GameActions::breakWait);
+		// 读状态而非改状态，但和「按键」同属输入层，放这里与 action.key 共用一套键名解析
+		NativeRegistry.function("input.mouse_button_down", GameActions::mouseButtonDown);
 	}
+
+	/**
+	 * 「按下鼠标 [按钮]?」：读物理鼠标状态。
+	 *
+	 * <p>不做边沿检测——按住期间持续为真；也不受界面是否打开影响。</p>
+	 */
+	private static Object mouseButtonDown(ScriptContext ctx, Object[] args) {
+		String raw = args.length > 0 ? Values.asString(args[0]) : "";
+		boolean down = InputKeys.isMouseDown(client(ctx), raw);
+		// 状态翻转时留一行日志：鼠标判断出问题时，这行能区分「参数没传进来」
+		// 「键名没解析」「GLFW 没读到」三种情况，比逐层加打印快
+		Boolean previous = LAST_MOUSE_STATE.put(raw, down);
+		if (previous == null || previous != down) {
+			LOG.info("[script] 鼠标「{}」{}（glfw button={}）",
+					raw, down ? "按下" : "松开", InputKeys.mouseButton(raw));
+		}
+		return down;
+	}
+
+	/** 上一次各按钮的读数，仅用于状态翻转时打日志。 */
+	private static final Map<String, Boolean> LAST_MOUSE_STATE = new HashMap<>();
 
 	/**
 	 * 等待准星所指的方块被破坏。
@@ -104,36 +130,15 @@ public final class GameActions {
 	}
 
 	/**
-	 * 朝坐标走一步：转向目标并按住前进键，进入 0.5 格内自动松手。
+	 * 停止移动：中止移动会话并松开所有脚本按键。
+	 *
+	 * <p>只松键是不够的——跟随器下一 tick 会把前进键按回去，所以必须先让它停下。</p>
 	 */
-	private static void moveToward(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.player == null) {
-			return;
-		}
-		double targetX = Values.asNumber(args[0]);
-		double targetZ = Values.asNumber(args[1]);
-		double dx = targetX - client.player.getX();
-		double dz = targetZ - client.player.getZ();
-		KeyBinding forward = client.options.forwardKey;
-		double distance = Math.sqrt(dx * dx + dz * dz);
-		if (distance < 0.5d) {
-			ScriptKeys.release(ctx.currentInstance(), forward);
-			return;
-		}
-		client.player.setYaw((float) Math.toDegrees(Math.atan2(-dx, dz)));
-		ScriptKeys.hold(ctx.currentInstance(), forward, -1);
-		// 步行约 0.216 格/tick；取 0.15 留出被地形拖慢的余量，上限 200 帧防止卡死。
-		// 这是估算而非到达判定：被挡住时会提前放行，需要精确语义时应配合「重复执行直到」使用。
-		ctx.requestWait((int) Math.min(200d, Math.ceil(distance / 0.15d)));
-	}
-
 	private static void stop(ScriptContext ctx, Object[] args) {
+		PathFollower.abort("停止移动");
+		TurnSession.abort("停止移动");
 		releaseMovementKeys();
 	}
-
-
-
 
 	private static void look(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
@@ -153,6 +158,11 @@ public final class GameActions {
 				Values.asNumber(args[0]),
 				Values.asNumber(args[1]),
 				Values.asNumber(args[2]));
+		// 目标与眼睛重合时方向向量为零，归一化得到 NaN，而 setYaw 遇到 NaN 会走
+		// Util.logErrorOrPause（开发环境直接抛异常）。这种输入直接忽略。
+		if (target.squaredDistanceTo(client.player.getEyePos()) < 1e-8) {
+			return;
+		}
 		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, target);
 	}
 

@@ -58,6 +58,28 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.autoRespawn = value)
 				.build());
 
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.show_path"), config.showPath)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.show_path.tooltip"))
+				.setSaveConsumer(value -> config.showPath = value)
+				.build());
+
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.show_path_hud"), config.showPathHud)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.show_path_hud.tooltip"))
+				.setSaveConsumer(value -> config.showPathHud = value)
+				.build());
+
+		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.monitor_list_items"),
+						config.monitorListItems, 1, 20)
+				.setDefaultValue(5)
+				.setTooltip(Text.translatable("config.turbomc.monitor_list_items.tooltip"))
+				.setSaveConsumer(value -> config.monitorListItems = value)
+				.build());
+
 		// ---- 按键权限 ----
 		ConfigCategory keys = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.keys"));
 
