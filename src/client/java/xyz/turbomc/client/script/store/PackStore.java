@@ -52,6 +52,10 @@ public final class PackStore {
 	private record Cache(long modifiedAt, Sb3Importer.Result result) {
 	}
 
+	/** 一次同步的结果：新增几个包、覆盖几个包、启用中的包是否被覆盖。 */
+	public record SyncResult(int added, int updated, boolean activeUpdated) {
+	}
+
 	private PackStore() {
 	}
 
@@ -191,20 +195,45 @@ public final class PackStore {
 	}
 
 	/**
-	 * 扫描 {@code imports/} 与 {@code imports/imported/}，把其中的 sb3 复制进包目录。
-	 * 同名文件已存在时跳过，避免重复导入产生副本。
+	 * 同步 {@code imports/}：新文件导入成新包，同名但内容不同的覆盖旧包。
+	 *
+	 * <p>「导入」和「更新」本来就是同一个动作——用户导出后只会做一件事，就是把 sb3 放进
+	 * imports。拆成两个按钮等于逼他先判断自己是首次导入还是在迭代。</p>
 	 */
-	public int importAll() {
+	public SyncResult importAll() {
 		load();
-		int added = 0;
-		added += importFrom(importsDir());
-		added += importFrom(importsDir().resolve("imported"));
-		lastMessage = added > 0 ? "已导入 " + added + " 个脚本包" : "imports 目录里没有新的 sb3";
+		int added = importFrom(importsDir()) + importFrom(importsDir().resolve("imported"));
 		if (added > 0) {
+			// 新包要出现在列表里，顺便让索引回到一致状态
 			reload();
 		}
-		LOG.info("[pack] 导入完成：新增 {} 个", added);
-		return added;
+		ScriptPack active = activePack();
+		int updated = 0;
+		int failed = 0;
+		boolean activeUpdated = false;
+		for (ScriptPack pack : packs()) {
+			Path source = pendingUpdate(pack);
+			if (source == null) {
+				continue;
+			}
+			if (!copyInto(pack, source)) {
+				failed++;
+				continue;
+			}
+			updated++;
+			if (active != null && pack.fileName.equals(active.fileName)) {
+				activeUpdated = true;
+			}
+		}
+		if (failed > 0) {
+			lastMessage = "更新失败 " + failed + " 个，详见日志";
+		} else if (added == 0 && updated == 0) {
+			lastMessage = "imports 里没有新增或更新的 sb3";
+		} else {
+			lastMessage = "新增 " + added + " 个，更新 " + updated + " 个";
+		}
+		LOG.info("[pack] 同步完成：新增 {}，更新 {}，失败 {}", added, updated, failed);
+		return new SyncResult(added, updated, activeUpdated);
 	}
 
 	private int importFrom(Path dir) {
@@ -228,6 +257,44 @@ public final class PackStore {
 			LOG.error("[pack] 导入失败: {}", dir, e);
 		}
 		return added;
+	}
+
+	/**
+	 * {@code imports/} 里与包同名、但内容不同的文件；没有则返回 {@code null}。
+	 *
+	 * <p>按字节比对，而不是看时间戳：导出与复制会保留源文件的 mtime，FAT 类文件系统
+	 * 的时间精度也只有 2 秒，用时间判断会漏掉更新。sb3 只有 KB 量级，直接比内容更可靠。</p>
+	 */
+	public Path pendingUpdate(ScriptPack pack) {
+		Path source = importsDir().resolve(pack.fileName);
+		Path target = pathOf(pack);
+		if (!Files.isRegularFile(source) || !Files.isRegularFile(target)) {
+			return null;
+		}
+		try {
+			// 大小不同必然有更新；相同才付一次全量比对
+			if (Files.size(source) != Files.size(target)) {
+				return source;
+			}
+			return Files.mismatch(source, target) == -1L ? null : source;
+		} catch (IOException e) {
+			LOG.warn("[pack] 更新检测失败：{} - {}", pack.fileName, e.getMessage());
+			return null;
+		}
+	}
+
+	/** 用 {@code imports/} 里的同名文件覆盖包。 */
+	private boolean copyInto(ScriptPack pack, Path source) {
+		try {
+			Files.copy(source, pathOf(pack), StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			LOG.error("[pack] 更新失败: {}", pack.fileName, e);
+			return false;
+		}
+		// 解析缓存以 mtime 为键：保留时间戳的复制不会改 mtime，必须显式失效
+		cache.remove(pack.fileName);
+		LOG.info("[pack] 已用 imports 的新版本覆盖 {}", pack.fileName);
+		return true;
 	}
 
 	/** 重命名包（同时改文件名）。重名时自动加后缀。 */

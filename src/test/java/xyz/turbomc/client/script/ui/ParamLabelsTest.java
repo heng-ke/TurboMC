@@ -47,6 +47,9 @@ class ParamLabelsTest {
 			"SCOPE,    global,      value.turbomc.scope.global",
 			"DIRECTION, forward,    value.turbomc.direction.forward",
 			"OP,       e ^,         value.turbomc.mathop.e_^",
+			"TYPE,     any,         value.turbomc.entity.any",
+			"TYPE,     HOSTILE,     value.turbomc.entity.hostile",
+			"TYPE,     minecraft:zombie, value.turbomc.entity.minecraft:zombie",
 	})
 	void buildsNormalizedKey(String param, String value, String expected) {
 		assertEquals(expected, ParamLabels.translationKey(param, value));
@@ -68,6 +71,7 @@ class ParamLabelsTest {
 			"BUTTON,   left", "BUTTON,   middle", "PRESSED,  true", "PRESSED,  false",
 			"UNIT,     dayofweek", "MENU,     timer", "MENU,     loudness",
 			"SCOPE,    local", "SCOPE,    global", "DIRECTION, forward", "OP,       e ^",
+			"TYPE,     any", "TYPE,     hostile", "TYPE,     player",
 	})
 	void languageFilesCoverValue(String param, String value) {
 		String key = ParamLabels.translationKey(param, value);

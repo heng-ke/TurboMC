@@ -132,6 +132,8 @@ public final class NodeChain {
 		}
 		Slot slot = node.inputs.get(name);
 		if (slot == null) {
+			// 刻意保留「?」：它表示「参数没读到」，是参数名错位、工程缺字段的可见信号
+			// （靠这个问号定位过两起真实缺陷）。不要用登记表的默认值把它盖掉。
 			return "?";
 		}
 		if (slot.hasBlock()) {

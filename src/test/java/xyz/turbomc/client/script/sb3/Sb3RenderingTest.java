@@ -109,4 +109,28 @@ class Sb3RenderingTest {
 		}
 		assertTrue(seen, "没找到自定义积木定义");
 	}
+
+	/** 带菜单参数的工程：实体类型菜单是影子积木，值应被展开成字面量 id。 */
+	private static final String ENTITY_PROJECT = """
+			{"targets":[
+			  {"isStage":true,"name":"Stage","variables":{},"lists":{},"blocks":{}},
+			  {"isStage":false,"name":"Sprite1","variables":{},"lists":{},"blocks":{
+			    "a":{"opcode":"event_whenflagclicked","next":"b","topLevel":true,"shadow":false},
+			    "b":{"opcode":"turbomc_nearestEntityX","topLevel":false,"shadow":false,
+			         "inputs":{"TYPE":[1,"m"]}},
+			    "m":{"opcode":"turbomc_menu_entityType","topLevel":false,"shadow":true,
+			         "fields":{"entityType":["minecraft:zombie",null]},"inputs":{}}
+			  }}
+			]}""";
+
+	@Test
+	@DisplayName("实体类型菜单同样展开成字面量（查看器才能显示成中文名）")
+	void entityTypeMenuBecomesLiteral() {
+		Sb3Importer.Result result = Sb3Importer.parse(JsonParser.parseString(ENTITY_PROJECT));
+		assertTrue(result.ok(), () -> "导入失败：" + result.error());
+		BlockNode node = result.scripts().get(0).hat.next;
+		assertEquals("world.nearest_entity_x", node.type);
+		assertEquals("minecraft:zombie", node.slot("TYPE").literal);
+		assertFalse(node.slot("TYPE").hasBlock(), "菜单不该作为嵌套积木挂在槽里");
+	}
 }

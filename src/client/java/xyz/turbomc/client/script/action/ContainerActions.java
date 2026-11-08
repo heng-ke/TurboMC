@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
@@ -183,8 +184,8 @@ public final class ContainerActions {
 		if (handler == null) {
 			return -1d;
 		}
-		String wanted = Values.asString(args.length > 0 ? args[0] : "").trim();
-		if (wanted.isEmpty()) {
+		Item wanted = ItemIds.resolve(Values.asString(args.length > 0 ? args[0] : ""));
+		if (wanted == null) {
 			return -1d;
 		}
 		for (int index = 0; index < handler.slots.size(); index++) {
@@ -192,7 +193,7 @@ public final class ContainerActions {
 			if (stack == null || stack.isEmpty()) {
 				continue;
 			}
-			if (Registries.ITEM.getId(stack.getItem()).toString().equals(wanted)) {
+			if (stack.getItem() == wanted) {
 				return (double) index;
 			}
 		}

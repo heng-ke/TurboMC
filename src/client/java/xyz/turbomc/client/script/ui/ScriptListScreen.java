@@ -3,6 +3,7 @@ package xyz.turbomc.client.script.ui;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ConfirmScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 import xyz.turbomc.client.script.ScriptEngine;
@@ -11,8 +12,10 @@ import xyz.turbomc.client.script.store.PackStore;
 import xyz.turbomc.client.script.store.ScriptDefinition;
 import xyz.turbomc.client.script.store.ScriptPack;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -52,8 +55,14 @@ public class ScriptListScreen extends Screen {
 		int left = width / 2 - 210;
 		int y = 48;
 
+		// 每次开界面算一次差异。sb3 只有 KB 量级，换来「哪个包有新版本」一眼可见。
+		Map<String, Boolean> pending = new HashMap<>();
 		for (ScriptPack pack : packs) {
-			addPackRow(store, pack, left, y);
+			pending.put(pack.fileName, store.pendingUpdate(pack) != null);
+		}
+
+		for (ScriptPack pack : packs) {
+			addPackRow(store, pack, left, y, pending.getOrDefault(pack.fileName, false));
 			y += ROW_HEIGHT;
 
 			if (expanded.contains(pack.fileName)) {
@@ -73,13 +82,14 @@ public class ScriptListScreen extends Screen {
 		addDrawableChild(ButtonWidget.builder(
 				Text.translatable("screen.turbomc.import"),
 				button -> {
-					int added = store.importAll();
-					if (added > 0) {
-						// 新包默认接管运行，用户点导入就是想马上看到效果
-						ScriptPack active = store.activePack();
-						if (active == null) {
-							store.setActive(store.packs().stream().findFirst().orElse(null));
-						}
+					boolean hadActive = store.activePack() != null;
+					PackStore.SyncResult result = store.importAll();
+					// 只有首次导入、还没有启用包时才接手第一个；否则保持玩家原有的选择
+					if (!hadActive && result.added() > 0) {
+						store.setActive(store.packs().stream().findFirst().orElse(null));
+					}
+					// 新增或覆盖都要求立刻生效：点这个按钮就是想看到新版本
+					if (result.added() > 0 || result.activeUpdated()) {
 						ScriptEngine.get().restart();
 					}
 					refresh();
@@ -111,7 +121,7 @@ public class ScriptListScreen extends Screen {
 		).dimensions(left + 330, bottom, 90, 20).build());
 	}
 
-	private void addPackRow(PackStore store, ScriptPack pack, int left, int y) {
+	private void addPackRow(PackStore store, ScriptPack pack, int left, int y, boolean hasUpdate) {
 		boolean isSelected = pack.fileName.equals(selected);
 
 		// 状态圆点：点击即切换启用（互斥，其余包自动关闭）
@@ -128,13 +138,18 @@ public class ScriptListScreen extends Screen {
 				}
 		).dimensions(left, y, 20, 20).build());
 
-		addDrawableChild(ButtonWidget.builder(
-				Text.literal((isSelected ? "\u00BB " : "") + pack.displayName()),
+		ButtonWidget nameButton = ButtonWidget.builder(
+				// ↑ 表示 imports 里有内容不同的同名文件，点「导入」即会同步
+				Text.literal((isSelected ? "\u00BB " : "") + pack.displayName() + (hasUpdate ? " \u2191" : "")),
 				button -> {
 					selected = pack.fileName;
 					refresh();
 				}
-		).dimensions(left + 22, y, 190, 20).build());
+		).dimensions(left + 22, y, 190, 20).build();
+		if (hasUpdate) {
+			nameButton.setTooltip(Tooltip.of(Text.translatable("screen.turbomc.update_pending")));
+		}
+		addDrawableChild(nameButton);
 
 		Sb3Importer.Result result = store.scripts(pack);
 		String count = result.ok()

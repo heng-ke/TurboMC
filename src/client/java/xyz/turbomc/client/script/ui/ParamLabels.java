@@ -1,6 +1,9 @@
 package xyz.turbomc.client.script.ui;
 
 import net.minecraft.client.resource.language.I18n;
+import net.minecraft.entity.EntityType;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import xyz.turbomc.client.script.block.BlockRegistry;
 import xyz.turbomc.client.script.block.BlockType;
 
@@ -65,6 +68,14 @@ public final class ParamLabels {
 		if ("TICKS".equals(key)) {
 			return WaitUnit.format(value);
 		}
+		// 实体类型：关键字取语言文件，具体 id 查注册表的实体名（模组实体同样有名字）
+		if ("TYPE".equals(key)) {
+			return entityTypeName(value);
+		}
+		// 物品同理：查注册表拿物品名，方块类物品会自动落到方块名（石头、铁矿石…）
+		if ("ITEM".equals(key)) {
+			return itemName(value);
+		}
 		String translationKey = translationKey(key, value);
 		if (translationKey == null) {
 			return value;
@@ -74,6 +85,31 @@ public final class ParamLabels {
 		return translated == null || translated.isBlank() || translationKey.equals(translated)
 				? value
 				: translated;
+	}
+
+	/**
+	 * 实体类型的显示名：{@code any/hostile/player} 走语言文件，其余按实体 id 查注册表。
+	 *
+	 * <p>不逐个实体列语言键：实体类型近百个，且随游戏版本与模组增减，列既不全也维护不动。
+	 * 查不到（拼错、模组已卸载）就回落成原始 id，保持可诊断。</p>
+	 */
+	private static String entityTypeName(String value) {
+		String key = translationKey("TYPE", value);
+		String translated = key == null ? null : I18n.translate(key);
+		if (translated != null && !translated.isBlank() && !key.equals(translated)) {
+			return translated;
+		}
+		Identifier id = Identifier.tryParse(value.trim());
+		if (id != null) {
+			EntityType<?> type = Registries.ENTITY_TYPE.get(id);
+			if (type != null) {
+				String name = type.getName().getString();
+				if (name != null && !name.isBlank()) {
+					return name;
+				}
+			}
+		}
+		return value;
 	}
 
 	/**
@@ -90,6 +126,8 @@ public final class ParamLabels {
 			case "SCOPE" -> "value.turbomc.scope." + normalize(value);
 			case "DIRECTION" -> "value.turbomc.direction." + normalize(value);
 			case "KEY" -> "value.turbomc.key." + normalize(value);
+			// 实体类型：any / hostile / player 有中文名，具体 id（minecraft:zombie）回落原值
+			case "TYPE" -> "value.turbomc.entity." + normalize(value);
 			case "OP" -> "value.turbomc.mathop." + normalize(value);
 			case "UNIT" -> "value.turbomc.unit." + normalize(value);
 			// 「当 [计时器/响度] > …」的菜单项
@@ -103,5 +141,22 @@ public final class ParamLabels {
 	/** 枚举值 → 语言键后缀：小写 + 空格换下划线（{@code up arrow} → {@code up_arrow}）。 */
 	private static String normalize(String value) {
 		return value.toLowerCase(java.util.Locale.ROOT).replace(' ', '_');
+	}
+
+	/**
+	 * 物品 id 的显示名，例如 {@code minecraft:iron_ore} → 铁矿石。
+	 *
+	 * <p>用 {@code containsId} 而不是 {@code get != AIR} 判存在：未知 id 时
+	 * {@code Registries.ITEM.get} 会回落成 AIR，那样拼错的 id 会被显示成「空气」。</p>
+	 */
+	private static String itemName(String value) {
+		Identifier id = Identifier.tryParse(value.trim().toLowerCase(java.util.Locale.ROOT));
+		if (id != null && Registries.ITEM.containsId(id)) {
+			String name = Registries.ITEM.get(id).getName().getString();
+			if (name != null && !name.isBlank()) {
+				return name;
+			}
+		}
+		return value;
 	}
 }
