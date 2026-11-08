@@ -106,6 +106,13 @@ public final class Sb3Mapping {
 			Map.entry("looks_sayforsecs", "debug.say_for"),
 			Map.entry("looks_thinkforsecs", "debug.think_for"),
 
+			// ---- 聊天与 AI（扩展）----
+			Map.entry("turbomc_lastChat", "query.last_chat"),
+			Map.entry("turbomc_aiAsk", "ai.ask"),
+			Map.entry("turbomc_aiReply", "ai.reply"),
+			Map.entry("turbomc_aiReset", "ai.reset"),
+			Map.entry("turbomc_aiSystem", "ai.system"),
+
 			// ---- 世界查询（扩展）----
 			Map.entry("turbomc_blockInFront", "world.block_in_front"),
 			Map.entry("turbomc_health", "world.health"),
@@ -118,7 +125,6 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_nearestEntityX", "world.nearest_entity_x"),
 			Map.entry("turbomc_nearestEntityY", "world.nearest_entity_y"),
 			Map.entry("turbomc_nearestEntityZ", "world.nearest_entity_z"),
-			Map.entry("turbomc_nearestHostile", "world.nearest_hostile"),
 			Map.entry("turbomc_onGround", "world.on_ground"),
 			Map.entry("turbomc_itemCount", "world.item_count"),
 

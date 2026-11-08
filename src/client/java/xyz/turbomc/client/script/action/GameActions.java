@@ -20,15 +20,19 @@ import xyz.turbomc.client.script.runtime.Values;
 import java.util.Locale;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * 会改变世界状态的动作：挖掘、移动、使用、放置、界面。
+ * 会改变世界状态的动作：移动、挖掘、使用、放置、聊天与命令、界面操作。
  *
  * <p>动作走「输入模拟 + 交互管理器」两条通道，不发送自定义数据包。
  * 只读的世界状态查询在 {@link WorldQueries}。</p>
+ *
+ * <p>聊天是唯一的例外：它不是「调用即发出」，而是先清洗、按单条上限切段，
+ * 再交给 {@link ChatQueue} 按配置的间隔逐条发送（见 {@link ChatText}）。</p>
  */
 public final class GameActions {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
@@ -67,10 +71,18 @@ public final class GameActions {
 		}
 	}
 	/**
-	 * 上一次发送聊天/命令的时间槽（50ms 一个）。同一槽内只放行一条，
-	 * 防止「循环节流关闭」时一个 tick 跑上百轮循环把几百条消息砸进服务器（会被踢）。
+	 * 上一次发送命令的时间槽（50 ms 一个）。同一槽内只放行一条，
+	 * 防止「循环节流关闭」时一个 tick 跑上百轮循环把几百条命令砸进服务器。
+	 *
+	 * <p>聊天不走这里了：它由 {@link ChatQueue} 按 tick 排队，间隔可配置，
+	 * 且同帧的第二次调用不再被静默丢弃。</p>
 	 */
 	private static long lastChatSlot = Long.MIN_VALUE;
+
+	/** 聊天清洗的提示只打一次：模型每轮都可能带换行，逐条刷日志只会淹掉真正的问题。 */
+	private static boolean warnedChatSanitize;
+	/** 分段发送的提示同样只打一次。 */
+	private static boolean warnedChatSegmented;
 
 	/** 上次重生请求时间，避免循环里连发。 */
 	private static long lastRespawnAt;
@@ -82,6 +94,8 @@ public final class GameActions {
 	}
 
 	public static void registerAll() {
+		// 聊天走队列：超长要分段、同帧多次调用不能静默丢弃。间隔由配置决定
+		ChatQueue.install(GameActions::sendChatNow, GameActions::chatIntervalTicks);
 		NativeRegistry.action("action.key", GameActions::key);
 		NativeRegistry.action("action.stop", GameActions::stop);
 		NativeRegistry.action("action.look", GameActions::look);
@@ -209,27 +223,89 @@ public final class GameActions {
 	 *
 	 * <p>以 {@code /} 开头的文本会被服务端当作命令，但走普通聊天通道发不出去，
 	 * 所以这里显式拦下并提示改用「执行命令」积木——静默失败比报错更难查。</p>
+	 *
+	 * <p><b>发送前必须清洗</b>：模型回复与脚本拼出来的文本可能带换行、`§` 或超长，
+	 * 原版服务端不会截断而是直接 {@code disconnect}，报「非法聊天字符」，玩家被踢出存档。
+	 * 详见 {@link ChatText}。</p>
+	 *
+	 * <p><b>超长要分段</b>：单条上限 256 字符 / 768 字节，切开的段落交给
+	 * {@link ChatQueue} 按配置的间隔逐条发出。</p>
 	 */
 	private static void chat(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.getNetworkHandler() == null) {
+		if (client(ctx).getNetworkHandler() == null) {
 			return;
 		}
-		String text = Values.asString(args[0]);
-		if (text.isBlank()) {
+		String raw = Values.asString(args[0]);
+		if (raw.isBlank()) {
 			return;
 		}
-		if (text.startsWith("/")) {
+		if (raw.startsWith("/")) {
 			warnKey("chat-slash", "「在聊天栏说」收到以 / 开头的文本，已忽略；执行命令请用「执行命令」积木");
 			return;
 		}
-		if (chatThrottled()) {
+		// 注意用 clean 而不是 sanitize：后者会按单条上限截断，
+		// 长文本在分段之前就被砍掉，结果永远只有一段（真机事故）
+		String text = ChatText.clean(raw);
+		if (text.isBlank()) {
+			warnKey("chat-empty", "「在聊天栏说」的内容去掉换行与控制字符后为空，已忽略");
+			return;
+		}
+		if (!text.equals(raw) && !warnedChatSanitize) {
+			warnedChatSanitize = true;
+			// 只提示一次：模型每轮都可能带换行，逐条刷日志没有意义。
+			// 记长度不记内容——聊天内容不该进日志。
+			LOG.warn("[script] 「在聊天栏说」的内容含换行/控制字符，已清洗后发送："
+					+ "原始 {} 字 → 发送 {} 字（单条上限 {} 字符 / {} 字节；本提示只出现一次）",
+					raw.length(), text.length(), ChatText.MAX_LENGTH, ChatText.MAX_BYTES);
+		}
+		int maxSegments = chatMaxSegments();
+		List<String> segments = ChatText.split(text, maxSegments);
+		if (segments.size() > 1 && !warnedChatSegmented) {
+			warnedChatSegmented = true;
+			// 分段是正常行为，但用户会看到聊天栏连着冒出好几条，提示一次免得以为重复了
+			LOG.info("[script] 「在聊天栏说」的内容超过单条上限，已分成 {} 段按间隔发送"
+					+ "（本提示只出现一次）", segments.size());
+		}
+		ChatQueue.offer(segments, maxSegments * 2);
+	}
+
+	/**
+	 * 真正把一段文本发出去：队列的出队回调。
+	 *
+	 * <p>回声登记放在这里而不是入队时：{@link SelfChatEcho} 的匹配窗口是 3 秒，
+	 * 入队时登记的话，排到第 4 段时第一条早过期了。必须是「实际发出的那一刻」。</p>
+	 */
+	private static void sendChatNow(String text) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null || client.getNetworkHandler() == null) {
 			return;
 		}
 		client.getNetworkHandler().sendChatMessage(text);
 		// 服务端会把这条广播回来，同样触发一次聊天事件。登记一下，
 		// 免得「当聊天包含」被自己的回复再次拉起，形成无限回路。
 		SelfChatEcho.sentByScript(text);
+	}
+
+	/** 每 tick 由引擎调用：冷却结束后发下一段。 */
+	public static void tickChat() {
+		ChatQueue.tick();
+	}
+
+	/** 切包、停引擎、停止全部时清空待发内容。 */
+	public static void clearChatQueue() {
+		ChatQueue.clear();
+	}
+
+	private static int chatIntervalTicks() {
+		TurboMCConfig config = TurboMCConfig.get();
+		Integer value = config.chatIntervalTicks;
+		return value == null ? 3 : Math.max(1, Math.min(20, value));
+	}
+
+	private static int chatMaxSegments() {
+		TurboMCConfig config = TurboMCConfig.get();
+		Integer value = config.chatMaxSegments;
+		return value == null ? 8 : Math.max(1, Math.min(16, value));
 	}
 
 	/**

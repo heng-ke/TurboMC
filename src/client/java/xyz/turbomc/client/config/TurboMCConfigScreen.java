@@ -80,6 +80,114 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.monitorListItems = value)
 				.build());
 
+		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.chat_interval"),
+						config.chatIntervalTicks == null ? 3 : config.chatIntervalTicks, 1, 20)
+				.setDefaultValue(3)
+				.setTooltip(Text.translatable("config.turbomc.chat_interval.tooltip"))
+				.setSaveConsumer(value -> config.chatIntervalTicks = value)
+				.build());
+
+		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.chat_max_segments"),
+						config.chatMaxSegments == null ? 8 : config.chatMaxSegments, 1, 16)
+				.setDefaultValue(8)
+				.setTooltip(Text.translatable("config.turbomc.chat_max_segments.tooltip"))
+				.setSaveConsumer(value -> config.chatMaxSegments = value)
+				.build());
+
+		// ---- AI 对话 ----
+		ConfigCategory ai = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.ai"));
+		TurboMCConfig.Ai section = config.aiOrCreate();
+
+		ai.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.ai.hint"))
+				.build());
+
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.base_url"),
+						section.baseUrl == null ? "" : section.baseUrl)
+				.setDefaultValue("")
+				.setTooltip(Text.translatable("config.turbomc.ai.base_url.tooltip"))
+				.setSaveConsumer(value -> section.baseUrl = value == null ? "" : value.trim())
+				.build());
+
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.api_key"),
+						section.apiKey == null ? "" : section.apiKey)
+				.setDefaultValue("")
+				.setTooltip(Text.translatable("config.turbomc.ai.api_key.tooltip"))
+				.setSaveConsumer(value -> section.apiKey = value == null ? "" : value.trim())
+				.build());
+
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.model"),
+						section.model == null ? "" : section.model)
+				.setDefaultValue("")
+				.setTooltip(Text.translatable("config.turbomc.ai.model.tooltip"))
+				.setSaveConsumer(value -> section.model = value == null ? "" : value.trim())
+				.build());
+
+		// 温度用文本框：Cloth 21.11 只有 intSlider，用滑块表达 0.0–2.0 要么步进太粗，
+		// 要么得让用户自己换算除以 100。文本框直接写 0.7，解析失败就保留原值。
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.temperature"),
+						String.valueOf(section.temperature == null ? 0.7 : section.temperature))
+				.setDefaultValue("0.7")
+				.setTooltip(Text.translatable("config.turbomc.ai.temperature.tooltip"))
+				.setSaveConsumer(value -> {
+					try {
+						section.temperature = Double.parseDouble(value.trim());
+					} catch (RuntimeException ignored) {
+						// 输入不是数字：保留原值，不回写 0（0 是合法温度，会把输出变成死板复读）
+					}
+				})
+				.build());
+
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.max_tokens"),
+						String.valueOf(section.maxTokens == null ? 300 : section.maxTokens))
+				.setDefaultValue("300")
+				.setTooltip(Text.translatable("config.turbomc.ai.max_tokens.tooltip"))
+				.setSaveConsumer(value -> {
+					try {
+						section.maxTokens = Integer.parseInt(value.trim());
+					} catch (RuntimeException ignored) {
+						// 同上：非法输入不覆盖
+					}
+				})
+				.build());
+
+		ai.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.ai.timeout"),
+						String.valueOf((section.timeoutMs == null ? 30000 : section.timeoutMs) / 1000))
+				.setDefaultValue("30")
+				.setTooltip(Text.translatable("config.turbomc.ai.timeout.tooltip"))
+				.setSaveConsumer(value -> {
+					try {
+						section.timeoutMs = Integer.parseInt(value.trim()) * 1000;
+					} catch (RuntimeException ignored) {
+						// 同上
+					}
+				})
+				.build());
+
+		ai.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.history_turns"),
+						section.historyTurns == null ? 8 : section.historyTurns, 0, 50)
+				.setDefaultValue(8)
+				.setTooltip(Text.translatable("config.turbomc.ai.history_turns.tooltip"))
+				.setSaveConsumer(value -> section.historyTurns = value)
+				.build());
+
+		ai.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.max_concurrent"),
+						section.maxConcurrent == null ? 2 : section.maxConcurrent, 1, 8)
+				.setDefaultValue(2)
+				.setTooltip(Text.translatable("config.turbomc.ai.max_concurrent.tooltip"))
+				.setSaveConsumer(value -> section.maxConcurrent = value)
+				.build());
+
 		// ---- 按键权限 ----
 		ConfigCategory keys = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.keys"));
 

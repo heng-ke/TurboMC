@@ -3,7 +3,7 @@ package xyz.turbomc.client.script.block;
 import java.util.List;
 
 /**
- * 核心积木清单，覆盖「事件 / 控制 / 运算 / 变量 / 查询 / 动作 / 调试」七类。
+ * 核心积木清单，覆盖「事件 / 控制 / 运算 / 变量 / 列表 / 感知 / 聊天与 AI / 动作 / 调试」等类别。
  *
  * <p>这份清单只服务于「把 sb3 积木渲染成文本」。脚本由 TurboWarp 编写，
  * 游戏内不提供拼接，因此这里不生成任何控件；新增积木时若忘了在此声明，
@@ -186,15 +186,23 @@ final class Blocks {
 				BlockParam.number("INDEX", "0"));
 		regT("world.slot_amount", "world", BlockShape.REPORTER, "槽位 {INDEX} 的数量",
 				BlockParam.number("INDEX", "0"));
+		// 物品参数是下拉菜单（扩展的 itemId 菜单，1.21.11 全部 1505 个物品）；
+		// 查看器把 id 显示成物品中文名（见 ParamLabels.itemName）
 		regT("world.first_slot_of", "world", BlockShape.REPORTER, "第一个装着 {ITEM} 的槽位",
 				BlockParam.text("ITEM", "minecraft:iron_ore"));
-		reg("world.nearest_entity", "world", BlockShape.REPORTER);
-		reg("world.nearest_entity_x", "world", BlockShape.REPORTER);
-		reg("world.nearest_entity_y", "world", BlockShape.REPORTER);
-		reg("world.nearest_entity_z", "world", BlockShape.REPORTER);
+		// 实体类型在编辑器里是下拉菜单（扩展的 entityType 菜单，1.21.11 全部 157 个实体）；
+		// 查看器只拿到最终值：关键字走语言文件，具体 id 走注册表查中文名（见 ParamLabels）
+		regT("world.nearest_entity", "world", BlockShape.REPORTER, "最近 {TYPE} 的距离",
+				BlockParam.text("TYPE", "minecraft:zombie"));
+		regT("world.nearest_entity_x", "world", BlockShape.REPORTER, "最近 {TYPE} 的 X",
+				BlockParam.text("TYPE", "minecraft:zombie"));
+		regT("world.nearest_entity_y", "world", BlockShape.REPORTER, "最近 {TYPE} 的 Y",
+				BlockParam.text("TYPE", "minecraft:zombie"));
+		regT("world.nearest_entity_z", "world", BlockShape.REPORTER, "最近 {TYPE} 的 Z",
+				BlockParam.text("TYPE", "minecraft:zombie"));
+		// 物品菜单同上（itemId）
 		regT("world.item_count", "world", BlockShape.REPORTER, "背包里 {ITEM} 的数量",
 				BlockParam.text("ITEM", "minecraft:stone"));
-		reg("world.nearest_hostile", "world", BlockShape.REPORTER);
 		reg("world.on_ground", "world", BlockShape.BOOLEAN);
 
 		// ---- 状态与物品 ----
@@ -210,7 +218,8 @@ final class Blocks {
 		reg("world.dimension", "world", BlockShape.REPORTER);
 		reg("world.in_water", "world", BlockShape.BOOLEAN);
 		reg("world.in_lava", "world", BlockShape.BOOLEAN);
-		reg("world.nearest_entity_name", "world", BlockShape.REPORTER);
+		regT("world.nearest_entity_name", "world", BlockShape.REPORTER, "最近 {TYPE} 的名称",
+				BlockParam.text("TYPE", "minecraft:zombie"));
 		reg("world.xp_level", "world", BlockShape.REPORTER);
 		reg("world.inventory_full", "world", BlockShape.BOOLEAN);
 		regT("world.entity_count", "world", BlockShape.REPORTER, "附近 {TYPE} 的数量",
@@ -265,6 +274,21 @@ final class Blocks {
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
+
+		// 聊天与 AI
+		// 「最近的聊天」是唯一能把聊天原文交给脚本的出口：whenChat 帽子只做关键词过滤，
+		// 文本不进线程。AI 对话靠它拿到玩家说的话，否则只能对着写死的文本自问自答。
+		regT("query.last_chat", "sensing", BlockShape.REPORTER, "最近的聊天");
+		regT("ai.ask", "action", BlockShape.STACK, "让会话 {SESSION} 回应 {TEXT}",
+				BlockParam.text("SESSION", "main"),
+				BlockParam.text("TEXT", ""));
+		regT("ai.reply", "sensing", BlockShape.REPORTER, "会话 {SESSION} 的最后回复",
+				BlockParam.text("SESSION", "main"));
+		regT("ai.reset", "action", BlockShape.STACK, "清空会话 {SESSION} 的对话记录",
+				BlockParam.text("SESSION", "main"));
+		regT("ai.system", "action", BlockShape.STACK, "设置会话 {SESSION} 的系统提示为 {TEXT}",
+				BlockParam.text("SESSION", "main"),
+				BlockParam.text("TEXT", ""));
 
 		// 调试
 		regT("debug.log", "debug", BlockShape.STACK, "输出日志 {TEXT}",

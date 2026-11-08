@@ -24,6 +24,7 @@ import xyz.turbomc.client.script.action.motion.TurnSession;
 import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.action.path.PathPlanner;
 import xyz.turbomc.client.script.runtime.ChatGate;
+import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.TriggerDispatcher;
@@ -89,6 +90,9 @@ public class TurboMCClient implements ClientModInitializer {
 					if ((sender == null || isSelf(sender)) && SelfChatEcho.isEcho(text)) {
 						return;
 					}
+					// 在关键词过滤之前记录：脚本要能「按内容自己判断要不要理」，
+					// 放进 fireChat 里就只剩命中关键词的那几条了
+					ChatState.record(text);
 					// 关键词过滤在 VM 侧按每个「当聊天包含」积木的输入值完成
 					ScriptEngine.get().fireChat(text);
 				});

@@ -2,6 +2,7 @@ package xyz.turbomc.client.script.action;
 
 import xyz.turbomc.client.script.action.motion.TurnActions;
 import xyz.turbomc.client.script.action.path.PathActions;
+import xyz.turbomc.client.script.ai.AiActions;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 
 import java.util.HashMap;
@@ -54,5 +55,6 @@ public final class NativeRegistry {
 		TurnActions.registerAll();
 		ContainerActions.registerAll();
 		WorldQueries.registerAll();
+		AiActions.registerAll();
 	}
 }

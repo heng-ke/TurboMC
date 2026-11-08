@@ -26,6 +26,10 @@ jobs:
       # VM 后端的冒烟：不启动客户端，在纯 JVM 里验证 Rhino + scratch-vm 链路。
       # 夹具在 src/test/resources/turbomc-vm/，进版本控制，CI 上才存在。
       # 分开成独立步骤：失败时能直接看出是哪一环坏了，不必翻整段日志。
+      # 扩展的编辑器契约：getInfo() 必须可结构化克隆（Worker postMessage）。
+      # 菜单 items 写成函数会让 TurboWarp 抛 DataCloneError，写成方法名字符串会抛 reading 'call'。
+      - name: 扩展自检
+        run: node turbowarp/verify-extension.js
       - name: smoke · 顺序执行
         run: ./gradlew vmSmoke
       - name: smoke · 事件帽子
@@ -44,6 +48,10 @@ jobs:
         run: ./gradlew vmNumberFormat
       - name: smoke · 扩展释放
         run: ./gradlew exportSmoke
+      # AI 对话：本地 HTTP 桩，不打外部接口。端到端那一段守的是
+      # ScriptBridge.poll 的 ai: 分支——漏了它等待会被立刻放行，回复永远是空串。
+      - name: smoke · AI 对话
+        run: ./gradlew vmAi
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:

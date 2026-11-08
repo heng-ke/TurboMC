@@ -5,8 +5,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -18,6 +16,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.Values;
 
@@ -29,6 +28,9 @@ import java.util.function.Predicate;
  *
  * <p>与 {@link GameActions} 的分工是「只读 vs 改变世界」。这样改动作不会碰到查询，
  * 也便于对查询单独做逻辑审查（它不产生任何副作用）。</p>
+ *
+ * <p>末尾的 {@code query.last_chat}（最近一条聊天）不属于世界状态，但同样是纯读取，
+ * 所以并入本表而不另开注册表。写入方在 {@code TurboMCClient} 的聊天事件里。</p>
  */
 public final class WorldQueries {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
@@ -49,7 +51,6 @@ public final class WorldQueries {
 		NativeRegistry.function("world.nearest_entity_x", WorldQueries::nearestEntityX);
 		NativeRegistry.function("world.nearest_entity_y", WorldQueries::nearestEntityY);
 		NativeRegistry.function("world.nearest_entity_z", WorldQueries::nearestEntityZ);
-		NativeRegistry.function("world.nearest_hostile", WorldQueries::nearestHostile);
 		NativeRegistry.function("world.on_ground", WorldQueries::onGround);
 		NativeRegistry.function("world.item_count", WorldQueries::itemCount);
 		NativeRegistry.function("world.held_item", WorldQueries::heldItem);
@@ -69,6 +70,9 @@ public final class WorldQueries {
 		NativeRegistry.function("world.ping", WorldQueries::ping);
 		NativeRegistry.function("world.is_mining", WorldQueries::isMining);
 		NativeRegistry.function("world.mining_progress", WorldQueries::miningProgress);
+		// 聊天不是「世界状态」，但同样是纯读取，放在这里不必单开一张注册表。
+		// 写入方在 TurboMCClient 的聊天事件里（ChatGate 通过之后）
+		NativeRegistry.function("query.last_chat", (context, args) -> ChatState.last());
 	}
 
 	// ---- 挖掘 ----
@@ -187,7 +191,7 @@ public final class WorldQueries {
 	}
 
 	private static Object nearestEntity(ScriptContext ctx, Object[] args) {
-		Entity entity = nearestEntityOrNull(ctx);
+		Entity entity = nearestEntityOrNull(ctx, args);
 		MinecraftClient client = client(ctx);
 		if (entity == null || client.player == null) {
 			return -1d;
@@ -196,24 +200,15 @@ public final class WorldQueries {
 	}
 
 	private static Object nearestEntityX(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx), 0);
+		return coordinateOf(nearestEntityOrNull(ctx, args), 0);
 	}
 
 	private static Object nearestEntityY(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx), 1);
+		return coordinateOf(nearestEntityOrNull(ctx, args), 1);
 	}
 
 	private static Object nearestEntityZ(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx), 2);
-	}
-
-	private static Object nearestHostile(ScriptContext ctx, Object[] args) {
-		Entity entity = nearestEntityOrNull(ctx, candidate -> candidate instanceof Monster, "nearest_hostile");
-		MinecraftClient client = client(ctx);
-		if (entity == null || client.player == null) {
-			return -1d;
-		}
-		return (double) client.player.distanceTo(entity);
+		return coordinateOf(nearestEntityOrNull(ctx, args), 2);
 	}
 
 	private static Object onGround(ScriptContext ctx, Object[] args) {
@@ -226,17 +221,8 @@ public final class WorldQueries {
 		if (client.player == null) {
 			return 0d;
 		}
-		Identifier identifier;
-		try {
-			identifier = Identifier.tryParse(Values.asString(args[0]));
-		} catch (Exception e) {
-			return 0d;
-		}
-		if (identifier == null) {
-			return 0d;
-		}
-		Item item = Registries.ITEM.get(identifier);
-		if (item == Items.AIR) {
+		Item item = ItemIds.resolve(Values.asString(args[0]));
+		if (item == null) {
 			return 0d;
 		}
 		PlayerInventory inventory = client.player.getInventory();
@@ -344,7 +330,7 @@ public final class WorldQueries {
 	}
 
 	private static Object nearestEntityName(ScriptContext ctx, Object[] args) {
-		Entity entity = nearestEntityOrNull(ctx);
+		Entity entity = nearestEntityOrNull(ctx, args);
 		return entity == null ? "" : entity.getType().getName().getString();
 	}
 
@@ -378,10 +364,10 @@ public final class WorldQueries {
 		if (client.world == null || client.player == null) {
 			return 0d;
 		}
-		String filter = Values.asString(args[0]).trim();
+		EntityFilter.Parsed filter = EntityFilter.parse(Values.asString(args[0]));
 		int count = 0;
 		for (Entity entity : nearbyEntities(ctx)) {
-			if (matchesEntityFilter(entity, filter)) {
+			if (EntityFilter.matches(entity, filter)) {
 				count++;
 			}
 		}
@@ -426,20 +412,6 @@ public final class WorldQueries {
 		};
 	}
 
-	private static boolean matchesEntityFilter(Entity entity, String filter) {
-		if (filter.isEmpty() || "any".equalsIgnoreCase(filter)) {
-			return true;
-		}
-		if ("hostile".equalsIgnoreCase(filter)) {
-			return entity instanceof Monster;
-		}
-		if ("player".equalsIgnoreCase(filter)) {
-			return entity instanceof PlayerEntity;
-		}
-		Identifier identifier = Identifier.tryParse(filter);
-		return identifier != null && Registries.ENTITY_TYPE.getId(entity.getType()).equals(identifier);
-	}
-
 	/**
 	 * 单 tick 缓存的「附近实体」列表：最近实体与实体计数共用同一次世界遍历。
 	 */
@@ -456,10 +428,20 @@ public final class WorldQueries {
 	}
 
 	/**
-	 * 单 tick 缓存最近实体：距离与三轴坐标共四个查询积木共享同一次世界遍历。
+	 * 单 tick 缓存最近实体：距离、三轴坐标与名称共五个查询积木共享同一次世界遍历。
+	 *
+	 * <p>缓存键带上过滤器，否则「任意实体的最近」会被「僵尸的最近」顶替。
+	 * 参数缺失（老工程没有这个输入）解析成 {@code any}，行为与加参数之前一致。</p>
 	 */
-	static Entity nearestEntityOrNull(ScriptContext ctx) {
-		return nearestEntityOrNull(ctx, entity -> true, "nearest_entity");
+	static Entity nearestEntityOrNull(ScriptContext ctx, Object[] args) {
+		EntityFilter.Parsed filter = filterOf(args);
+		return nearestEntityOrNull(ctx, entity -> EntityFilter.matches(entity, filter),
+				"nearest_entity:" + filter.cacheKey());
+	}
+
+	/** 读积木的「实体类型」参数；没有输入时为空串，由 {@link EntityFilter#parse} 归一到 any。 */
+	private static EntityFilter.Parsed filterOf(Object[] args) {
+		return EntityFilter.parse(args.length > 0 ? Values.asString(args[0]) : "");
 	}
 
 	static Entity nearestEntityOrNull(ScriptContext ctx, Predicate<Entity> filter, String cacheKey) {

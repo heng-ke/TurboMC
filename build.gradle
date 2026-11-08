@@ -142,6 +142,16 @@ tasks.register('vmSmoke', JavaExec) {
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', "-Dturbomc.perf.windowMs=${perfWindow}"
 }
 
+// AI 对话冒烟：本地 HTTP 桩，不打真实接口
+// 覆盖服务层的正常/非2xx/坏JSON/超时/会话互斥，以及 VM 里「挂起 → poll → 继续」端到端
+tasks.register('vmAi', JavaExec) {
+	group = 'verification'
+	description = '验证 AI 对话链路：本地桩 + VM 端到端（不访问外部网络）'
+	mainClass = 'xyz.turbomc.client.script.vm.AiSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
 // 往返冒烟：编辑器积木树 → project.json → VM 执行
 // 导入：sb3 → 可查看的积木树 + VM 执行
 tasks.register('vmImport', JavaExec) {

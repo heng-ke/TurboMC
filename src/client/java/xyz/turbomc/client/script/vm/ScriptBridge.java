@@ -11,6 +11,7 @@ import xyz.turbomc.client.script.action.InputKeys;
 import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.action.motion.TurnSession;
 import xyz.turbomc.client.script.action.path.PathFollower;
+import xyz.turbomc.client.script.ai.AiService;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.sb3.Sb3Mapping;
@@ -271,6 +272,11 @@ public final class ScriptBridge {
 		}
 		if ("turn".equals(key)) {
 			return TurnSession.finished();
+		}
+		// 必须在下面的「未知 key 一律 true」之前：漏了这段，AI 的等待会被立刻放行，
+		// 症状是积木一闪而过、回复永远是空串，而日志里没有任何异常
+		if (key != null && key.startsWith("ai:")) {
+			return AiService.get().isDone(key.substring("ai:".length()));
 		}
 		if (!"break".equals(key)) {
 			return true;

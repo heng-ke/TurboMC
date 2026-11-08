@@ -12,11 +12,18 @@
    （模组更新后会自动覆盖成新版本）。
 3. 在 TurboWarp 里加载这个 js：不加载的话，扩展积木会显示成未知块。
 4. 写脚本，导出 `.sb3`，放进 `.minecraft/config/turbomc/imports/`
-5. 进游戏按 **F7** → 点「导入」→ 点左侧圆点启用该包
+5. 进游戏按 **F7** → 点「导入/更新」→ 点左侧圆点启用该包
 6. 按 **F6** 开启引擎，HUD 出现 `● 包名` 即表示正在运行
+
+> 迭代时沿用同名文件即可：新导出的 sb3 覆盖 `imports/` 里的旧的，按 **F7** 点「导入/更新」——
+> 导入对「新文件」与「同名但内容不同」一视同仁，不必先删包再导入。
+> 包名后的 `↑` 表示 imports 里有内容不同的新版本；启用中的包被覆盖后会立刻重启生效。
 
 > 仓库里的 `turbowarp/turbomc-extension.js` 是同一份文件的源，改扩展请改仓库这份，
 > 再重新构建——`config/turbomc/` 下的副本每次启动都会按 jar 内版本覆盖。
+
+> 要用「AI 对话」积木，先填好 `config/turbomc.json` 的 `ai` 段（或模组设置 → **AI 对话**）：
+> `baseUrl`、`apiKey`、`model` 三项。没配时积木不报错，只是永远返回空串。
 
 ## 按键
 
@@ -40,6 +47,10 @@
 脚本的「说 / 思考」会显示在 HUD 上——这两个是 scratch-vm 的原生积木，游戏内没有
 渲染出口，HUD 是它们唯一的表达通道。
 
+**AI 对话**：`最近的聊天` 取到玩家说的话，`让会话 [SESSION] 回应 [TEXT]` 发给大模型并
+等回复（等待期间脚本挂起，不卡游戏）。接口走 OpenAI 兼容协议，在 `config/turbomc.json`
+的 `ai` 段或模组设置 → AI 对话里配置 `baseUrl`、`apiKey`、`model`。密钥不入 sb3。
+
 ## 构建
 
 ```bash
@@ -47,7 +58,7 @@
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物位于 `build/libs/turbomc-1.0.0.jar`。
+产物位于 `build/libs/turbomc-<mod_version>.jar`。
 
 冒烟测试不需要启动客户端：
 

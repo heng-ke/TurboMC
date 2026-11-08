@@ -74,6 +74,8 @@ src/client/java/xyz/turbomc/client/
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
     │   ├── NativeRegistry.java  opcode → 动作的注册表
+    │   ├── ChatText.java        聊天清洗：换行 / § / 控制字符，256 字符与 768 字节双上限
+    │   ├── ChatQueue.java       聊天发送队列：超长分段、按 tick 拉开间隔
     │   ├── path/                「走向」的移动会话（见 PATHFINDING.md）
     │   │   ├── PathActions.java    解析 x/y/z，启动会话
     │   │   ├── PathFollower.java   每 tick 驱动：转向 / 前进 / 跳跃 / 卡住
@@ -86,7 +88,11 @@ src/client/java/xyz/turbomc/client/
     ├── runtime/                 宿主上下文
     │   ├── ScriptContext.java   每 tick 重建的宿主环境（含等待请求通道）
     │   ├── TriggerDispatcher.java 按键 / 受伤 / 死亡事件源
+    │   ├── ChatState.java       最近一条聊天原文（供「最近的聊天」积木读）
     │   └── Values / ScratchCast  值转换（scratch-vm 已自带运算与比较，Java 不重复实现）
+    ├── ai/                      大模型对话
+    │   ├── AiService.java       HTTP（HttpClient 异步）、会话表、历史裁剪、并发与取消
+    │   └── AiActions.java       四个积木的动作：ask / reply / reset / system
     ├── vm/                      JS 运行时
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
@@ -325,6 +331,102 @@ scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订
 预热失败不拖累客户端：`start()` 会再试一次，异常只让脚本暂时不可用；
 引擎关闭时不预热——不为用不上的 VM 付这 0.6 秒。
 
+### 19. 聊天文本在帽子积木里只进不出
+
+`当聊天包含 [MATCH]` 是帽子积木，`MATCH` 只做过滤：`vm-bootstrap.js` 的
+`__tmcStartHatFiltered` 用 `needle.indexOf(pattern)` 判断，命中就 `_pushThread`，
+**文本随即丢弃**。帽子积木没有输出参数，线程启动后拿不到那句话。
+
+要读聊天必须走 `ChatState`。写入位置在 `TurboMCClient` 的聊天回调里，且必须在
+`ChatGate.accept()` **之后**、`fireChat()` **之前**：
+
+- 放进 `fireChat` 里写 → 只有命中关键词的那几条会被记录，脚本无法「按内容自己判断要不要理」
+- 放在 gate 之前 → 同一条消息重复投递时会反复覆盖（内容相同，语义脏）
+
+读取是 `query.last_chat`，最终由「最近的聊天」积木暴露。**存的是完整消息**，带
+`<玩家名> ` 前缀——这是刻意的：多人服里脚本要能区分是谁在说话。副作用是「开头是 X」
+这类判断永远不成立，只能用「包含」，文档里已写明。
+
+**只保留最后一条**：脚本正在
+等待（寻路、AI 请求）时连来三条，前两条会被覆盖——这是这个名字承诺的语义，要完整队列
+是另一件事，别在这里偷偷扩。
+
+### 20. AI 请求靠 poll 挂起，而 `poll` 的默认返回值是「已完成」
+
+`aiAsk` 提交请求后调 `requestWaitUntil("ai:" + id, timeoutTicks + 40)`，JS 侧包装成
+Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `ScriptBridge.poll`。
+两个必须守住的点：
+
+1. **`poll` 必须在「未知 key 一律 true」之前识别 `ai:` 前缀**。漏了它就等于立刻放行，
+   现象是积木一闪而过、回复永远空串，且没有任何异常。这条由 `./gradlew vmAi` 的端到端
+   断言守住（变量必须变成桩返回的文本）。
+2. **JS 等待上限要比 HTTP 超时大 40 tick**。`__tmcWaitUntil` 到点自行 resolve 且不通知
+   Java，两边相等时脚本会先往下跑而请求还在飞（与「走向」同一条坑）。
+
+网络只能在 Java 侧：Rhino 没有 `fetch` / `Worker`。会话表、历史裁剪、并发上限、
+在途请求取消都在 `AiService`；它不引用任何 Minecraft 类型，配置由 `Supplier` 注入，
+因此能在纯 JVM 里用本地 HTTP 桩测全部分支（`./gradlew vmAi`）。
+
+失败一律**返回空串、不抛异常、不挂起**：异常会被桥吞成 null，脚本静默乱走，比空串更难查。
+失败时同时清空 `last`——否则脚本会把上一次的旧回复当成这一次的。
+
+切包与停引擎必须 `cancelAll()`：回调落到已停止的 VM 上没有意义，线程池里的连接不取消就是泄漏。
+
+**会话模型**：`AiService` 按 `SESSION` 参数分流（trim 后区分大小写），每个会话持有 system、
+历史（只存 user / assistant）、在途请求 id、最近回复。历史按 `historyTurns × 2` 条裁剪；
+改 system 提示时**同时清空历史**——人格换了，旧对话只会让模型前后矛盾；同一会话同时只允许
+一个在途请求，第二条直接失败而不是排队，否则历史顺序会与服务端实际处理顺序错开。
+
+**已知限制**（改之前先算代价）：
+
+- `HttpClient.connectTimeout` 只在首次创建时读配置，改超时后需要重启客户端
+- 并发上限检查（`inFlight.size() >= maxConcurrent`）不是原子操作，当前依赖 VM 单线程执行；
+  将来若从多线程调 `ask`，这条会失效
+- `aiAsk` 在未配置时只有一行日志，游戏内没有视觉反馈
+
+**未决**：部分厂商要额外请求头（`anthropic-version` 之类）或非 OpenAI 格式；
+`java.net.http` 默认不读 `http_proxy` 环境变量；脚本可以写出无数个会话名，是否需要上限。
+
+### 21. 聊天必须先清洗再发，否则玩家会被踢
+
+模型回复与脚本拼出来的文本是自由文本，可能带换行、`§` 或超过 256 字符。原版服务端
+对这些**不截断，直接 `disconnect`**，客户端只看到一句「非法聊天字符」，玩家被踢出存档，
+而日志里没有原文——这次真机事故就是这么发生的，排查时无从下手。
+
+所以 `GameActions.chat()` 在发送前一律走 `ChatText.sanitize()`：换行 / 回车 / 制表折成空格、
+删 `§` 及其格式码、删其余控制字符与孤立代理项、折叠连续空格、超长时截断并补 `…`。
+中文与 emoji 不动——它们本身合法。
+
+**截断要同时满足两个上限**：256 字符，且 UTF-8 字节 ≤ 768。服务端的
+`ByteBuf.readUtf(256)` 内部按 `maxLength * 3` 校验字节，只盯字符数会漏掉一种情况——
+256 个字符里混了 emoji（4 字节/个）时字节数超标，服务端读包失败同样掉线，
+只是断开原因与「非法聊天字符」不同，更难联想。截断按码点逐个填充，不切代理对。
+
+两个必须守住的细节：
+
+1. **回声登记要用清洗后的文本**。`SelfChatEcho.sentByScript()` 登记的是实际发出去的内容，
+   服务端回传的也是同一串；用原文登记会认不出来，`当聊天包含` 就会被自己的回复再次拉起。
+2. **不要去清洗 `ai.reply` 的返回值**。脚本可能拿回复做比较、取子串，改写数据源会破坏
+   这类用法。清洗只放在唯一出口。
+
+提示只打一次（`warnedChatSanitize`），且只记长度不记内容——聊天内容不该进日志。
+
+**超长分段发**：单条上限之外的文本由 `ChatText.split()` 按标点切成多段（切点优先落在
+`。！？；，` 上，找不到才硬切），交给 `ChatQueue` 按配置的间隔逐条发出
+（`chatIntervalTicks`，默认 3 tick ≈ 150 ms）。间隔**不要取 1**：原版 1.19+ 的
+`ChatSpamTracker` 每秒上限 20 条，每 tick 一条正好贴着红线。段数上限 `chatMaxSegments`
+（默认 8，约 2000 字），超出的部分不再发送，末段补 `…`。
+
+`ScriptEngine.tick()` 每 tick 推一次队列；停引擎、切包、停止全部都必须 `clearChatQueue()`，
+否则上一份工程的长回复会在新工程里继续冒出来。
+
+这顺带修掉一个旧行为：以前同帧的第二次「在聊天栏说」会被 50 ms 节流**静默丢弃**，
+现在全部入队，一条不丢。
+
+`执行命令` 不走这条：`sendChatCommand` 是独立包，服务端按命令解析，非法内容只报
+「未知命令」不会断开，256 字符的上限也不适用于命令（命令上限是 32500），
+套用聊天的截断反而会把长命令切坏。
+
 ## 六、HUD
 
 基础两行：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡；
@@ -343,7 +445,7 @@ scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物：`build/libs/turbomc-1.0.0.jar`
+产物：`build/libs/turbomc-<version>.jar`
 
 ### 冒烟测试（不启动客户端）
 
@@ -360,6 +462,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `./gradlew vmDepth` | 验证超长 `next` 链被深度保护截断，而不是打穿线程栈 |
 | `./gradlew vmPreload -Pmode=preload` | 测量预热前后首次载入工程的耗时（`cold` 为对照） |
 | `./gradlew exportSmoke` | 验证扩展释放：创建 / 内容一致不动 / 旧版覆盖 |
+| `./gradlew vmAi` | AI 对话：本地 HTTP 桩（正常 / 非 2xx / 坏 JSON / 超时 / 会话互斥）+ VM 端到端 |
 
 **夹具在 `src/test/resources/turbomc-vm/`，进版本控制**——CI 上只有这一份，
 放在 `run/` 下会因被 gitignore 而在 CI 上消失。
@@ -367,7 +470,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 读取顺序：`-P` 参数指定的路径 → classpath 里的同名夹具。常用夹具：
 `project.json`（顺序执行）、`hat-project.json`（聊天帽子）、`keyhat-project.json`（按键帽子）、
 `list-project.json`（列表监视器）、`block-project.json`（条件等待）、`ask-project.json`（询问链路）、
-`fixture.sb3`（sb3 导入）。
+`ai-project.json`（AI 对话：ask → reply → 写变量）、`fixture.sb3`（sb3 导入）。
 
 > **`hat` 与 `block` 模式必须显式指定 `-PvmProject`**：默认的 `project.json`
 > 里没有对应的帽子积木，`startHat` 会起 0 个线程——那是**假失败**，不是真问题。
@@ -382,6 +485,12 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `ScratchCastTest` | Scratch 弱类型转换规则（非数字串得 0、`" false "` 为真、数字转字符串按 ECMAScript） |
 | `ChatGateTest` | 同一条聊天只触发一次：有签名按签名去重、无签名按正文 + 1 秒窗口 |
 | `TurnMathTest` | 转向步进的限幅 / 死区 / 最短路径，以及 NaN 输入得 0 |
+| `ChatTextTest` | 聊天清洗与切段：换行 / `§` / 控制字符、256 字符与 768 字节双上限、按标点切、不切代理对；含「先 clean 再 split」的顺序回归 |
+| `ChatQueueTest` | 聊天队列：首段立即发、间隔准确、溢出丢弃、clear 生效、未装出口不崩 |
+| `EntityFilterTest` | 实体类型参数解析（`any` / `hostile` / `player` / 具体 id） |
+| `ItemIdsTest` | 物品 id 规范化（`iron_ore`、`IRON_ORE`、带空格 → `minecraft:iron_ore`） |
+| `Sb3RenderingTest` | sb3 → 查看器积木树的三条还原规则（错了像面板 bug，其实是导入 bug） |
+| `ParamLabelsTest` | 参数本地化：拼出的语言键与语言文件里的键必须对得上 |
 
 涉及客户端的验证一律走冒烟任务——纯 JVM 里没有客户端，动作会抛 NPE 被桥吞成
 `null`，测不到真实行为。

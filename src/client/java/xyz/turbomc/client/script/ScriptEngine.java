@@ -4,14 +4,17 @@ import net.minecraft.client.MinecraftClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.config.TurboMCConfig;
+import xyz.turbomc.client.script.action.GameActions;
 import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.action.ScriptKeys;
 import xyz.turbomc.client.script.action.motion.TurnSession;
 import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.action.path.PathPlanner;
+import xyz.turbomc.client.script.ai.AiService;
 import xyz.turbomc.client.script.block.BlockRegistry;
 import xyz.turbomc.client.script.node.BlockNode;
 import xyz.turbomc.client.script.runtime.ChatGate;
+import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
@@ -108,6 +111,8 @@ public final class ScriptEngine {
 			PathFollower.abort("停止全部");
 			TurnSession.abort("停止全部");
 			ScriptKeys.releaseEveryKey();
+			// 已排队的聊天段落不再发：脚本都停了，队列还在往外冒话很奇怪
+			GameActions.clearChatQueue();
 			return;
 		}
 		if (!initialized) {
@@ -119,6 +124,8 @@ public final class ScriptEngine {
 		RhinoVm vm = RhinoVm.get();
 		vm.setBudgetMs(config.scratchVmBudgetMs);
 		vm.tick(client);
+		// 聊天队列按 tick 推进：超长回复被切成多段，段间要拉开间隔
+		GameActions.tickChat();
 		// 「停止全部」是 VM 内部事件，Java 侧只有主动查询才看得见。
 		// 不查的话线程已经清空，「走向」会话却还会按着前进键再走满 MAX_TICKS。
 		if (vm.takeProjectStops() > 0) {
@@ -261,6 +268,10 @@ public final class ScriptEngine {
 		// 上一份工程登记的监视器与未交付的回答不该留给下一份
 		MonitorStore.clear();
 		ScriptBridge.clearPendingAnswer();
+		// 在途的 AI 请求同样属于上一份工程：回调落到已停止的 VM 上只会白跑，连接还得占着
+		AiService.get().cancelAll();
+		ChatState.clear();
+		GameActions.clearChatQueue();
 		LOG.info("[script] 已停止：{}", reason);
 	}
 
@@ -349,6 +360,10 @@ public final class ScriptEngine {
 		// 监视器与未交付的回答同属「上一份工程的状态」，一并清掉
 		MonitorStore.clear();
 		ScriptBridge.clearPendingAnswer();
+		// AI 会话与在途请求同理：换工程后接着上一份的对话只会让模型前后矛盾
+		AiService.get().cancelAll();
+		ChatState.clear();
+		GameActions.clearChatQueue();
 	}
 
 	public boolean isRunning() {

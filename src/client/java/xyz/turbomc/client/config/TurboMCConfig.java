@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
 import xyz.turbomc.TurboMC;
+import xyz.turbomc.client.script.ai.AiService;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -52,6 +53,23 @@ public final class TurboMCConfig {
 	 * <p>整张列表刷在屏幕上会挡住画面，超出部分只显示总数。</p>
 	 */
 	public int monitorListItems = 5;
+
+	/**
+	 * 连续发送聊天的间隔（tick，20 tick = 1 秒）。
+	 *
+	 * <p>超长回复会被切成多段逐条发出，段与段之间就是这个间隔。默认 3 tick ≈ 150 ms
+	 * （约 6.7 条/秒）。**不要轻易改成 1**：原版 1.19+ 的 {@code ChatSpamTracker}
+	 * 每秒上限是 20 条，每 tick 一条正好贴着红线，服务端会判定刷屏并断开。</p>
+	 */
+	public Integer chatIntervalTicks = 3;
+
+	/**
+	 * 单次「在聊天栏说」最多切成几段。
+	 *
+	 * <p>每段上限 256 字符 / 768 字节，8 段约等于 2000 字。超出部分不再发送，
+	 * 末段以省略号结尾。调大只会让一次输出持续更久，触发反刷屏插件的风险也随之上升。</p>
+	 */
+	public Integer chatMaxSegments = 8;
 	/**
 	 * 死亡后自动重生（不需要写脚本）。
 	 *
@@ -86,6 +104,33 @@ public final class TurboMCConfig {
 	 * 脚本允许按下的键。**空表示不限制**（除黑名单外全部放行）。
 	 */
 	public List<String> allowedKeys;
+
+	/**
+	 * 大模型对话配置。
+	 *
+	 * <p><b>从旧配置文件加载时这一段是 {@code null}</b>：Gson 用 Unsafe 建实例，字段初始化
+	 * 不执行。所以读取一律走 {@link #aiOrCreate()} 或 {@link #aiSettings()}，不要直接读字段。</p>
+	 */
+	public Ai ai = new Ai();
+
+	/**
+	 * 配置段 {@code ai}。
+	 *
+	 * <p>字段全用包装类型：缺失与 0 必须能区分——{@code temperature = 0} 是合法值
+	 * （完全确定性输出），用原始类型会把「没配过」和「配成 0」混成一件事。</p>
+	 */
+	public static final class Ai {
+		/** 不含 {@code /chat/completions}；填全了也认。 */
+		public String baseUrl = "";
+		/** 明文存放，本地 Ollama 之类可以留空。 */
+		public String apiKey = "";
+		public String model = "";
+		public Double temperature = 0.7;
+		public Integer maxTokens = 300;
+		public Integer timeoutMs = 30000;
+		public Integer historyTurns = 8;
+		public Integer maxConcurrent = 2;
+	}
 
 	private TurboMCConfig() {
 	}
@@ -140,6 +185,37 @@ public final class TurboMCConfig {
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * 归一化后的大模型配置。
+	 *
+	 * <p>缺失字段一律回退到安全默认值：旧版本的配置文件里没有 {@code ai} 段，
+	 * 直接读字段会得到一串 {@code null}。</p>
+	 */
+	public AiService.Settings aiSettings() {
+		Ai section = ai == null ? new Ai() : ai;
+		return new AiService.Settings(
+				trim(section.baseUrl),
+				trim(section.apiKey),
+				trim(section.model),
+				section.temperature == null ? 0.7 : Math.max(0.0, Math.min(2.0, section.temperature)),
+				section.maxTokens == null ? 300 : Math.max(1, Math.min(8192, section.maxTokens)),
+				section.timeoutMs == null ? 30000 : Math.max(1000, Math.min(300000, section.timeoutMs)),
+				section.historyTurns == null ? 8 : Math.max(0, Math.min(50, section.historyTurns)),
+				section.maxConcurrent == null ? 2 : Math.max(1, Math.min(16, section.maxConcurrent)));
+	}
+
+	/** 配置界面用：需要写入时确保对象存在。 */
+	public Ai aiOrCreate() {
+		if (ai == null) {
+			ai = new Ai();
+		}
+		return ai;
+	}
+
+	private static String trim(String value) {
+		return value == null ? "" : value.trim();
 	}
 
 	public static void load() {
