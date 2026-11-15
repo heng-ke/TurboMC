@@ -31,6 +31,7 @@ import xyz.turbomc.client.script.runtime.TriggerDispatcher;
 import xyz.turbomc.client.script.render.PathRenderer;
 import xyz.turbomc.client.script.ui.ScriptHudElement;
 import xyz.turbomc.client.script.ui.ScriptListScreen;
+import xyz.turbomc.client.script.view.ViewSmoother;
 import xyz.turbomc.client.script.vm.ExtensionExporter;
 
 public class TurboMCClient implements ClientModInitializer {
@@ -97,11 +98,57 @@ public class TurboMCClient implements ClientModInitializer {
 					ScriptEngine.get().fireChat(text);
 				});
 
+		// 「服务端消息」通道。
+		//
+		// 代理服/子服常把玩家聊天包成 system 消息下发（客户端日志表现为
+		// "[System] [CHAT] 名字: 内容"，而真玩家聊天是 "[CHAT] <名字> 内容"），
+		// 聊天栏里看着一模一样，但协议层是不同的包，Fabric 的 CHAT 事件不会触发。
+		// 只订阅 CHAT 的后果是「单人/局域网正常、进服务器后当聊天包含永不触发」。
+		//
+		// 这个通道要额外挡两类东西：动作栏消息（overlay）、插件广告。
+		// 前者靠 overlay 标记，后者靠 ChatServerAnyMatch 默认为 false——只放行
+		// 「关键词可确定且命中」的帽子，空关键词/复合表达式一律不启动。
+		//
+		// 已知隐患（本批次不处理）：与上面的 CHAT 回调一样，这里运行在网络线程，
+		// 会直接操作 Rhino 里的 runtime.threads。改主线程投递要重排时序与去重，
+		// 属独立批次，见 docs/ARCHITECTURE.md「聊天事件的双通道」。
+		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+			// 动作栏（血量、计时、经验提示）不是聊天，混进来会让帽子疯狂启动
+			if (overlay) {
+				return;
+			}
+			if (!TurboMCConfig.get().chatFromServerMessages) {
+				return;
+			}
+			if (!ScriptEngine.get().active()) {
+				return;
+			}
+			String text = message.getString();
+			// 系统消息没有签名：走「正文 + 短窗口」去重，与单机路径同一套语义
+			if (!ChatGate.accept(text, null)) {
+				return;
+			}
+			// 脚本自己发的聊天在服务端也会变成 system 消息回来，认出来就别触发自己
+			if (SelfChatEcho.isEcho(text)) {
+				return;
+			}
+			// 与玩家聊天通道同序：先记录再派发，脚本读到的就是触发它的那句话。
+			// 这里是无条件覆盖（含插件广告），由使用者自行在脚本里按关键词判断。
+			ChatState.record(text);
+			ScriptEngine.get().fireServerChat(text);
+		});
+
 		// 脚本在 START_CLIENT_TICK 推进，使本 tick 设置的动作能赶在实体移动逻辑之前生效。
 		ClientTickEvents.START_CLIENT_TICK.register(this::onClientTick);
 
 		// 「走向」的路线显示：实体之后、半透明之前，线与方块遮挡关系正常
 		WorldRenderEvents.AFTER_ENTITIES.register(PathRenderer::render);
+
+		// 视角平滑：写入必须发生在渲染帧上。原版第一人称的 getYaw(float) 不做 tick 内插值，
+		// 在 tick 里每 50 ms 写一次就是每 3 帧跳一格的台阶（见 ViewSmoother 的类注释）。
+		// START_MAIN 是每帧能拿到的最早时机；写入下一帧才被相机读到，固定 1 帧延迟。
+		WorldRenderEvents.START_MAIN.register(ctx ->
+				ViewSmoother.onRenderFrame(MinecraftClient.getInstance()));
 
 		// 退出世界/断开连接：PathPlanner 的静态字段抓着旧世界的 ClientWorld，
 		// 不在这里断开，换存档时会一直多留一整个世界的区块缓存。
@@ -113,6 +160,8 @@ public class TurboMCClient implements ClientModInitializer {
 				client.execute(() -> {
 					PathFollower.abort("断开连接");
 					TurnSession.abort("断开连接");
+					// 视角控制也要收：引擎可能没在跑，光 abort 会话不覆盖 MANUAL 那一路
+					ViewSmoother.clear("断开连接");
 					ScriptKeys.releaseEveryKey();
 					PathPlanner.reset();
 					// 一局结束就把性能汇总刷出来，不用等下一个 30 秒窗口

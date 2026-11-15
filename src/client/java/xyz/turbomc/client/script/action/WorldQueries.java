@@ -73,6 +73,10 @@ public final class WorldQueries {
 		// 聊天不是「世界状态」，但同样是纯读取，放在这里不必单开一张注册表。
 		// 写入方在 TurboMCClient 的聊天事件里（ChatGate 通过之后）
 		NativeRegistry.function("query.last_chat", (context, args) -> ChatState.last());
+		// 「触发我的聊天」由引导脚本在线程上下文里直接返回（见 vm-bootstrap 的 __tmcThreadChat），
+		// 这里只是兜底：万一某个调用路径绕过了包装器，拿到空串而不是一次「未映射」警告。
+		// 刻意不回落 ChatState.last()——那会让它和「最近的聊天」变成同一个积木。
+		NativeRegistry.function("query.trigger_chat", (context, args) -> "");
 	}
 
 	// ---- 挖掘 ----

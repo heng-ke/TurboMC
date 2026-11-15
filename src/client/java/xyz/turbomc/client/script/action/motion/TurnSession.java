@@ -5,6 +5,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.MathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.script.view.ViewSmoother;
 
 /**
  * 一次「平滑转向」的会话：每 tick 把 yaw / pitch 朝目标收敛一段。
@@ -92,9 +93,9 @@ public final class TurnSession {
 			return;
 		}
 
-		player.setYaw(player.getYaw() + TurnMath.yawStep(yawDiff));
-		player.setPitch(MathHelper.clamp(
-				player.getPitch() + TurnMath.pitchStep(pitchDiff), -PITCH_LIMIT, PITCH_LIMIT));
+		// 写入交给 ViewSmoother 在渲染帧上按 dt 收敛：tick 里每 50 ms 写一次，
+		// 在第一人称下就是每 3 帧跳一格的台阶（getYaw(float) 不做 tick 内插值）
+		ViewSmoother.setTurnTarget(s.yaw, s.pitch);
 	}
 
 	/** poll 的返回值：终态为真，保持到下一次 start()。 */
@@ -152,6 +153,8 @@ public final class TurnSession {
 		}
 		s.state = state;
 		lastState = state;
+		// 转向结束就不再接管视角：旧目标留着会让镜头继续往那个方向偏
+		ViewSmoother.clear("转向结束");
 		if (state == State.DONE) {
 			LOG.info("[turn] 到达目标视角：{} tick{}", s.ticks, note == null ? "" : "（" + note + "）");
 		} else {

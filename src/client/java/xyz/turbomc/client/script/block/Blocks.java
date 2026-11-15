@@ -279,6 +279,8 @@ final class Blocks {
 		// 「最近的聊天」是唯一能把聊天原文交给脚本的出口：whenChat 帽子只做关键词过滤，
 		// 文本不进线程。AI 对话靠它拿到玩家说的话，否则只能对着写死的文本自问自答。
 		regT("query.last_chat", "sensing", BlockShape.REPORTER, "最近的聊天");
+		// 与上一块同一族：前者是「全局最新」，后者是「触发我的那条」（跟着线程走，不会被覆盖）
+		regT("query.trigger_chat", "sensing", BlockShape.REPORTER, "触发我的聊天");
 		regT("ai.ask", "action", BlockShape.STACK, "让会话 {SESSION} 回应 {TEXT}",
 				BlockParam.text("SESSION", "main"),
 				BlockParam.text("TEXT", ""));

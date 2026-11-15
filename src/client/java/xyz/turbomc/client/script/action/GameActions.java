@@ -3,7 +3,6 @@ package xyz.turbomc.client.script.action;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.network.packet.c2s.play.ClientStatusC2SPacket;
 import net.minecraft.util.math.Vec3d;
@@ -16,6 +15,7 @@ import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.view.ViewSmoother;
 
 import java.util.Locale;
 import java.util.HashMap;
@@ -159,8 +159,9 @@ public final class GameActions {
 		if (client.player == null) {
 			return;
 		}
-		client.player.setYaw((float) Values.asNumber(args[0]));
-		client.player.setPitch((float) Values.asNumber(args[1]));
+		// 直接写值并占用视角：与「走向 / 平滑转向」的帧层控制互斥，否则每 tick 会互相掰
+		ViewSmoother.applyManual(client,
+				(float) Values.asNumber(args[0]), (float) Values.asNumber(args[1]));
 	}
 
 	private static void lookAt(ScriptContext ctx, Object[] args) {
@@ -174,10 +175,14 @@ public final class GameActions {
 				Values.asNumber(args[2]));
 		// 目标与眼睛重合时方向向量为零，归一化得到 NaN，而 setYaw 遇到 NaN 会走
 		// Util.logErrorOrPause（开发环境直接抛异常）。这种输入直接忽略。
-		if (target.squaredDistanceTo(client.player.getEyePos()) < 1e-8) {
+		Vec3d eye = client.player.getEyePos();
+		if (target.squaredDistanceTo(eye) < 1e-8) {
 			return;
 		}
-		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, target);
+		// 与 TurnSession 共用同一套角度换算，避免「看向」和「平滑转向」算出的角度差一点点
+		float yaw = TurnSession.yawTo(eye, target.x, target.y, target.z, client.player.getYaw());
+		float pitch = TurnSession.pitchTo(eye, target.x, target.y, target.z);
+		ViewSmoother.applyManual(client, yaw, pitch);
 	}
 
 

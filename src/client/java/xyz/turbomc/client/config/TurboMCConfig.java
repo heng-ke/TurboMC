@@ -70,6 +70,27 @@ public final class TurboMCConfig {
 	 * 末段以省略号结尾。调大只会让一次输出持续更久，触发反刷屏插件的风险也随之上升。</p>
 	 */
 	public Integer chatMaxSegments = 8;
+
+	/**
+	 * 把「服务端消息」也当作聊天来源。
+	 *
+	 * <p>代理服与子服常把玩家聊天包成 system 消息下发（日志表现为
+	 * {@code [System] [CHAT] 名字: 内容}），聊天栏里与真玩家聊天看不出区别，
+	 * 但 Fabric 的 {@code ClientReceiveMessageEvents.CHAT} 不会触发。关掉这一项后，
+	 * 这类服务器上「当聊天包含」就完全不工作——与 1.3.0 的行为一致。</p>
+	 *
+	 * <p>默认开：只订阅玩家聊天会让「单人正常、进服失效」被当成模组坏了。</p>
+	 */
+	public boolean chatFromServerMessages = true;
+
+	/**
+	 * 服务端消息通道上，关键词读不出来的帽子是否也触发。
+	 *
+	 * <p>「读不出来」指关键词为空，或槽里接的是复合表达式（直接接变量会被求值）。
+	 * 默认关：这个通道混着插件广告、加入离开、抢购倒计时，放行等于每条广告都把脚本拉起来。
+	 * 需要「任意匹配」语义时再打开。</p>
+	 */
+	public boolean chatServerAnyMatch = false;
 	/**
 	 * 死亡后自动重生（不需要写脚本）。
 	 *

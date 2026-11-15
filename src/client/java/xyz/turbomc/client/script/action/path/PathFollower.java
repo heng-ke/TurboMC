@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.action.ScriptKeys;
 import xyz.turbomc.client.script.action.motion.TurnMath;
 import xyz.turbomc.client.script.action.motion.TurnSession;
+import xyz.turbomc.client.script.view.ViewSmoother;
 
 import java.util.List;
 
@@ -51,8 +52,18 @@ public final class PathFollower {
 	 * 又会在拐角来回摆。0.5 是「贴得够近但不切角」的折中。
 	 */
 	private static final double NODE_REACH = 0.5;
-	/** 超过这个角度先站定再转：边走边转 90° 以上会横着蹭墙。 */
-	private static final float STAND_TURN_DEG = 75f;
+	/**
+	 * 超过这个角度先站定再转，其余边走边转。
+	 *
+	 * <p><b>为什么不只是「90° 以上会蹭墙」</b>：边走边转走的是圆弧，最小转弯半径
+	 * R = 速度 ÷ 角速度 ≈ 4.317 ÷ 4.19 ≈ 1.03 格（{@link TurnMath#MAX_YAW_SPEED}）。
+	 * 目标落在 1 格附近、又需要较大角度时，角色会绕着目标转圈，永远进不了
+	 * {@link #NODE_REACH}——实测的「原地转圈」正是这个区间。</p>
+	 *
+	 * <p>站定把速度降为 0，转弯半径随之为 0，绕圈在几何上就不成立。30° 与参考项目
+	 * areaautominer 的 {@code TURN_BEFORE_WALK_THRESHOLD} 一致。</p>
+	 */
+	private static final float STAND_TURN_DEG = 30f;
 
 	private static final int STUCK_TICKS = 10;
 	/** 卡住重算上限。与半截路的分段次数分开计：这是「原地打转」，那是「够不到目标」。 */
@@ -166,6 +177,8 @@ public final class PathFollower {
 
 	/** 中止当前会话（停止移动、关引擎、切工程、停止全部）。 */
 	public static void abort(String reason) {
+		// 视角控制一并交还：会话已经不在了，再按旧目标转没有意义
+		ViewSmoother.clear("走向中止");
 		// 上浮状态一并收掉，否则中止后跳跃键还按着、玩家会一直往上飘
 		stopSurface();
 		Session current = session;
@@ -311,8 +324,15 @@ public final class PathFollower {
 			return;
 		}
 
-		// 朝向：大角度先站定，小角度边走边转；转多少由比例收敛决定，不是固定 30°
-		float diff = TurnMath.yawDiff(player.getYaw(), yawTo(player, node));
+		// 朝向：大角度先站定，小角度边走边转。
+		// 真正的 yaw 写入交给 ViewSmoother 在渲染帧上按 dt 收敛：原版第一人称的
+		// getYaw(float) 不插值，在 tick 里写一次就是 20 Hz 台阶（每 3 帧跳一格）。
+		float desiredYaw = yawTo(player, node);
+		float diff = TurnMath.yawDiff(player.getYaw(), desiredYaw);
+		// 转向会话接管时让出：两套目标不能同时生效
+		if (!TurnSession.isActive()) {
+			ViewSmoother.setWalkTarget(desiredYaw);
+		}
 		if (Math.abs(diff) > STAND_TURN_DEG) {
 			s.turning = true;
 			setForward(client, s, false);
@@ -321,11 +341,6 @@ public final class PathFollower {
 			s.turning = false;
 			setForward(client, s, true);
 			setJump(client, s, shouldJump(player, node));
-		}
-
-		// 转向会话正在接管视角时让出 yaw，否则两边每 tick 各写一次、互相抵消
-		if (!TurnSession.isActive()) {
-			player.setYaw(player.getYaw() + TurnMath.yawStep(diff));
 		}
 
 		if (s.turning) {
@@ -570,6 +585,8 @@ public final class PathFollower {
 		} else {
 			LOG.info("[path] 中止：{}", reason == null ? "未知" : reason);
 		}
+		// 会话结束就不再接管视角；旧目标留在那里会让镜头继续转
+		ViewSmoother.clear("走向结束");
 	}
 
 	private static void closeSession(MinecraftClient client) {
@@ -585,6 +602,8 @@ public final class PathFollower {
 		session = null;
 		view = null;
 		viewIndex = 0;
+		// 被新会话取代：先交还视角，新会话下一次 tick 再登记自己的目标
+		ViewSmoother.clear("走向会话被替换");
 	}
 
 	private static void buildView(Session s, ClientPlayerEntity player) {

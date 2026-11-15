@@ -108,6 +108,7 @@ public final class Sb3Mapping {
 
 			// ---- 聊天与 AI（扩展）----
 			Map.entry("turbomc_lastChat", "query.last_chat"),
+			Map.entry("turbomc_triggerChat", "query.trigger_chat"),
 			Map.entry("turbomc_aiAsk", "ai.ask"),
 			Map.entry("turbomc_aiReply", "ai.reply"),
 			Map.entry("turbomc_aiReset", "ai.reset"),

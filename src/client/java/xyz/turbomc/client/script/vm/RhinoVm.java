@@ -433,13 +433,26 @@ public final class RhinoVm {
 	 * @param message 聊天原文；关键词为空表示无条件触发
 	 */
 	public int startChatHat(String message) {
+		return startChatHat(message, true);
+	}
+
+	/**
+	 * 触发「当聊天包含 [MATCH]」，并指定「关键词读不出来时」是否放行。
+	 *
+	 * @param message          聊天原文
+	 * @param allowAnyKeyword  {@code true} 空关键词/变量/表达式一律放行（玩家聊天的历史行为）；
+	 *                         {@code false} 只启动「关键词可确定且命中」的帽子（服务端消息通道）
+	 */
+	public int startChatHat(String message, boolean allowAnyKeyword) {
 		if (!ready) {
 			return 0;
 		}
 		Context cx = factory.enterContext();
 		try {
+			// 传字符串而不是布尔：Rhino 会把 java.lang.Boolean 包成对象，JS 侧用 === 比较会失真
 			return toInt(call(cx, "__tmcStartHatFiltered",
-					new Object[]{"turbomc_whenChat", "MATCH", message}), 0);
+					new Object[]{"turbomc_whenChat", "MATCH", message,
+							allowAnyKeyword ? "any" : "keyword"}), 0);
 		} finally {
 			Context.exit();
 		}

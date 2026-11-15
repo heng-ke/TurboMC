@@ -1858,6 +1858,10 @@ var TurboMC = /*#__PURE__*/function () {
             blockType: Scratch.BlockType.REPORTER,
             text: T('last chat message', '最近的聊天')
           }, {
+            opcode: 'triggerChat',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('chat that triggered me', '触发我的聊天')
+          }, {
             opcode: 'aiAsk',
             blockType: Scratch.BlockType.COMMAND,
             text: T('ask session [SESSION] to reply to [TEXT]', '让会话 [SESSION] 回应 [TEXT]'),
@@ -2821,6 +2825,12 @@ var TurboMC = /*#__PURE__*/function () {
       key: "lastChat",
       value: function lastChat() {
         this.preview('lastChat');
+        return '';
+      }
+    }, {
+      key: "triggerChat",
+      value: function triggerChat() {
+        this.preview('triggerChat');
         return '';
       }
     }, {

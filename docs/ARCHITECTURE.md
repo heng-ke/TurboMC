@@ -98,7 +98,7 @@ src/client/java/xyz/turbomc/client/
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
     │   └── *SmokeTest.java      纯 JVM 冒烟（不发布）
     ├── render/                  世界渲染出口
-    │   └── PathRenderer.java    「走向」的路线：折线 + 当前节点框 + 终点框
+    │   └── PathRenderer.java    「走向」的路线：折线（已走金黄 / 未走青色）+ 当前节点框 + 终点框
     ├── sb3/
     │   ├── Sb3Mapping.java      opcode ↔ 内部类型、字段/输入改名（全项目唯一一份）
     │   └── Sb3Importer.java     sb3 → 积木树（只读查看用）
@@ -279,13 +279,19 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 寻路本身复用原版僵尸的 A\*，但**只复用"找路"**：`MoveControl` 是给 `MobEntity` 直接写移动向量的，
 玩家没有，位移只能靠按键。细节与选型见 [PATHFINDING.md](PATHFINDING.md)。
 
-同理，「平滑转向」也是会话：`TurnSession` 每 tick 走掉剩余角度的一部分，脚本用
+同理，「平滑转向」也是会话：`TurnSession` 每 tick 判定一次进度，脚本用
 `requestWaitUntil("turn", …)` 挂起。它与 `PathFollower` 共享 `TurnMath`——两份平滑实现迟早会走偏。
-`TurnSession.isActive()` 为真时 `PathFollower` 让出 yaw，否则两边每 tick 各写一次、互相抵消。
+`TurnSession.isActive()` 为真时 `PathFollower` 让出 yaw，否则两边各写一次、互相抵消。
 
-朝向必须**比例收敛**（每 tick 走剩余角度的 45%，限幅 12°），不能用固定角速度：
-`ClientPlayerEntity.getYaw(float)` 直接返回原始 yaw，相机不做 tick 内插值，所以每一步都当场可见，
-而恒定的 30.000°/tick 在反作弊里是一条标准直线特征。
+**视角的实际写入在渲染帧上，不在 tick 里**（`script/view/ViewSmoother`，注册于
+`WorldRenderEvents.START_MAIN`）。原因：`ClientPlayerEntity.getYaw(float)` 在非骑乘时直接返回原始 yaw，
+相机不做 tick 内插值，所以 tick 里每 50 ms 写一次就是每 3 帧（60 fps）跳一格的台阶。
+tick 只登记目标角度，帧层用 `1 - exp(-k·dt)` 收敛并按 240°/s 限速——写入频率跟上帧率，台阶消失，
+整条路径不需要 mixin。玩家动鼠标（yaw 被外部改过）时本帧让位，下一帧继续。
+
+视角归属分四档：`WALK`（寻路）/ `TURN`（平滑转向）/ `MANUAL`（「看向 / 看向坐标」积木直接写值，
+保持到下一次走向或转向开始）/ `NONE`。`MANUAL` 期间移动方向由 yaw 派生，因此走向会把角色带向
+新朝向——这是「看向接管视角」的既定取舍，不是缺陷。
 
 ### 14. 寻路有两处输出：世界里的路线 + HUD 的状态行
 
@@ -350,6 +356,66 @@ scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订
 **只保留最后一条**：脚本正在
 等待（寻路、AI 请求）时连来三条，前两条会被覆盖——这是这个名字承诺的语义，要完整队列
 是另一件事，别在这里偷偷扩。
+
+#### 双通道：玩家聊天 ≠ 服务器系统消息
+
+代理服与子服常把玩家聊天包成 system 消息下发。客户端日志里两种形态一眼可分：
+
+| 通道 | 日志形态 | Fabric 事件 | 正文 |
+|---|---|---|---|
+| 真玩家聊天 | `[CHAT] <名字> 内容` | `CHAT`（在 `onChatMessage` 触发） | `<名字> 内容` |
+| 服务端消息 | `[System] [CHAT] 名字: 内容` | `GAME`（在 `onGameMessage` 触发） | `名字: 内容` |
+
+聊天栏里两者完全一样，所以「单人正常、进服后当聊天包含永不触发」只可能来自这条差异。
+`TurboMCClient` 因此注册了两个回调；`fireServerChat()` 与 `fireChat()` 只差一处：
+**系统消息通道只启动「关键词可确定且命中」的帽子**。
+
+- 关键词为空、或槽里接的是复合表达式 → 读不出，默认不启动（`chatServerAnyMatch = false`）。
+  这个通道混着插件广告、加入离开提示与倒计时，放行等于每条广告都把脚本拉起来。
+- 关键词是**直接接进槽里的变量** → `__tmcResolveKeyword` 去 `target.variables` 取值，
+  角色里找不到再回退舞台，因此仍是精确过滤。
+- 复合表达式不求值：本版 VM 没有暴露 `getInputValue`，自行实现等于复制一遍运算语义，
+  一旦与 VM 不一致，表现就是「关键词明明命中却不触发」，比不触发更难查。
+  确实需要这类写法时打开 `chatServerAnyMatch`，退化为任意匹配。
+
+`ChatState` 在系统消息通道上是**无条件覆盖**（含插件广告）：通道不同，语义不变——
+「最近的聊天」永远等于最后到达的那条消息。
+
+#### 触发消息必须绑在「线程」上，不能只放全局槽
+
+聊天事件的处理顺序是「先写 `ChatState`，再 `_pushThread`」，而线程要到**下一帧**才执行。
+中间任何一条消息（别的玩家、系统通道的插件广告）都会改写全局槽。实测：A 触发帽子、B 在
+中间到达，线程读到的是 **B**。脚本如果在 `aiAsk` 前面还有「等待」「说」「走向」，窗口能拉到
+秒级，等于必错。
+
+修法：入队时把消息挂到线程对象上，读的时候优先取它——
+
+```js
+var pushed = runtime._pushThread(id, target);
+if (!pushed) { pushed = runtime.threads[runtime.threads.length - 1]; } // 本构建不返回线程
+if (pushed && needle !== null) { pushed.tmcChat = needle; }
+```
+
+读取端在积木包装器的第二参数 `util` 上：`util.thread.tmcChat`。因此包装器签名必须是
+`function (args, util)`——少写这个参数不会报错，只会静默失去上下文。
+
+两个报告器的分工：
+
+| 积木 | 语义 | 非聊天线程 |
+|---|---|---|
+| 最近的聊天 | 有线程副本就用副本，否则回落到全局槽 | 全局最新一条 |
+| 触发我的聊天 | 只用线程副本 | **空串**，刻意不回落 |
+
+不回落是刻意的：回落就等于「最近的聊天」，这个积木没有存在意义。空串同时给脚本一个
+「我是不是被聊天拉起来的」判断手段。
+
+**标签不跨线程**：广播派生的线程、绿旗线程身上没有副本，只能走回落/空串。要跨广播传消息，
+自己在线程里先存进变量。
+
+**已知隐患（未处理）**：两个回调都运行在网络线程，会直接操作 Rhino 的
+`runtime.threads`——`_pushThread` 前的 busy 检查与随后的 push 并非原子。现有 `CHAT`
+路径一直如此，本批次为控制改动面保持一致。要改成主线程投递，得同时重排「记录 → 派发」
+的时序与 `ChatGate` 去重窗口，属独立批次。
 
 ### 20. AI 请求靠 poll 挂起，而 `poll` 的默认返回值是「已完成」
 

@@ -170,7 +170,17 @@ for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 		if (isBoolean) {
 			__tmcBooleanBlocks++;
 		}
-		Scratch.__instance[block.opcode] = function (args) {
+		Scratch.__instance[block.opcode] = function (args, util) {
+			// 聊天类的两个报告器优先读「线程自带的副本」，理由见 __tmcThreadChat。
+			var tagged = __tmcThreadChat(util);
+			if (block.opcode === 'lastChat' && tagged !== null) {
+				return tagged;
+			}
+			if (block.opcode === 'triggerChat') {
+				// 不是聊天触发的线程（绿旗、广播、按键）没有副本，返回空串。
+				// 这里刻意不回落到全局槽：回落就等于「最近的聊天」，这个积木也就没有存在意义了
+				return tagged === null ? '' : tagged;
+			}
 			var result = __tmcApi().call('turbomc_' + block.opcode, names, args);
 			// 条件型等待优先：它表达的是「等到某事发生」，不能用固定帧数代替
 			var check = __tmcApi().takeWaitCheck();
@@ -598,12 +608,24 @@ function __tmcShadowText(blocks, id) {
  *
  * <p>{@code runtime.startHats} 的字段匹配只认 field，而扩展把「当聊天包含」的关键词
  * 声明成 input，因此不能用它做过滤。这里自己遍历顶层块、读输入值、按需 pushThread。</p>
+ *
+ * <p>{@code mode} 决定「关键词读不出来时」怎么办：</p>
+ * <ul>
+ *   <li>{@code "any"}：放行。玩家聊天通道用它——单人/离线服的历史行为是「空关键词即全匹配」，
+ *       收紧会改变既有工程的语义。</li>
+ *   <li>{@code "keyword"}：跳过。服务端消息通道用它，因为那个通道里混着插件广告与倒计时，
+ *       只有能确定关键词的帽子才允许启动，否则每个广告都会把脚本拉起来。</li>
+ * </ul>
+ *
+ * <p>「读不出来」含三种情况：关键词为空、槽里接的是变量、槽里接的是复合表达式。
+ * 其中<b>直接变量</b>会被 {@link __tmcResolveKeyword} 求值，属于「读得出来」。</p>
  */
-function __tmcStartHatFiltered(opcode, inputName, matchText) {
+function __tmcStartHatFiltered(opcode, inputName, matchText, mode) {
 	var started = 0;
 	var runtime = __tmcVm.runtime;
 	var targets = runtime.targets;
 	var needle = matchText === null || matchText === undefined ? null : String(matchText);
+	var allowAny = mode !== 'keyword';
 	for (var t = 0; t < targets.length; t++) {
 		var target = targets[t];
 		var blocks = target.blocks;
@@ -617,12 +639,13 @@ function __tmcStartHatFiltered(opcode, inputName, matchText) {
 				continue;
 			}
 			if (inputName && needle !== null) {
-				var pattern = __tmcReadInput(blocks, block, inputName);
-				if (pattern === null) {
-					// 关键词不是字面量（表达式之类）：静态读不出值，退化为「不按关键词过滤」
-					pattern = '';
-				}
-				if (pattern !== '' && needle.indexOf(pattern) < 0) {
+				var keyword = __tmcResolveKeyword(runtime, target, blocks, block, inputName);
+				if (!keyword.known || keyword.value === '') {
+					// 读不出或为空：mode 允许就当「匹配全部」，否则这一顶帽子本轮不启动
+					if (!allowAny) {
+						continue;
+					}
+				} else if (needle.indexOf(keyword.value) < 0) {
 					continue;
 				}
 			}
@@ -638,11 +661,138 @@ function __tmcStartHatFiltered(opcode, inputName, matchText) {
 			if (busy) {
 				continue;
 			}
-			runtime._pushThread(id, target);
+			var pushed = runtime._pushThread(id, target);
+			if (!pushed) {
+				// 这个构建里 _pushThread 不返回线程（压缩版把它包了一层），
+				// 但它内部是 push 到 threads 末尾，取末尾即刚入队的那一个
+				pushed = runtime.threads[runtime.threads.length - 1];
+			}
+			if (pushed && needle !== null) {
+				// 把触发消息挂在线程自己身上：线程下一帧才执行，中间到达的消息会改写
+				// ChatState 的全局槽，读的时候就会串到别人的话上去（实测过）。
+				pushed.tmcChat = needle;
+			}
 			started++;
 		}
 	}
 	return started;
+}
+
+/**
+ * 当前线程携带的聊天消息；不是聊天触发的线程返回 {@code null}。
+ *
+ * <p><b>为什么需要</b>：聊天事件的处理顺序是「先写全局槽，再入队线程」，而线程要下一帧才
+ * 执行。中间任何一条消息（另一个玩家的、系统通道的插件广告）都会改写全局槽，脚本读到的
+ * 就是别人的话——实测过：A 触发帽子、B 在中间到达，线程读到的是 B。</p>
+ *
+ * <p>所以入队时把消息挂到线程对象上（{@code thread.tmcChat}），读的时候优先取它。
+ * 线程对象是每个脚本实例独有的，不会被任何人改写，等于给这条消息做了一份私有副本。</p>
+ *
+ * <p>标签不跨线程传递：广播派生的线程、绿旗线程都没有副本，只能回落到全局槽
+ * （{@code 最近的聊天}）或空串（{@code 触发我的聊天}）。</p>
+ */
+function __tmcThreadChat(util) {
+	if (!util || !util.thread) {
+		return null;
+	}
+	var value = util.thread.tmcChat;
+	return value === undefined || value === null ? null : String(value);
+}
+
+/**
+ * 解析「当聊天包含」的关键词，返回 {@code {known, value}}。
+ *
+ * <p>{@code known === false} 表示宿主侧无法确定关键词，由调用方决定放不放行。</p>
+ *
+ * <p>只认两种来源：字面量（{@link __tmcReadInput}）与<b>直接接进槽里的变量</b>。
+ * 复合表达式（{@code 连接 a 和 b} 之类）不求值——那需要一个真实线程走 scratch-vm 的
+ * 求值器，本版 VM 没有暴露 {@code getInputValue}；自行实现等于复制一遍运算语义，
+ * 一旦与 VM 不一致就是「关键词明明命中却不触发」，比不触发更难查。</p>
+ */
+function __tmcResolveKeyword(runtime, target, blocks, block, inputName) {
+	var literal = __tmcReadInput(blocks, block, inputName);
+	if (literal !== null) {
+		return {known: true, value: literal};
+	}
+	var reporter = __tmcReporterBlock(blocks, block, inputName);
+	if (reporter && reporter.opcode === 'data_variable') {
+		var value = __tmcVariableText(runtime, target, reporter.fields && reporter.fields.VARIABLE);
+		if (value !== null) {
+			return {known: true, value: value};
+		}
+	}
+	return {known: false, value: ''};
+}
+
+/**
+ * 取输入槽里接的那块积木（可能是变量/表达式 reporter）。
+ *
+ * <p>两种形态都要认：运行期的 {@code {block: id}} 与原始 JSON 的 {@code [3, "id", ...]}。
+ * 槽里只有替身积木时它和 shadow 是同一块，说明是字面量，这里不该被调到。</p>
+ */
+function __tmcReporterBlock(blocks, block, inputName) {
+	var input = block.inputs && block.inputs[inputName];
+	if (!input) {
+		return null;
+	}
+	var id = null;
+	if (input.block !== undefined) {
+		id = input.block;
+	} else if (typeof input[1] === 'string') {
+		id = input[1];
+	}
+	if (!id || !blocks._blocks) {
+		return null;
+	}
+	return blocks._blocks[id] || null;
+}
+
+/**
+ * 读变量当前值，读不到返回 {@code null}。
+ *
+ * <p>作用域要依次找：先本角色，再舞台——sb3 里变量通常定义在舞台上，角色只是引用，
+ * 只在 {@code target.variables} 里找会漏掉绝大多数工程。</p>
+ *
+ * <p>值可能是任何类型（数字、布尔）：一律转字符串，因为比较用的是
+ * {@code indexOf}，非字符串会抛。</p>
+ */
+function __tmcVariableText(runtime, target, field) {
+	if (!field) {
+		return null;
+	}
+	var name = field.name !== undefined ? field.name : field[0];
+	var id = field.id !== undefined ? field.id : field[1];
+	var owners = [target];
+	try {
+		var stage = runtime.getTargetForStage();
+		if (stage && stage !== target) {
+			owners.push(stage);
+		}
+	} catch (e) {
+		// 没有舞台（冒烟测试的极简工程）就只在角色里找
+	}
+	for (var o = 0; o < owners.length; o++) {
+		var vars = owners[o] && owners[o].variables;
+		if (!vars) {
+			continue;
+		}
+		var entry = id === undefined ? null : vars[id];
+		if (!entry && name !== undefined) {
+			for (var key in vars) {
+				var candidate = vars[key];
+				if (candidate && candidate.type !== 'list' && candidate.name === name) {
+					entry = candidate;
+					break;
+				}
+			}
+		}
+		if (!entry || entry.type === 'list') {
+			continue;
+		}
+		var value = entry.value;
+		return value === undefined || value === null ? '' : String(value);
+	}
+	return null;
 }
 
 function __tmcBlockCount() {

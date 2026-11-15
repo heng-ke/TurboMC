@@ -7,21 +7,21 @@ import xyz.turbomc.client.script.block.BlockRegistry;
 /**
  * 「当聊天包含」的触发次数冒烟。
  *
- * <p>要回答的问题很具体：一条聊天消息会不会让同一个帽子跑多次。</p>
+ * <p>要回答三个问题：一条聊天会不会让同一个帽子跑多次；关键词过滤在
+ * <b>玩家聊天通道</b>（{@code allowAnyKeyword = true}）与<b>服务端消息通道</b>
+ * （{@code false}）下各自的行为；接在关键词槽里的变量能否被正确求值。</p>
  *
  * <p>scratch-vm 只对 {@code edgeActivated} 的帽子做逐帧检查，而扩展里三个事件帽子都显式声明了
  * {@code isEdgeActivated: false}，理论上只能由宿主的 {@code startHats} 拉起。这个用例用
- * 「计数变量 +1」把「跑了几次」变成可断言的事实：</p>
+ * 「计数变量 +1」把「跑了几次」变成可断言的事实。</p>
+ *
+ * <p>工程里有三顶帽子，各自一个计数器：</p>
  *
  * <ol>
- *   <li>发一条命中关键词的消息 → 计数应为 1；</li>
- *   <li>再发同样的消息 → 计数应为 2（每条消息各跑一次）；</li>
- *   <li>发一条不命中的消息 → 计数不变。</li>
+ *   <li>关键词 {@code hello}（字面量）；</li>
+ *   <li>关键词为空（任意匹配语义）；</li>
+ *   <li>关键词是<b>舞台上的变量</b> {@code kw}，初值 {@code abc}。</li>
  * </ol>
- *
- * <p>若第 1 步得到大于 1，说明帽子在被逐帧重复拉起，那是 VM 侧的配置问题；
- * 若等于 1，则游戏里「说一次却一直触发」只能来自事件本身被重复投递
- * （例如脚本自己发的聊天又被自己收到）。</p>
  *
  * <p>仅手动运行：{@code ./gradlew vmChat}。</p>
  */
@@ -42,26 +42,72 @@ public final class ChatHatTest {
 			vm.tick(null);
 		}
 
-		int before = count(vm);
-		vm.startChatHat("say hello world");
+		// 1) 只认关键词：字面量命中，空关键词与变量都不该被拉起
+		int literalStart = vm.startChatHat("say hello world", false);
 		tick(vm, 30);
-		int first = count(vm);
+		int hits1 = num(vm, "hits");
+		int blank1 = num(vm, "blankHits");
+		int var1 = num(vm, "varHits");
 
-		vm.startChatHat("say hello again");
+		// 2) 只认关键词：谁都不命中 —— 空关键词帽子必须被跳过
+		int noneStart = vm.startChatHat("nothing here", false);
 		tick(vm, 30);
-		int second = count(vm);
+		int blank2 = num(vm, "blankHits");
 
-		vm.startChatHat("bye bye");
+		// 3) 只认关键词：变量求值为 abc，应当命中变量帽子
+		int variableStart = vm.startChatHat("xx abc yy", false);
 		tick(vm, 30);
-		int third = count(vm);
+		int var2 = num(vm, "varHits");
 
-		System.out.println("[chat] 初始=" + before
-				+ " 第一条命中=" + first
-				+ " 第二条命中=" + second
-				+ " 不命中=" + third);
+		// 4) 放行模式：空关键词帽子这时才允许启动
+		int anyStart = vm.startChatHat("nothing here", true);
+		tick(vm, 30);
+		int blank3 = num(vm, "blankHits");
 
-		boolean single = first == before + 1 && second == first + 1;
-		boolean filtered = third == second;
+		// 5) 放行模式不等于「全都启动」：字面量不命中、变量不包含，仍只有空关键词帽子跑
+		int anyStart2 = vm.startChatHat("zzz", true);
+		tick(vm, 30);
+		int hits = num(vm, "hits");
+		int blank = num(vm, "blankHits");
+		int varHits = num(vm, "varHits");
+
+		boolean literalOnly = literalStart == 1 && hits1 == 1 && blank1 == 0 && var1 == 0;
+		boolean emptySkipped = noneStart == 0 && blank2 == 0;
+		boolean variableResolved = variableStart == 1 && var2 == 1;
+		boolean anyModeFires = anyStart == 1 && blank3 == 1;
+		boolean stillFiltered = anyStart2 == 1 && blank == 2 && hits == 1 && varHits == 1;
+
+		System.out.println("[chat] 字面量命中=起" + literalStart + "/hits=" + hits1
+				+ " 空关键词跳过=起" + noneStart + "/blankHits=" + blank2
+				+ " 变量求值=起" + variableStart + "/varHits=" + var2
+				+ " 放行模式=起" + anyStart + "→" + blank3
+				+ " 放行仍过滤=起" + anyStart2 + "→" + blank);
+
+		// ---- A：触发消息绑定到线程 ----
+		// 模拟真实时序：A 到货 → 帽子入队（此刻还没执行）→ 同一 tick 内 B 到货覆盖全局槽
+		// → 线程执行时「最近的聊天」必须仍是 A。
+		xyz.turbomc.client.script.runtime.ChatState.clear();
+		xyz.turbomc.client.script.runtime.ChatState.record("cap A-message");
+		int capStart = vm.startChatHat("cap A-message", false);
+		xyz.turbomc.client.script.runtime.ChatState.record("cap B-message");
+		tick(vm, 3);
+		String seen = String.valueOf(vm.getVariable("seen"));
+		String trig = String.valueOf(vm.getVariable("trig"));
+		String flagTrig = String.valueOf(vm.getVariable("flagTrig"));
+
+		boolean pinned = capStart == 1 && "cap A-message".equals(seen);
+		boolean triggerBlock = "cap A-message".equals(trig);
+		// 绿旗线程没有聊天副本：「触发我的聊天」必须是空，而不是回落到全局槽
+		boolean triggerEmptyOnFlag = flagTrig.isEmpty() || "0".equals(flagTrig);
+		System.out.println("[chat] 线程绑定：入队 " + capStart + " 个，读到「" + seen + "」"
+				+ "，触发我的聊天=「" + trig + "」，绿旗线程=「" + flagTrig + "」");
+
+		// 探针 2：同一顶块的线程还在跑（等待中）时，新消息会不会把帽子拉起来
+		int busy1 = vm.startChatHat("busy one", false);
+		int busy2 = vm.startChatHat("busy two", false);
+		tick(vm, 2);
+		System.out.println("[chat] 探针：同一帽子连发两条，入队 " + busy1 + " / " + busy2
+				+ "（第二个被 busy 跳过即为 0）");
 
 		// 回声抑制：脚本自己发的那条不应再触发帽子
 		xyz.turbomc.client.script.runtime.SelfChatEcho.sentByScript("bot reply");
@@ -73,11 +119,20 @@ public final class ChatHatTest {
 		boolean newMessagePasses = ChatGate.accept("hello", "sig-2");
 		boolean unsignedWindow = ChatGate.accept("hello there", null) && !ChatGate.accept("hello there", null);
 
-		boolean ok = single && filtered && echoSuppressed && playerStillWorks
+		boolean ok = literalOnly && emptySkipped && variableResolved && anyModeFires && stillFiltered
+				&& pinned && triggerBlock && triggerEmptyOnFlag
+				&& echoSuppressed && playerStillWorks
 				&& sameMessageOnce && newMessagePasses && unsignedWindow;
-		System.out.println("[chat] 一条消息只跑一次=" + single + " 关键词过滤=" + filtered
-				+ " 回声被吞=" + echoSuppressed + " 玩家消息仍触发=" + playerStillWorks);
-		System.out.println("[chat] 同一条消息只触发一次=" + sameMessageOnce
+		System.out.println("[chat] 字面量只起一次=" + literalOnly
+				+ " 空关键词被跳过=" + emptySkipped
+				+ " 变量被求值=" + variableResolved
+				+ " 放行模式生效=" + anyModeFires
+				+ " 放行仍按关键词过滤=" + stillFiltered);
+		System.out.println("[chat] 消息绑定线程=" + pinned
+				+ " 触发我的聊天=" + triggerBlock
+				+ " 非聊天线程为空=" + triggerEmptyOnFlag);
+		System.out.println("[chat] 回声被吞=" + echoSuppressed + " 玩家消息仍触发=" + playerStillWorks
+				+ " 同一条消息只触发一次=" + sameMessageOnce
 				+ " 相同文字的新消息仍触发=" + newMessagePasses
 				+ " 无签名短窗口去重=" + unsignedWindow);
 		System.out.println(ok ? "CHAT HAT PASS" : "CHAT HAT FAIL");
@@ -90,12 +145,17 @@ public final class ChatHatTest {
 		}
 	}
 
-	private static int count(RhinoVm vm) {
-		Object value = vm.getVariable("hits");
+	private static int num(RhinoVm vm, String name) {
+		Object value = vm.getVariable(name);
 		return value instanceof Number number ? number.intValue() : -1;
 	}
 
-	/** 最小工程：一个「当聊天包含 hello」帽子，体内把 hits 加一。 */
+	/**
+	 * 最小工程：三顶「当聊天包含」帽子，体内各自把一个计数变量加一。
+	 *
+	 * <p>关键词 {@code kw} 定义在舞台上、由角色引用——这是 sb3 里最常见的作用域形态，
+	 * 顺带把「变量查找要回退到舞台」这条也钉住。</p>
+	 */
 	private static String project() {
 		return """
 				{
@@ -103,7 +163,15 @@ public final class ChatHatTest {
 				    {
 				      "isStage": true,
 				      "name": "Stage",
-				      "variables": {"hits-id": ["hits", 0]},
+				      "variables": {
+				        "hits-id": ["hits", 0],
+				        "blank-id": ["blankHits", 0],
+				        "var-id": ["varHits", 0],
+				        "kw-id": ["kw", "abc"],
+				        "seen-id": ["seen", ""],
+				        "trig-id": ["trig", ""],
+				        "ftrig-id": ["flagTrig", "未执行"]
+				      },
 				      "lists": {}, "broadcasts": {}, "blocks": {}, "comments": {},
 				      "currentCostume": 0,
 				      "costumes": [{"name":"c","dataFormat":"svg","assetId":"cd21514d0531fdffb22204e0ec5ed84a",
@@ -116,12 +184,61 @@ public final class ChatHatTest {
 				      "name": "角色1",
 				      "variables": {}, "lists": {}, "broadcasts": {},
 				      "blocks": {
-				        "hat": {"opcode":"turbomc_whenChat","next":"add","parent":null,
+				        "hat1": {"opcode":"turbomc_whenChat","next":"add1","parent":null,
 				          "inputs":{"MATCH":[1,[10,"hello"]]},"fields":{},
 				          "shadow":false,"topLevel":true,"x":0,"y":0},
-				        "add": {"opcode":"data_changevariableby","next":null,"parent":"hat",
+				        "add1": {"opcode":"data_changevariableby","next":null,"parent":"hat1",
 				          "inputs":{"VALUE":[1,[4,"1"]]},
 				          "fields":{"VARIABLE":["hits","hits-id"]},
+				          "shadow":false,"topLevel":false},
+
+				        "hat2": {"opcode":"turbomc_whenChat","next":"add2","parent":null,
+				          "inputs":{"MATCH":[1,[10,""]]},"fields":{},
+				          "shadow":false,"topLevel":true,"x":0,"y":150},
+				        "add2": {"opcode":"data_changevariableby","next":null,"parent":"hat2",
+				          "inputs":{"VALUE":[1,[4,"1"]]},
+				          "fields":{"VARIABLE":["blankHits","blank-id"]},
+				          "shadow":false,"topLevel":false},
+
+				        "hat3": {"opcode":"turbomc_whenChat","next":"add3","parent":null,
+				          "inputs":{"MATCH":[3,[12,"kw","kw-id"],[10,""]]},"fields":{},
+				          "shadow":false,"topLevel":true,"x":0,"y":300},
+				        "add3": {"opcode":"data_changevariableby","next":null,"parent":"hat3",
+				          "inputs":{"VALUE":[1,[4,"1"]]},
+				          "fields":{"VARIABLE":["varHits","var-id"]},
+				          "shadow":false,"topLevel":false},
+
+				        "hat4": {"opcode":"turbomc_whenChat","next":"set4","parent":null,
+				          "inputs":{"MATCH":[1,[10,"cap"]]},"fields":{},
+				          "shadow":false,"topLevel":true,"x":0,"y":450},
+				        "set4": {"opcode":"data_setvariableto","next":"setTrig","parent":"hat4",
+				          "inputs":{"VALUE":[3,"read4",[10,""]]},
+				          "fields":{"VARIABLE":["seen","seen-id"]},
+				          "shadow":false,"topLevel":false},
+				        "read4": {"opcode":"turbomc_lastChat","next":null,"parent":"set4",
+				          "inputs":{},"fields":{},"shadow":false,"topLevel":false},
+				        "setTrig": {"opcode":"data_setvariableto","next":null,"parent":"set4",
+				          "inputs":{"VALUE":[3,"readTrig",[10,""]]},
+				          "fields":{"VARIABLE":["trig","trig-id"]},
+				          "shadow":false,"topLevel":false},
+				        "readTrig": {"opcode":"turbomc_triggerChat","next":null,"parent":"setTrig",
+				          "inputs":{},"fields":{},"shadow":false,"topLevel":false},
+
+				        "flagHat": {"opcode":"event_whenflagclicked","next":"setFlag","parent":null,
+				          "inputs":{},"fields":{},
+				          "shadow":false,"topLevel":true,"x":0,"y":750},
+				        "setFlag": {"opcode":"data_setvariableto","next":null,"parent":"flagHat",
+				          "inputs":{"VALUE":[3,"readFlag",[10,""]]},
+				          "fields":{"VARIABLE":["flagTrig","ftrig-id"]},
+				          "shadow":false,"topLevel":false},
+				        "readFlag": {"opcode":"turbomc_triggerChat","next":null,"parent":"setFlag",
+				          "inputs":{},"fields":{},"shadow":false,"topLevel":false},
+
+				        "hat5": {"opcode":"turbomc_whenChat","next":"wait5","parent":null,
+				          "inputs":{"MATCH":[1,[10,"busy"]]},"fields":{},
+				          "shadow":false,"topLevel":true,"x":0,"y":600},
+				        "wait5": {"opcode":"control_wait","next":null,"parent":"hat5",
+				          "inputs":{"DURATION":[1,[5,"999"]]},"fields":{},
 				          "shadow":false,"topLevel":false}
 				      },
 				      "comments": {},

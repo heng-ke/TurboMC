@@ -89,6 +89,22 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_messages"),
+						config.chatFromServerMessages)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.chat_server_messages.tooltip"))
+				.setSaveConsumer(value -> config.chatFromServerMessages = value)
+				.build());
+
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_any_match"),
+						config.chatServerAnyMatch)
+				.setDefaultValue(false)
+				.setTooltip(Text.translatable("config.turbomc.chat_server_any_match.tooltip"))
+				.setSaveConsumer(value -> config.chatServerAnyMatch = value)
+				.build());
+
+		script.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.chat_max_segments"),
 						config.chatMaxSegments == null ? 8 : config.chatMaxSegments, 1, 16)
 				.setDefaultValue(8)

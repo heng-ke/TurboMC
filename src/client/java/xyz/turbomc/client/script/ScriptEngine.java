@@ -342,6 +342,38 @@ public final class ScriptEngine {
 		RhinoVm.get().startChatHat(message);
 	}
 
+	/**
+	 * 服务端消息通道的触发：代理服把玩家聊天包成 system 消息下发时走这里。
+	 *
+	 * <p>与 {@link #fireChat} 有两处刻意的差别：</p>
+	 *
+	 * <ol>
+	 *   <li><b>只启动关键词可确定的帽子</b>（{@code chatServerAnyMatch} 为 {@code false} 时）。
+	 *       这个通道里混着插件广告、加入离开提示、抢购倒计时，无关键词的帽子跟着走会被刷爆。
+	 *       关键词是变量的仍会被精确求值——见 {@code __tmcResolveKeyword}。</li>
+	 *   <li><b>命中才打日志</b>：这个通道的消息量在每分钟几十条，正常派发打 info 会把日志淹掉；
+	 *       而「一条都不打」又让线上排查无从下手，所以只在真的起了线程时留一行。</li>
+	 * </ol>
+	 *
+	 * <p>{@code ChatState} 的写入由调用方（事件源）负责，与玩家聊天通道保持同序：
+	 * 先记录、再派发，脚本读到的就是触发它的那句话。</p>
+	 */
+	public void fireServerChat(String message) {
+		if (!active() || message == null || message.isEmpty()) {
+			return;
+		}
+		if (SelfChatEcho.isEcho(message)) {
+			return;
+		}
+		int started = RhinoVm.get().startChatHat(message,
+				TurboMCConfig.get().chatServerAnyMatch);
+		if (started > 0) {
+			LOG.info("[chat] 服务端消息命中帽子 {} 个", started);
+		} else {
+			LOG.debug("[chat] 服务端消息未命中帽子");
+		}
+	}
+
 	public Set<String> triggerKeys() {
 		return cachedTriggerKeys;
 	}

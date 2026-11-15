@@ -32,6 +32,10 @@ bin/
 
 run/
 
+# LWJGL 运行时把原生库解到工作目录，不该进版本库
+
+.lwjgl/
+
 # java
 
 hs_err_*.log

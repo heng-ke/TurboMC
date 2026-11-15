@@ -1801,6 +1801,14 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('last chat message', '最近的聊天')
 					},
+					// 触发本次脚本的那条聊天。与「最近的聊天」的差别只有一处：
+					// 后者是「全局最新」，被后到的消息覆盖；前者跟着线程走，永不串台。
+					// 不是聊天触发的线程（绿旗、广播、按键）拿到空串。
+					{
+						opcode: 'triggerChat',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('chat that triggered me', '触发我的聊天')
+					},
 					{
 						opcode: 'aiAsk',
 						blockType: Scratch.BlockType.COMMAND,
@@ -2416,6 +2424,7 @@ class TurboMC {
 		// 浏览器里没有 Java 侧的桥：返回空串而不是 undefined，
 		// 免得积木在编辑器里被当成「无返回值」而显示成红色
 		lastChat() { this.preview('lastChat'); return ''; }
+		triggerChat() { this.preview('triggerChat'); return ''; }
 		aiAsk(args) { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }
 		aiReply(args) { this.preview('aiReply'); return ''; }
 		aiReset(args) { this.preview('aiReset'); }
