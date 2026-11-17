@@ -146,8 +146,13 @@ public final class ScriptEngine {
 	 * 在标题界面/加载界面把 VM 备好，把「首次反序列化」的冷路径提前走掉。
 	 *
 	 * <p><b>为什么放在这里</b>：模组初始化阶段做重活会拖慢启动，异常还会连累整个客户端；
-	 * 放标题界面最多让脚本暂时不可用，进世界时 {@code start()} 还会再走一次 init。
-	 * 引擎关闭时不预热——不为用不上的 VM 付 0.6 秒。</p>
+	 * 放标题界面最多让脚本暂时不可用，进世界时 {@code start()} 还会再走一次 init。</p>
+	 *
+	 * <p><b>只看总开关，不看引擎开关</b>——这条是踩过坑的。{@code disableEngineOnExit}
+	 * 默认开，退出世界会把 {@code scriptEngineEnabled} 复位成 false 并写盘；如果预热也跟着
+	 * 这个开关走，下次启动在标题界面就不预热，玩家进世界后按 F6 才现付
+	 * {@code vm.init} 的 0.7 秒 + 工程冷载 0.4 秒，全部落在渲染线程上，表现为一次 1.1 秒的卡死。
+	 * 预热成本换到标题界面（游戏本来就在加载资源）几乎无感，这个交换是划算的。</p>
 	 *
 	 * <p><b>只在没有玩家时调用</b>，所以不会和 {@code start()} 抢同一帧。</p>
 	 */
@@ -156,7 +161,7 @@ public final class ScriptEngine {
 			return;
 		}
 		TurboMCConfig config = TurboMCConfig.get();
-		if (!config.masterEnabled || !config.scriptEngineEnabled) {
+		if (!config.masterEnabled) {
 			return;
 		}
 		warmUpTried = true;

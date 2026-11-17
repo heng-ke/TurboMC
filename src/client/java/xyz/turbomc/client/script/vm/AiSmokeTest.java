@@ -51,8 +51,9 @@ public final class AiSmokeTest {
 		String base = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
 
 		AiService ai = AiService.get();
-		// 超时设 1200 ms：桩对 "slow" 睡 1500 ms，正好越过这条线
-		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 1200, 4, 2));
+		// 超时设 3000 ms：桩对 "slow" 睡 4000 ms，正好越过这条线。
+		// 不用 1200/1500 那种紧贴的余量：并行跑多个冒烟任务时 CPU 一忙就会误判超时（实测过）
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 3000, 4, 2));
 
 		boolean ok = true;
 
@@ -77,16 +78,16 @@ public final class AiSmokeTest {
 		ok &= report("坏 JSON 返回空串", jsonOk, broken);
 
 		long slowStart = System.currentTimeMillis();
-		String slow = await(ai, "s-slow", "slow", 5000);
+		String slow = await(ai, "s-slow", "slow", 8000);
 		long slowCost = System.currentTimeMillis() - slowStart;
-		boolean slowOk = "".equals(slow) && slowCost < 4000;
+		boolean slowOk = "".equals(slow) && slowCost < 8000;
 		ok &= report("超时返回空串（" + slowCost + " ms）", slowOk, slow);
 
 		// 会话互斥：同一个会话同时两条，第二条必须被拒绝（返回 null 而不是排队）
 		String first = ai.ask("s-busy", "slow");
 		String second = ai.ask("s-busy", "hello");
 		boolean busyOk = first != null && second == null;
-		awaitId(ai, first, 5000);
+		awaitId(ai, first, 8000);
 		ok &= report("同会话不许并排", busyOk, "first=" + first + " second=" + second);
 
 		// 未配置：baseUrl / model 为空时必须立刻失败，不发请求
@@ -94,7 +95,57 @@ public final class AiSmokeTest {
 		boolean disabledOk = ai.ask("s-off", "hello") == null;
 		ok &= report("未配置直接失败", disabledOk, "");
 
-		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 1200, 4, 2));
+		// 未配置必须能从快照看出来：HUD 与面板都靠 snapshot，不能只写日志
+		AiService.Snapshot offView = ai.snapshot();
+		AiService.SessionStatus offSession = find(offView, "s-off");
+		boolean offReported = !offView.configured() && offView.attempted()
+				&& offSession != null && offSession.phase() == AiService.Phase.FAILED
+				&& offSession.error().contains("未配置");
+		ok &= report("快照暴露未配置", offReported, offSession == null ? "无会话" : offSession.error());
+
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 3000, 4, 2));
+
+		// ---- 状态快照：HUD / 面板的唯一数据源 ----
+		// 超时故意放宽到 10 s：默认 3000 ms 下，机器一忙就可能「还没来得及取快照就已经超时」，
+		// WAITING 断言会偶发失败（并行跑多个冒烟任务时实测到过一次）
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 10000, 4, 2));
+		String slowId = ai.ask("s-view", "slow");
+		AiService.SessionStatus waitingView = find(ai.snapshot(), "s-view");
+		boolean waitingOk = slowId != null && waitingView != null
+				&& waitingView.phase() == AiService.Phase.WAITING
+				&& waitingView.pendingMs() >= 0
+				&& "slow".equals(waitingView.prompt());
+		ok &= report("快照=等待中", waitingOk,
+				waitingView == null ? "无会话" : waitingView.phase() + " " + waitingView.prompt());
+		awaitId(ai, slowId, 8000);
+
+		// 桩睡 4000 ms < 10 s 超时，所以这一轮应当成功，且能读到回复与耗时
+		AiService.SessionStatus okView = find(ai.snapshot(), "s-view");
+		boolean okViewOk = okView != null && okView.phase() == AiService.Phase.OK
+				&& "pong:slow".equals(okView.reply())
+				&& okView.error().isEmpty()
+				&& okView.costMs() >= 1000;
+		ok &= report("快照=成功", okViewOk,
+				okView == null ? "" : okView.phase() + " " + okView.reply() + " " + okView.costMs() + "ms");
+
+		// 失败路径：短原因（HUD 一行显示的就是它），而不是整条异常链
+		await(ai, "s-fail", "boom", 5000);
+		AiService.SessionStatus failView = find(ai.snapshot(), "s-fail");
+		boolean failViewOk = failView != null && failView.phase() == AiService.Phase.FAILED
+				&& "HTTP 500".equals(failView.error());
+		ok &= report("失败留下短原因", failViewOk, failView == null ? "" : failView.error());
+
+		// 恢复默认超时：后续用例按 3000 ms 走（超时那份断言依赖它）
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 3000, 4, 2));
+
+		// 2xx + 空 content：算失败而不是成功（否则 HUD 是「✓ + 空白」）
+		String noContent = await(ai, "s-empty", "noContent", 5000);
+		AiService.SessionStatus emptyView = find(ai.snapshot(), "s-empty");
+		boolean emptyOk = "".equals(noContent) && emptyView != null
+				&& emptyView.phase() == AiService.Phase.FAILED
+				&& "空回复".equals(emptyView.error());
+		ok &= report("空回复按失败处理", emptyOk,
+				emptyView == null ? "" : emptyView.phase() + " " + emptyView.error());
 
 		// 「最近的聊天」：注册表里能拿到，且读到的是最近记录的那条。
 		// 写入方在 TurboMCClient 的客户端事件里，纯 JVM 测不到；这里守的是注册与读取这一半。
@@ -156,6 +207,15 @@ public final class AiSmokeTest {
 		}
 	}
 
+	private static AiService.SessionStatus find(AiService.Snapshot snapshot, String name) {
+		for (AiService.SessionStatus status : snapshot.sessions()) {
+			if (status.name().equals(name)) {
+				return status;
+			}
+		}
+		return null;
+	}
+
 	private static boolean report(String name, boolean pass, String detail) {
 		System.out.println("[ai] " + (pass ? "✓ " : "✗ ") + name
 				+ (detail == null || detail.isEmpty() ? "" : "：" + detail));
@@ -169,7 +229,7 @@ public final class AiSmokeTest {
 		String user = lastUserContent(body);
 
 		if (body.contains("slow")) {
-			sleep(1500);
+			sleep(4000);
 		}
 		if (body.contains("boom")) {
 			respond(exchange, 500, "{\"error\":{\"message\":\"boom\"}}");
@@ -177,6 +237,11 @@ public final class AiSmokeTest {
 		}
 		if (body.contains("badjson")) {
 			respond(exchange, 200, "not json at all");
+			return;
+		}
+		// 2xx 但 content 为空：必须归为失败，不能显示成绿色的成功
+		if (body.contains("noContent")) {
+			respond(exchange, 200, "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"\"}}]}");
 			return;
 		}
 		JsonObject message = new JsonObject();

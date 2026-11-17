@@ -14,7 +14,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,6 +83,38 @@ public final class AiService {
 	private record Message(String role, String content) {
 	}
 
+	/** 会话当前处于哪一步。{@code IDLE} 表示还没发起过请求。 */
+	public enum Phase {
+		IDLE, WAITING, OK, FAILED
+	}
+
+	/**
+	 * 会话的只读展示状态。
+	 *
+	 * <p>{@code prompt} / {@code reply} / {@code error} 都是**截断后**的文本：这份数据会直接
+	 * 画到 HUD 和面板上，长度不设上限只会把屏幕撑爆。要完整内容请读日志。</p>
+	 *
+	 * @param pendingMs 仅 {@code WAITING} 时有意义：从提交到现在过了多久，用于「卡住了吗」的判断
+	 * @param costMs    最近一次请求的往返耗时
+	 * @param updatedAt 最近一次有结论的时刻；{@code 0} 表示还没结论
+	 */
+	public record SessionStatus(String name, Phase phase, int historyTurns, boolean hasSystem,
+								long pendingMs, long costMs, String prompt, String reply,
+								String error, long updatedAt) {
+	}
+
+	/**
+	 * 全量快照，供 HUD 与运行面板读取。
+	 *
+	 * @param configured 是否配好了 {@code baseUrl} + {@code model}
+	 * @param attempted  是否调用过请求；用来区分「从没用过」和「用了但没配」
+	 * @param model      当前模型名；未配置时为空串，供面板显示
+	 * @param inFlight   在途请求数
+	 */
+	public record Snapshot(boolean configured, boolean attempted, String model, int inFlight,
+						   int maxConcurrent, List<SessionStatus> sessions) {
+	}
+
 	/** 一个会话：system 提示 + 历史 + 在途请求 + 最近回复。 */
 	private static final class Session {
 		String system = "";
@@ -88,6 +123,18 @@ public final class AiService {
 		String pending;
 		/** 只存 user / assistant，system 单独存，不参与裁剪。 */
 		final Deque<Message> history = new ArrayDeque<>();
+
+		// ---- 对外可观测状态（HUD / 面板用），只影响展示，不参与请求逻辑 ----
+		/** 本轮请求提交时刻；{@code 0} 表示没有在途请求。 */
+		long pendingSince;
+		/** 最近一次请求从提交到有结论的耗时。 */
+		long lastCostMs;
+		/** 最近一次有结论的时刻（成功或失败都算）。 */
+		long lastAt;
+		/** 最近一次提问，已截断。 */
+		String lastPrompt = "";
+		/** 最近一次失败原因；成功时清空。 */
+		String lastError = "";
 	}
 
 	private final Map<String, Session> sessions = new ConcurrentHashMap<>();
@@ -95,6 +142,8 @@ public final class AiService {
 	private final Map<String, CompletableFuture<HttpResponse<String>>> inFlight = new ConcurrentHashMap<>();
 
 	private volatile Supplier<Settings> settingsProvider = () -> Settings.DISABLED;
+	/** 是否调用过 {@link #ask}。用来区分「从没用过 AI」和「用了但没配好」。 */
+	private volatile boolean attempted;
 	private HttpClient http;
 	private ExecutorService executor;
 	private int counter;
@@ -124,15 +173,18 @@ public final class AiService {
 	 */
 	public String ask(String sessionKey, String text) {
 		String key = normalize(sessionKey);
+		attempted = true;
 		Settings settings = settingsProvider.get();
 		if (settings == null || !settings.configured()) {
 			invalidate(key);
+			recordError(key, "未配置：请填写接口地址与模型名");
 			LOG.warn("[ai] 未配置：请在 config/turbomc.json 里填写 ai.baseUrl 与 ai.model");
 			return null;
 		}
 		String prompt = capPrompt(text == null ? "" : text.trim());
 		if (prompt.isEmpty()) {
 			invalidate(key);
+			recordError(key, "输入为空");
 			return null;
 		}
 		Session session = sessions.computeIfAbsent(key, k -> new Session());
@@ -143,10 +195,14 @@ public final class AiService {
 			session.last = "";
 			if (session.pending != null) {
 				// 排队会让历史顺序与服务端实际处理顺序错开，这里选择直接失败
+				session.lastError = "上一轮还没结束";
+				session.lastAt = System.currentTimeMillis();
 				LOG.warn("[ai] 会话「{}」已有在途请求，本次忽略", key);
 				return null;
 			}
 			if (inFlight.size() >= Math.max(1, settings.maxConcurrent())) {
+				session.lastError = "并发已满（上限 " + settings.maxConcurrent() + "）";
+				session.lastAt = System.currentTimeMillis();
 				LOG.warn("[ai] 并发已达上限 {}，本次忽略", settings.maxConcurrent());
 				return null;
 			}
@@ -155,11 +211,17 @@ public final class AiService {
 				id = "r" + (++counter);
 			}
 			session.pending = id;
+			session.pendingSince = System.currentTimeMillis();
+			session.lastPrompt = prompt;
+			session.lastError = "";
 			HttpRequest request;
 			try {
 				request = buildRequest(settings, session, prompt);
 			} catch (RuntimeException e) {
 				session.pending = null;
+				session.pendingSince = 0;
+				session.lastError = "请求构造失败";
+				session.lastAt = System.currentTimeMillis();
 				LOG.warn("[ai] 请求构造失败：{}", e.toString());
 				return null;
 			}
@@ -168,6 +230,9 @@ public final class AiService {
 				future = client(settings).sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			} catch (RuntimeException e) {
 				session.pending = null;
+				session.pendingSince = 0;
+				session.lastError = "请求提交失败";
+				session.lastAt = System.currentTimeMillis();
 				LOG.warn("[ai] 请求提交失败：{}", e.toString());
 				return null;
 			}
@@ -203,6 +268,9 @@ public final class AiService {
 		synchronized (session) {
 			session.history.clear();
 			session.last = "";
+			session.lastError = "";
+			session.lastCostMs = 0;
+			session.lastPrompt = "";
 		}
 	}
 
@@ -218,6 +286,9 @@ public final class AiService {
 			session.system = text == null ? "" : text;
 			session.history.clear();
 			session.last = "";
+			session.lastError = "";
+			session.lastCostMs = 0;
+			session.lastPrompt = "";
 		}
 	}
 
@@ -251,7 +322,56 @@ public final class AiService {
 		return Math.max(40, timeout / 50 + 40);
 	}
 
+	/**
+	 * 只读快照：HUD 与运行面板靠它回答「触发了没有、回没回、为什么没回」。
+	 *
+	 * <p><b>刻意无锁聚合</b>：调用方是渲染线程（每帧一次），这里逐会话加锁只保护单条记录的
+	 * 拷贝，不会与 HTTP 回调线程形成长临界区。会话数量是个位数，代价可忽略。</p>
+	 *
+	 * <p>文本一律截断：这份数据直接画到屏幕上，完整内容留给日志。</p>
+	 */
+	public Snapshot snapshot() {
+		Settings settings = settingsProvider.get();
+		boolean configured = settings != null && settings.configured();
+		long now = System.currentTimeMillis();
+		List<SessionStatus> list = new ArrayList<>();
+		for (Map.Entry<String, Session> entry : sessions.entrySet()) {
+			Session session = entry.getValue();
+			synchronized (session) {
+				Phase phase;
+				if (session.pending != null) {
+					phase = Phase.WAITING;
+				} else if (session.lastError != null && !session.lastError.isEmpty()) {
+					phase = Phase.FAILED;
+				} else if (session.lastAt > 0) {
+					phase = Phase.OK;
+				} else {
+					phase = Phase.IDLE;
+				}
+				long pendingMs = phase == Phase.WAITING && session.pendingSince > 0
+						? now - session.pendingSince
+						: 0;
+				list.add(new SessionStatus(entry.getKey(), phase, session.history.size() / 2,
+						!session.system.isBlank(), pendingMs, session.lastCostMs,
+						truncate(session.lastPrompt, 80), truncate(session.last, 80),
+						truncate(session.lastError, 80), session.lastAt));
+			}
+		}
+		list.sort(Comparator.comparing(SessionStatus::name));
+		return new Snapshot(configured, attempted, settings == null ? "" : settings.model(),
+				inFlight.size(), settings == null ? 0 : settings.maxConcurrent(), list);
+	}
+
 	// ---- 内部 ----
+
+	/** 记一次「请求根本没发出去」的失败原因，供 HUD / 面板显示。 */
+	private void recordError(String key, String message) {
+		Session session = sessions.computeIfAbsent(key, k -> new Session());
+		synchronized (session) {
+			session.lastError = message;
+			session.lastAt = System.currentTimeMillis();
+		}
+	}
 
 	private void complete(String id, String key, Session session, String prompt,
 						  HttpResponse<String> response, Throwable error) {
@@ -272,14 +392,36 @@ public final class AiService {
 			}
 		}
 
+		long now = System.currentTimeMillis();
+		// 2xx 但正文为空：对脚本来说与失败等价（aiReply 拿到空串）。
+		// 不能算「成功」——否则 HUD 上是一个绿色 ✓ 加一串空白，比直接报错更难查。
+		boolean emptyReply = reply != null && reply.isBlank();
+		if (emptyReply) {
+			reply = null;
+			// finish_reason 是判断「为什么空」的关键：length = token 不够（推理模型常见），
+			// content_filter = 被拦截。只写进日志与面板，不长篇堆到 HUD 上
+			String finish = finishReason(response == null ? null : response.body());
+			failure = "空回复（接口返回 2xx 但 content 为空"
+					+ (finish.isEmpty() ? "" : "，finish_reason=" + finish) + "）";
+		}
+		String reason = reply == null
+				? (emptyReply ? "空回复" : shortReason(response, error))
+				: "";
 		synchronized (session) {
+			session.lastCostMs = session.pendingSince > 0 ? now - session.pendingSince : 0;
+			session.pendingSince = 0;
+			session.lastAt = now;
 			session.pending = null;
 			if (reply != null) {
 				session.last = reply;
+				session.lastError = "";
 				appendHistory(session, prompt, reply);
 			} else {
 				// 失败时清空：宁可让脚本拿到空串，也不要它把上一次的旧回复当成这一次的
 				session.last = "";
+				// 原因要留下来：HUD 与面板靠它回答「为什么没回话」。
+				// 存的是短原因（超时 / HTTP 401 / 连接失败），完整异常链只在日志里
+				session.lastError = reason == null || reason.isBlank() ? "未知失败" : reason;
 				// 取消是切包/停引擎的预期行为，不是故障——照着打 warn 会把真错误淹掉
 				if (!isCancellation(error)) {
 					LOG.warn("[ai] 会话「{}」请求失败：{}", key, failure);
@@ -289,9 +431,68 @@ public final class AiService {
 		inFlight.remove(id);
 	}
 
+	/** 取 {@code choices[0].finish_reason}；读不到返回空串。 */
+	private static String finishReason(String body) {
+		if (body == null || body.isEmpty()) {
+			return "";
+		}
+		try {
+			JsonElement parsed = JsonParser.parseString(body);
+			if (!parsed.isJsonObject()) {
+				return "";
+			}
+			JsonArray choices = parsed.getAsJsonObject().getAsJsonArray("choices");
+			if (choices == null || choices.isEmpty()) {
+				return "";
+			}
+			JsonElement reason = choices.get(0).getAsJsonObject().get("finish_reason");
+			return reason == null || reason.isJsonNull() ? "" : reason.getAsString();
+		} catch (RuntimeException e) {
+			return "";
+		}
+	}
+
+	/**
+	 * 给界面用的短失败原因。
+	 *
+	 * <p>完整异常链（{@code CompletionException：java.net.http.HttpTimeoutException: ...}）
+	 * 只写日志；HUD 一行放不下，玩家也不需要类名。这里归成几类人话。</p>
+	 */
+	private static String shortReason(HttpResponse<String> response, Throwable error) {
+		if (error != null) {
+			if (isCancellation(error)) {
+				return "已取消";
+			}
+			Throwable current = error;
+			for (int depth = 0; current != null && depth < 8; depth++) {
+				String name = current.getClass().getSimpleName();
+				if (name.contains("Timeout")) {
+					return "超时";
+				}
+				if (name.contains("UnknownHost")) {
+					return "域名解析失败";
+				}
+				if (name.contains("SSL") || name.contains("Certificate")) {
+					return "TLS 失败";
+				}
+				if (name.contains("Connect")) {
+					return "连接失败";
+				}
+				current = current.getCause();
+			}
+			return "请求失败";
+		}
+		if (response == null) {
+			return "没有响应";
+		}
+		if (response.statusCode() / 100 != 2) {
+			return "HTTP " + response.statusCode();
+		}
+		return "响应解析失败";
+	}
+
 	/** 取消会被包装成 {@code CompletionException}，所以要顺着 cause 链找。 */
-	private static boolean isCancellation(Throwable error) {
-		Throwable current = error;
+	private static boolean isCancellation(Throwable error) {		Throwable current = error;
 		for (int depth = 0; current != null && depth < 8; depth++) {
 			if (current instanceof java.util.concurrent.CancellationException) {
 				return true;

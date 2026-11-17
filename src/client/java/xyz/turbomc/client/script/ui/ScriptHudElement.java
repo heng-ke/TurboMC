@@ -14,6 +14,7 @@ import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.config.HudCorner;
 import xyz.turbomc.client.script.ScriptEngine;
 import xyz.turbomc.client.script.action.path.PathFollower;
+import xyz.turbomc.client.script.ai.AiService;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.vm.RhinoVm;
@@ -38,6 +39,12 @@ public final class ScriptHudElement implements HudElement {
 	private static final long HOLD_MS = 5000L;
 	/** 同时最多显示几句。 */
 	private static final int MAX_BUBBLES = 3;
+	/** AI 状态行最多显示几条（多会话时只留前几个，按会话名排序，稳定不跳动）。 */
+	private static final int MAX_AI_ROWS = 2;
+	/** AI 结论（成功 / 失败）在 HUD 上的停留时长，与气泡同一量级。 */
+	private static final long AI_HOLD_MS = 5000L;
+	/** HUD 上展示的回复字数上限（再长会被宽度裁掉，完整内容在运行面板里）。 */
+	private static final int AI_REPLY_CHARS = 24;
 	/** 单行最大像素宽度，超出按宽度截断。 */
 	private static final int MAX_WIDTH = 200;
 	private static final int LINE_HEIGHT = 10;
@@ -112,6 +119,7 @@ public final class ScriptHudElement implements HudElement {
 			addPathRows(rows);
 		}
 		addMonitorRows(rows, textRenderer);
+		addAiRows(rows, textRenderer);
 
 		// 按时间正序：旧消息在上，新消息贴着状态行往下排
 		List<Bubble> visible = bubbles.values().stream()
@@ -135,8 +143,7 @@ public final class ScriptHudElement implements HudElement {
 	 * 脚本「显示变量」只是登记名字，值在这里现读 VM。Minecraft 的 tick 与渲染同在
 	 * 主线程，和 {@link #pollSpeech} 取气泡是同一条路，不存在并发读写。</p>
 	 */
-	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {
-		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
+	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
 		if (monitors.isEmpty()) {
 			return;
 		}
@@ -149,6 +156,87 @@ public final class ScriptHudElement implements HudElement {
 					: name + " = " + stringify(vm.getVariable(name));
 			rows.add(new Row(Text.literal(textRenderer.trimToWidth(text, MAX_WIDTH)), 0xFFFFD54F));
 		}
+	}
+
+	/**
+	 * AI 会话状态。
+	 *
+	 * <p>三条原则：<b>有活动才出现</b>（空闲时不留一行「AI 空闲」占位）、
+	 * <b>回复只给前 12 字</b>（聊天原文可能很长，也可能涉及别人的话，完整内容留给面板）、
+	 * <b>失败必须给原因</b>——这是「为什么没回话」在游戏内唯一能自查的出口。</p>
+	 *
+	 * <p>未配置时只在「用过」之后提示一次，避免从没用过 AI 的人被一行红字长期打扰。</p>
+	 */
+	private void addAiRows(List<Row> rows, TextRenderer textRenderer) {
+		AiService.Snapshot snapshot = AiService.get().snapshot();
+		if (!snapshot.configured()) {
+			if (snapshot.attempted()) {
+				addAiRow(rows, textRenderer,
+						Text.translatable("hud.turbomc.ai.unconfigured"), 0xFFFF7F7F);
+			}
+			return;
+		}
+		long now = System.currentTimeMillis();
+		int shown = 0;
+		for (AiService.SessionStatus status : snapshot.sessions()) {
+			if (shown >= MAX_AI_ROWS) {
+				break;
+			}
+			String name = status.name();
+			switch (status.phase()) {
+				case WAITING -> {
+					addAiRow(rows, textRenderer, Text.translatable("hud.turbomc.ai.waiting", name,
+							seconds(status.pendingMs())), 0xFFFFD54F);
+					shown++;
+				}
+				case OK -> {
+					// 结论只停留几秒：常驻会把屏幕变成日志
+					if (now - status.updatedAt() > AI_HOLD_MS) {
+						continue;
+					}
+					// 头部走翻译键，尾巴直接拼字面量：回复内容不该经过格式串，
+					// 少一个 %s 就整段消失，这种坑排查成本远大于省下来的几行代码
+					String head = Text.translatable("hud.turbomc.ai.ok", name,
+							seconds(status.costMs())).getString();
+					String tail = status.reply().isEmpty()
+							? Text.translatable("hud.turbomc.ai.empty_reply").getString()
+							: preview(status.reply(), AI_REPLY_CHARS);
+					addAiRow(rows, textRenderer, Text.literal(head + "  " + tail), 0xFF55FF55);
+					shown++;
+				}
+				case FAILED -> {
+					if (now - status.updatedAt() > AI_HOLD_MS) {
+						continue;
+					}
+					addAiRow(rows, textRenderer, Text.translatable("hud.turbomc.ai.failed", name,
+							preview(status.error(), 20)), 0xFFFF5555);
+					shown++;
+				}
+				default -> {
+					// IDLE：还没发过请求，不占位
+				}
+			}
+		}
+	}
+
+	/** 统一按 {@link #MAX_WIDTH} 裁剪：行太宽会把整个 HUD 底板撑出屏幕。 */
+	private void addAiRow(List<Row> rows, TextRenderer textRenderer, Text text, int color) {
+		rows.add(new Row(Text.literal(textRenderer.trimToWidth(text.getString(), MAX_WIDTH)), color));
+	}
+
+	private static String seconds(long millis) {
+		return String.format("%.1f", millis / 1000.0);
+	}
+
+	/** 按码点截断，避免把 emoji 的代理对切成半个。 */
+	private static String preview(String text, int limit) {
+		if (text == null || text.isEmpty()) {
+			return "";
+		}
+		if (text.codePointCount(0, text.length()) <= limit) {
+			return text;
+		}
+		return text.substring(0, text.offsetByCodePoints(0, limit)) + "…";
 	}
 
 	/** 列表前 N 项，超出部分只报总数——整表刷在 HUD 上会挡住半个屏幕。 */
