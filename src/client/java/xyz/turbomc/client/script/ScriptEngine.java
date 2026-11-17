@@ -276,6 +276,28 @@ public final class ScriptEngine {
 	}
 
 	/**
+	 * 退出存档/服务器时的收尾。
+	 *
+	 * <p>总开关是持久化的：上一局按过 F6，配置里就留着 {@code true}，下一局进世界
+	 * 的第一帧会自动跑起来，玩家没有机会选择。是否在这里复位由配置
+	 * {@code disableEngineOnExit} 决定（默认开）。</p>
+	 *
+	 * <p>调用方必须保证在主线程执行：本方法会写配置文件，并与 tick 争用会话状态。</p>
+	 */
+	public void onWorldExit() {
+		TurboMCConfig config = TurboMCConfig.get();
+		if (!config.shouldDisableEngineOnExit() || !config.scriptEngineEnabled) {
+			return;
+		}
+		config.scriptEngineEnabled = false;
+		TurboMCConfig.save();
+		// 不等下一 tick 的 player==null 分支：断线回调这一帧世界引用可能还在，
+		// 立刻收尾才能保证按键、会话与聊天队列在同一帧内释放干净。
+		stop("退出世界");
+		LOG.info("[script] 已按配置关闭引擎，下次进入世界需按 F6 开启");
+	}
+
+	/**
 	 * 只有「运行中 + 未被停止全部 + VM 健康」才接受外部触发。
 	 *
 	 * <p>缺了这道判断，引擎关闭后按键与聊天仍会 {@code startHat}：线程被压进

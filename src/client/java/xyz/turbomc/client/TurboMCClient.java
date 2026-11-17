@@ -111,7 +111,7 @@ public class TurboMCClient implements ClientModInitializer {
 		//
 		// 已知隐患（本批次不处理）：与上面的 CHAT 回调一样，这里运行在网络线程，
 		// 会直接操作 Rhino 里的 runtime.threads。改主线程投递要重排时序与去重，
-		// 属独立批次，见 docs/ARCHITECTURE.md「聊天事件的双通道」。
+		// 属独立批次，见 docs/ARCHITECTURE.md「双通道：玩家聊天 ≠ 服务器系统消息」。
 		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
 			// 动作栏（血量、计时、经验提示）不是聊天，混进来会让帽子疯狂启动
 			if (overlay) {
@@ -166,6 +166,9 @@ public class TurboMCClient implements ClientModInitializer {
 					PathPlanner.reset();
 					// 一局结束就把性能汇总刷出来，不用等下一个 30 秒窗口
 					PerfProbe.flush();
+					// 总开关是持久化的，不在这里复位，下一局进世界会自动开跑。
+					// 内部会再走一次 stop()：上面的 abort / reset 都幂等，重复调用无副作用。
+					ScriptEngine.get().onWorldExit();
 				}));
 	}
 

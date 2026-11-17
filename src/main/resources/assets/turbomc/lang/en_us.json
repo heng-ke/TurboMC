@@ -25,6 +25,8 @@
   "config.turbomc.hud_corner.bottom_right": "Bottom Right",
   "config.turbomc.auto_respawn": "Auto respawn on death",
   "config.turbomc.auto_respawn.tooltip": "Respawn automatically when the death screen appears, no script needed. Sends one request only; does not return you to where you died.",
+  "config.turbomc.disable_on_exit": "Turn engine off when leaving a world",
+  "config.turbomc.disable_on_exit.tooltip": "When on, leaving a save or disconnecting from a server switches the master switch off, so the next world needs F6 again. When off, the previous state is remembered and scripts start as soon as you join.",
   "config.turbomc.show_path": "Show path when walking",
   "config.turbomc.show_path.tooltip": "Draws the A* route while the go-to block runs: cyan polyline, white current node, yellow end. Stays 3 seconds after finishing.",
   "config.turbomc.show_path_hud": "Show path state on HUD",

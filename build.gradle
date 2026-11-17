@@ -17,6 +17,14 @@ repositories {
 loom {
 	splitEnvironmentSourceSets()
 
+	runs {
+		// 开发环境默认没有 --username，Minecraft 会自造 "Player###" 随机名。
+		// 显式指定，保证每次启动的本地玩家名固定。
+		client {
+			programArgs "--username", "uzsdh"
+		}
+	}
+
 	mods {
 		"turbomc" {
 			sourceSet sourceSets.main

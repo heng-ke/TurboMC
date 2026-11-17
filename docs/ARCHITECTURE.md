@@ -61,6 +61,8 @@ TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/turbomc/im
 ```
 src/client/java/xyz/turbomc/client/
 ├── TurboMCClient.java          入口：按键、事件注册、tick 驱动
+├── mixin/
+│   └── KeyBindingMixin.java    脚本按下的键在读取端接管（原版每 tick 刷新会覆盖 setPressed）
 ├── config/
 │   ├── TurboMCConfig.java      配置数据与持久化
 │   ├── TurboMCConfigScreen.java 模组菜单（需 Cloth Config）
@@ -97,6 +99,8 @@ src/client/java/xyz/turbomc/client/
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
     │   └── *SmokeTest.java      纯 JVM 冒烟（不发布）
+    ├── view/
+    │   └── ViewSmoother.java    视角平滑：写入必须在渲染帧（tick 内写 50 ms 才一步，看得见台阶）
     ├── render/                  世界渲染出口
     │   └── PathRenderer.java    「走向」的路线：折线（已走金黄 / 未走青色）+ 当前节点框 + 终点框
     ├── sb3/
@@ -229,7 +233,7 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 `project.json` 里写作 `turbomc_log`、`turbomc_tap` 这样。
 
 **改扩展 id 等于改所有积木的名字**：已经导出的工程会变成未知积木，而且不报错，
-只是积木消失。要改就必须同时改 `Sb3Mapping` 的 61 条映射、`ScriptEngine` 里三个
+只是积木消失。要改就必须同时改 `Sb3Mapping` 的 62 条映射、`ScriptEngine` 里三个
 帽子 opcode、`vm-bootstrap.js` 的拼接前缀，以及所有既有的 `.sb3`。
 
 ### 11. 同一条聊天只触发一次
@@ -313,6 +317,13 @@ HUD 的文本要按「内容变化才重建」处理：距离每 tick 变，取�
 `fireChat` 都先过它。少了这道判断，引擎停止后按键与聊天仍会 `startHat`：线程被压进
 `runtime.threads` 而 `_step` 不再调用——只进不出，长时间挂机会持续涨内存。
 `stop()` 还必须清空 `cachedTriggerKeys`：键表留着，分发器仍会按旧键逐 tick 派发。
+
+**退出世界要复位持久开关**：`scriptEngineEnabled` 是写进配置的持久值，玩家上一局按过 F6
+它就一直是 `true`，下一局进世界的第一帧会直接 `start()` + `greenFlag()`——从玩家视角是
+「没按 F6 脚本自己跑了」。`ClientPlayConnectionEvents.DISCONNECT` 是退出存档与断开服务器
+唯一共用的收口点，回调已投递主线程，在那里调用 `ScriptEngine.onWorldExit()`：
+按 `disableEngineOnExit`（缺省视为开）复位并 `save()`，随后 `stop("退出世界")` 立即收尾，
+不等下一 tick 的 `player == null` 分支——断线那一帧世界引用可能还没清干净。
 
 ### 16. 「停止全部」要自己订阅 `PROJECT_STOP_ALL`
 
@@ -568,6 +579,10 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 3. 放进 `.minecraft/config/turbomc/imports/`
 4. 游戏内按 **F7** → 点「导入」→ 点圆点启用
 5. 按 **F6** 开引擎，HUD 出现 `● 包名` 即表示在跑
+   - 总开关是持久化的：配置里 `scriptEngineEnabled` 为 `true` 时，进世界第一帧就会
+     `start()` + `greenFlag()`，与有没有按 F6 无关
+   - 退出存档/断开服务器时默认复位为 `false`（配置 `disableEngineOnExit`，字段缺失视为
+     开），所以每局都要重新按 F6；关掉该项则保留上一局状态，进世界自动运行
 
 ## 九、日志关键字
 
@@ -586,6 +601,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `[script] VM 预热完成，进世界只需载入工程` | 标题界面的预热跑完了（正常应出现一次） |
 | `[script] VM 预热失败，进世界后再试：…` | 预热出错，但进世界时 `start()` 会再 init 一次 |
 | `[script] 检测到「停止全部」，已收尾，等待玩家按 F6 重新开启` | 脚本执行了停止全部，会话与按键已收尾 |
+| `[script] 已按配置关闭引擎，下次进入世界需按 F6 开启` | 退出世界时按 `disableEngineOnExit` 复位了持久开关 |
 | `[script] 按键「x」派发帽子但没起线程（工程里没有这个键的帽子？）` | 键名收集到了但 `startHats` 匹配不上 |
 | `[perf] 最近一窗（30000 ms）：…` | 每 30 秒一条的性能汇总（`vm.step` / `path.plan` / `hud.read` 等） |
 | `[perf] xxx 单次 N ms（≥33 ms…）` | 某一次调用超过两帧，卡顿就发生在这一下 |

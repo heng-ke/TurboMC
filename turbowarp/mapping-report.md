@@ -7,11 +7,11 @@
 
 | 项 | 数量 |
 |---|---|
-| 扩展积木 | 59 |
+| 扩展积木 | 62 |
 | 其中事件帽子（宿主触发） | 3 |
-| 需要动作实现 | 56 |
-| 映射表条目 | 113 |
-| 其中原生积木 | 54 |
+| 需要动作实现 | 59 |
+| 映射表条目 | 129 |
+| 其中原生积木 | 67 |
 
 ## 二、扩展积木
 
@@ -27,55 +27,58 @@
 | 8 | `turbomc_moveToward` | `action.move_toward` | COMMAND |
 | 9 | `turbomc_look` | `action.look` | COMMAND |
 | 10 | `turbomc_lookAt` | `action.look_at` | COMMAND |
-| 11 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
-| 12 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
-| 13 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
-| 14 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
-| 15 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
-| 16 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
-| 17 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
-| 18 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
-| 19 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
-| 20 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
-| 21 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
-| 22 | `turbomc_chat` | `action.chat` | COMMAND |
-| 23 | `turbomc_command` | `action.command` | COMMAND |
-| 24 | `turbomc_respawn` | `action.respawn` | COMMAND |
-| 25 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
-| 26 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
-| 27 | `turbomc_aiReply` | `ai.reply` | REPORTER |
-| 28 | `turbomc_aiReset` | `ai.reset` | COMMAND |
-| 29 | `turbomc_aiSystem` | `ai.system` | COMMAND |
-| 30 | `turbomc_health` | `world.health` | REPORTER |
-| 31 | `turbomc_food` | `world.food` | REPORTER |
-| 32 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
-| 33 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
-| 34 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
-| 35 | `turbomc_posX` | `world.pos_x` | REPORTER |
-| 36 | `turbomc_posY` | `world.pos_y` | REPORTER |
-| 37 | `turbomc_posZ` | `world.pos_z` | REPORTER |
-| 38 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
-| 39 | `turbomc_heldItem` | `world.held_item` | REPORTER |
-| 40 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
-| 41 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
-| 42 | `turbomc_dimension` | `world.dimension` | REPORTER |
-| 43 | `turbomc_biome` | `world.biome` | REPORTER |
-| 44 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
-| 45 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
-| 46 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
-| 47 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
-| 48 | `turbomc_blockAt` | `world.block_at` | REPORTER |
-| 49 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
-| 50 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
-| 51 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
-| 52 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
-| 53 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
-| 54 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
-| 55 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
-| 56 | `turbomc_itemCount` | `world.item_count` | REPORTER |
-| 57 | `turbomc_ping` | `world.ping` | REPORTER |
-| 58 | `turbomc_log` | `debug.log` | COMMAND |
-| 59 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
+| 11 | `turbomc_lookSmooth` | `action.look_smooth` | COMMAND |
+| 12 | `turbomc_lookAtSmooth` | `action.look_at_smooth` | COMMAND |
+| 13 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
+| 14 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
+| 15 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
+| 16 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
+| 17 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
+| 18 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
+| 19 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
+| 20 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
+| 21 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
+| 22 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
+| 23 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
+| 24 | `turbomc_chat` | `action.chat` | COMMAND |
+| 25 | `turbomc_command` | `action.command` | COMMAND |
+| 26 | `turbomc_respawn` | `action.respawn` | COMMAND |
+| 27 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
+| 28 | `turbomc_triggerChat` | `query.trigger_chat` | REPORTER |
+| 29 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
+| 30 | `turbomc_aiReply` | `ai.reply` | REPORTER |
+| 31 | `turbomc_aiReset` | `ai.reset` | COMMAND |
+| 32 | `turbomc_aiSystem` | `ai.system` | COMMAND |
+| 33 | `turbomc_health` | `world.health` | REPORTER |
+| 34 | `turbomc_food` | `world.food` | REPORTER |
+| 35 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
+| 36 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
+| 37 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
+| 38 | `turbomc_posX` | `world.pos_x` | REPORTER |
+| 39 | `turbomc_posY` | `world.pos_y` | REPORTER |
+| 40 | `turbomc_posZ` | `world.pos_z` | REPORTER |
+| 41 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
+| 42 | `turbomc_heldItem` | `world.held_item` | REPORTER |
+| 43 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
+| 44 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
+| 45 | `turbomc_dimension` | `world.dimension` | REPORTER |
+| 46 | `turbomc_biome` | `world.biome` | REPORTER |
+| 47 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
+| 48 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
+| 49 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
+| 50 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
+| 51 | `turbomc_blockAt` | `world.block_at` | REPORTER |
+| 52 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
+| 53 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
+| 54 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
+| 55 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
+| 56 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
+| 57 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
+| 58 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
+| 59 | `turbomc_itemCount` | `world.item_count` | REPORTER |
+| 60 | `turbomc_ping` | `world.ping` | REPORTER |
+| 61 | `turbomc_log` | `debug.log` | COMMAND |
+| 62 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
 
 ## 三、原生积木
 

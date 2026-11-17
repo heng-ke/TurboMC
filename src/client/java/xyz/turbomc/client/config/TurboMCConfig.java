@@ -39,7 +39,28 @@ public final class TurboMCConfig {
 	public HudCorner hudCorner = HudCorner.TOP_LEFT;
 
 	// ---- 脚本引擎 ----
+	/**
+	 * 脚本引擎总开关，由 F6 翻转。
+	 *
+	 * <p><b>这是持久值，不是会话值</b>：为 {@code true} 时，进入世界的第一帧
+	 * {@code ScriptEngine.tick()} 就会 {@code start()} + {@code greenFlag()}，与玩家是否
+	 * 按过 F6 无关。是否在退出世界时复位见 {@link #disableEngineOnExit}。</p>
+	 */
 	public boolean scriptEngineEnabled = false;
+
+	/**
+	 * 退出存档或服务器时是否自动关闭脚本引擎。
+	 *
+	 * <p>开关本身是持久化的：玩家上一局按过 F6，配置里就留着 {@code true}，
+	 * 下一局进世界的第一帧会自动跑起来——这不是玩家按了 F6，是他们没机会选择。
+	 * 打开本项后，退出世界时自动复位为 {@code false}，每局都要显式按 F6 才运行。</p>
+	 *
+	 * <p>用包装类型：旧配置文件没有这个字段时 Gson 会留 {@code null}，原始类型会
+	 * 静默变成 {@code false}，等于把「不自动关闭」强加给升级用户。{@code null}
+	 * 按「开」处理，与默认值一致。</p>
+	 */
+	public Boolean disableEngineOnExit = true;
+
 	/**
 	 * VM 每 tick 的脚本时间预算（毫秒）。
 	 *
@@ -165,6 +186,13 @@ public final class TurboMCConfig {
 	 */
 	public boolean showWaitInSeconds() {
 		return waitInSeconds == null || waitInSeconds;
+	}
+
+	/**
+	 * 退出世界时是否自动关闭脚本引擎；配置里缺该字段时按「是」处理。
+	 */
+	public boolean shouldDisableEngineOnExit() {
+		return disableEngineOnExit == null || disableEngineOnExit;
 	}
 
 

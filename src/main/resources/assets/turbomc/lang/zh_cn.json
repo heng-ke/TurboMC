@@ -25,6 +25,8 @@
   "config.turbomc.hud_corner.bottom_right": "右下",
   "config.turbomc.auto_respawn": "死亡后自动重生",
   "config.turbomc.auto_respawn.tooltip": "开启后死亡界面一出现就自动重生，不需要写脚本。只发一次重生请求，不会自动回到死亡点。",
+  "config.turbomc.disable_on_exit": "退出世界时关闭脚本引擎",
+  "config.turbomc.disable_on_exit.tooltip": "开启后，退出存档或断开服务器时自动把总开关关掉，下次进入世界要重新按 F6 才会运行。关闭此项则记住上一局的状态，进世界即自动开跑。",
   "config.turbomc.show_path": "显示「走向」的路线",
   "config.turbomc.show_path.tooltip": "开启后脚本执行「走向」时，把 A* 算出的路线画在世界里：青色折线、白色当前节点、黄色终点。结束后保留 3 秒。",
   "config.turbomc.show_path_hud": "在 HUD 显示寻路状态",

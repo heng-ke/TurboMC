@@ -51,6 +51,15 @@ public final class TurboMCConfigScreen {
 		// ---- 脚本引擎 ----
 		ConfigCategory script = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.script"));
 
+		// 放分类第一项：它决定「进世界后要不要手动按 F6」，是其它行为的前提
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.disable_on_exit"),
+						config.shouldDisableEngineOnExit())
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.disable_on_exit.tooltip"))
+				.setSaveConsumer(value -> config.disableEngineOnExit = value)
+				.build());
+
 		script.addEntry(entries
 				.startBooleanToggle(Text.translatable("config.turbomc.auto_respawn"), config.autoRespawn)
 				.setDefaultValue(false)
