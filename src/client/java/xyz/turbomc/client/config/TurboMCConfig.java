@@ -172,6 +172,15 @@ public final class TurboMCConfig {
 		public Integer timeoutMs = 30000;
 		public Integer historyTurns = 8;
 		public Integer maxConcurrent = 2;
+
+		// ---- HUD 展示（只影响界面，不参与请求） ----
+
+		/** 成功 / 失败结论在 HUD 上停留几秒。等待中的状态不受影响，一直显示到有结论。 */
+		public Integer hudHoldSeconds = 5;
+		/** HUD 上同时显示几个会话；多会话时按会话名排序取前几个。 */
+		public Integer hudMaxRows = 2;
+		/** HUD 上回复预览的字数上限；完整内容在运行面板里看。 */
+		public Integer hudReplyChars = 24;
 	}
 
 	private TurboMCConfig() {
@@ -253,6 +262,27 @@ public final class TurboMCConfig {
 				section.timeoutMs == null ? 30000 : Math.max(1000, Math.min(300000, section.timeoutMs)),
 				section.historyTurns == null ? 8 : Math.max(0, Math.min(50, section.historyTurns)),
 				section.maxConcurrent == null ? 2 : Math.max(1, Math.min(16, section.maxConcurrent)));
+	}
+
+	/** HUD 结论停留时长（毫秒）。缺字段按 5 秒——旧配置文件没有这一段。 */
+	public int aiHudHoldMs() {
+		Ai section = ai;
+		Integer value = section == null ? null : section.hudHoldSeconds;
+		return (value == null ? 5 : Math.max(1, Math.min(20, value))) * 1000;
+	}
+
+	/** HUD 上同时显示几个会话。 */
+	public int aiHudMaxRows() {
+		Ai section = ai;
+		Integer value = section == null ? null : section.hudMaxRows;
+		return value == null ? 2 : Math.max(1, Math.min(5, value));
+	}
+
+	/** HUD 上回复预览的字数上限。 */
+	public int aiHudReplyChars() {
+		Ai section = ai;
+		Integer value = section == null ? null : section.hudReplyChars;
+		return value == null ? 24 : Math.max(8, Math.min(64, value));
 	}
 
 	/** 配置界面用：需要写入时确保对象存在。 */

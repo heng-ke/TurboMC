@@ -39,12 +39,6 @@ public final class ScriptHudElement implements HudElement {
 	private static final long HOLD_MS = 5000L;
 	/** 同时最多显示几句。 */
 	private static final int MAX_BUBBLES = 3;
-	/** AI 状态行最多显示几条（多会话时只留前几个，按会话名排序，稳定不跳动）。 */
-	private static final int MAX_AI_ROWS = 2;
-	/** AI 结论（成功 / 失败）在 HUD 上的停留时长，与气泡同一量级。 */
-	private static final long AI_HOLD_MS = 5000L;
-	/** HUD 上展示的回复字数上限（再长会被宽度裁掉，完整内容在运行面板里）。 */
-	private static final int AI_REPLY_CHARS = 24;
 	/** 单行最大像素宽度，超出按宽度截断。 */
 	private static final int MAX_WIDTH = 200;
 	private static final int LINE_HEIGHT = 10;
@@ -162,7 +156,7 @@ public final class ScriptHudElement implements HudElement {
 	 * AI 会话状态。
 	 *
 	 * <p>三条原则：<b>有活动才出现</b>（空闲时不留一行「AI 空闲」占位）、
-	 * <b>回复只给前 12 字</b>（聊天原文可能很长，也可能涉及别人的话，完整内容留给面板）、
+	 * <b>回复只给开头若干字</b>（可配，聊天原文可能很长，也可能涉及别人的话，完整内容留给面板）、
 	 * <b>失败必须给原因</b>——这是「为什么没回话」在游戏内唯一能自查的出口。</p>
 	 *
 	 * <p>未配置时只在「用过」之后提示一次，避免从没用过 AI 的人被一行红字长期打扰。</p>
@@ -176,10 +170,14 @@ public final class ScriptHudElement implements HudElement {
 			}
 			return;
 		}
+		TurboMCConfig config = TurboMCConfig.get();
+		int maxRows = config.aiHudMaxRows();
+		int replyChars = config.aiHudReplyChars();
+		long holdMs = config.aiHudHoldMs();
 		long now = System.currentTimeMillis();
 		int shown = 0;
 		for (AiService.SessionStatus status : snapshot.sessions()) {
-			if (shown >= MAX_AI_ROWS) {
+			if (shown >= maxRows) {
 				break;
 			}
 			String name = status.name();
@@ -191,7 +189,7 @@ public final class ScriptHudElement implements HudElement {
 				}
 				case OK -> {
 					// 结论只停留几秒：常驻会把屏幕变成日志
-					if (now - status.updatedAt() > AI_HOLD_MS) {
+					if (now - status.updatedAt() > holdMs) {
 						continue;
 					}
 					// 头部走翻译键，尾巴直接拼字面量：回复内容不该经过格式串，
@@ -200,12 +198,12 @@ public final class ScriptHudElement implements HudElement {
 							seconds(status.costMs())).getString();
 					String tail = status.reply().isEmpty()
 							? Text.translatable("hud.turbomc.ai.empty_reply").getString()
-							: preview(status.reply(), AI_REPLY_CHARS);
+							: preview(status.reply(), replyChars);
 					addAiRow(rows, textRenderer, Text.literal(head + "  " + tail), 0xFF55FF55);
 					shown++;
 				}
 				case FAILED -> {
-					if (now - status.updatedAt() > AI_HOLD_MS) {
+					if (now - status.updatedAt() > holdMs) {
 						continue;
 					}
 					addAiRow(rows, textRenderer, Text.translatable("hud.turbomc.ai.failed", name,

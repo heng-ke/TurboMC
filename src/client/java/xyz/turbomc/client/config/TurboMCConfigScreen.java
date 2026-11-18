@@ -207,10 +207,35 @@ public final class TurboMCConfigScreen {
 
 		ai.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.ai.max_concurrent"),
-						section.maxConcurrent == null ? 2 : section.maxConcurrent, 1, 8)
+						section.maxConcurrent == null ? 2 : section.maxConcurrent, 1, 16)
 				.setDefaultValue(2)
 				.setTooltip(Text.translatable("config.turbomc.ai.max_concurrent.tooltip"))
 				.setSaveConsumer(value -> section.maxConcurrent = value)
+				.build());
+
+		// HUD 展示：只影响界面，不影响请求
+		ai.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_hold_seconds"),
+						section.hudHoldSeconds == null ? 5 : section.hudHoldSeconds, 1, 20)
+				.setDefaultValue(5)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_hold_seconds.tooltip"))
+				.setSaveConsumer(value -> section.hudHoldSeconds = value)
+				.build());
+
+		ai.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_max_rows"),
+						section.hudMaxRows == null ? 2 : section.hudMaxRows, 1, 5)
+				.setDefaultValue(2)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_max_rows.tooltip"))
+				.setSaveConsumer(value -> section.hudMaxRows = value)
+				.build());
+
+		ai.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_reply_chars"),
+						section.hudReplyChars == null ? 24 : section.hudReplyChars, 8, 64)
+				.setDefaultValue(24)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_reply_chars.tooltip"))
+				.setSaveConsumer(value -> section.hudReplyChars = value)
 				.build());
 
 		// ---- 按键权限 ----

@@ -52,6 +52,8 @@ public final class AiService {
 	 * 接口返回 400，整轮失败，原因还埋在响应体里。8000 字符对聊天场景绰绰有余。</p>
 	 */
 	private static final int MAX_PROMPT_CHARS = 8000;
+	/** 并发上限的硬顶：配置里再大也按这个算，避免脚本写错时开出几十个线程。 */
+	private static final int MAX_CONCURRENT_LIMIT = 16;
 
 	/**
 	 * 一次请求的配置快照。
@@ -146,6 +148,9 @@ public final class AiService {
 	private volatile boolean attempted;
 	private HttpClient http;
 	private ExecutorService executor;
+	/** 当前 client 的线程池大小与连接超时，用于判断配置变了要不要重建。 */
+	private int poolSize;
+	private int connectTimeoutMs;
 	private int counter;
 
 	private AiService() {
@@ -588,23 +593,43 @@ public final class AiService {
 		return content.getAsString();
 	}
 
+	/**
+	 * 取（必要时重建）HTTP 客户端。
+	 *
+	 * <p><b>为什么按配置重建</b>：{@code HttpClient} 的线程池与连接超时都只在 build 时生效。
+	 * 早先写死 2 线程，结果是「{@code maxConcurrent} 配到 8，实际并发仍然只有 2」——
+	 * 配置项骗人比没有配置项更糟。现在把「池大小 + 连接超时」作为重建条件：
+	 * 改了配置，下一次请求就换新的 client，不必重启客户端。</p>
+	 *
+	 * <p>旧 client 的线程池走 {@code shutdown()} 而不是 {@code shutdownNow()}：
+	 * 在途请求还挂在旧池上，硬砍会让脚本拿到「已取消」而不是它本来能拿到的回复。</p>
+	 */
 	private HttpClient client(Settings settings) {
+		int wantedPool = Math.max(1, Math.min(MAX_CONCURRENT_LIMIT, settings.maxConcurrent()));
+		int wantedConnect = Math.max(1000, settings.timeoutMs());
 		HttpClient current = http;
-		if (current != null) {
+		if (current != null && wantedPool == poolSize && wantedConnect == connectTimeoutMs) {
 			return current;
 		}
 		synchronized (this) {
-			if (http == null) {
-				executor = Executors.newFixedThreadPool(2, runnable -> {
-					Thread thread = new Thread(runnable, "turbomc-ai");
-					// 守护线程：冒烟测试结束时不该被它挂住
-					thread.setDaemon(true);
-					return thread;
-				});
-				http = HttpClient.newBuilder()
-						.connectTimeout(Duration.ofMillis(Math.max(1000, settings.timeoutMs())))
-						.executor(executor)
-						.build();
+			if (http != null && wantedPool == poolSize && wantedConnect == connectTimeoutMs) {
+				return http;
+			}
+			ExecutorService previous = executor;
+			executor = Executors.newFixedThreadPool(wantedPool, runnable -> {
+				Thread thread = new Thread(runnable, "turbomc-ai");
+				// 守护线程：冒烟测试结束时不该被它挂住
+				thread.setDaemon(true);
+				return thread;
+			});
+			http = HttpClient.newBuilder()
+					.connectTimeout(Duration.ofMillis(wantedConnect))
+					.executor(executor)
+					.build();
+			poolSize = wantedPool;
+			connectTimeoutMs = wantedConnect;
+			if (previous != null) {
+				previous.shutdown();
 			}
 			return http;
 		}

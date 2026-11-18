@@ -14,6 +14,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 对话的冒烟测试：不启动客户端，也不打真实接口。
@@ -89,6 +90,34 @@ public final class AiSmokeTest {
 		boolean busyOk = first != null && second == null;
 		awaitId(ai, first, 8000);
 		ok &= report("同会话不许并排", busyOk, "first=" + first + " second=" + second);
+
+		// 并发上限必须按配置生效：maxConcurrent=4 时四个不同会话应同时受理，第五个被拒。
+		// 这条守住的是「配置写了 4 却仍然只跑 2」那类假配置。
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 10000, 4, 4));
+		String[] parallel = new String[4];
+		for (int i = 0; i < parallel.length; i++) {
+			parallel[i] = ai.ask("s-par" + i, "slow");
+		}
+		String overflow = ai.ask("s-par-overflow", "slow");
+		boolean admitted = true;
+		for (String id : parallel) {
+			admitted &= id != null;
+		}
+		boolean inFlightOk = ai.snapshot().inFlight() == 4;
+		boolean concurrencyOk = admitted && overflow == null && inFlightOk;
+		ok &= report("并发上限按配置生效", concurrencyOk,
+				"受理=" + admitted + " 在途=" + ai.snapshot().inFlight() + " 溢出=" + overflow);
+		long parStart = System.currentTimeMillis();
+		for (String id : parallel) {
+			awaitId(ai, id, 12000);
+		}
+		long parCost = System.currentTimeMillis() - parStart;
+		// 断言「桩侧同时处理过 4 个请求」，而不是比耗时：耗时在高负载机器上会飘，
+		// 而同时处理数只取决于线程池大小——这才是「maxConcurrent 真的生效」的直接证据。
+		int peak = MAX_HANDLERS.get();
+		boolean parallelOk = peak >= 4;
+		ok &= report("四个请求真并行", parallelOk, "同时处理峰值 " + peak + "，总耗时 " + parCost + " ms");
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 3000, 4, 2));
 
 		// 未配置：baseUrl / model 为空时必须立刻失败，不发请求
 		ai.settingsProvider(() -> AiService.Settings.DISABLED);
@@ -224,7 +253,20 @@ public final class AiSmokeTest {
 
 	// ---- 本地桩 ----
 
+	private static final AtomicInteger HANDLERS = new AtomicInteger();
+	private static final AtomicInteger MAX_HANDLERS = new AtomicInteger();
+
 	private static void handle(HttpExchange exchange) throws IOException {
+		int now = HANDLERS.incrementAndGet();
+		MAX_HANDLERS.accumulateAndGet(now, Math::max);
+		try {
+			handleInner(exchange);
+		} finally {
+			HANDLERS.decrementAndGet();
+		}
+	}
+
+	private static void handleInner(HttpExchange exchange) throws IOException {
 		String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
 		String user = lastUserContent(body);
 
