@@ -16,6 +16,14 @@ import java.util.Locale;
  * 因此本类可以自由使用 Cloth Config 的 API。</p>
  */
 public final class TurboMCConfigScreen {
+	/**
+	 * 已保存密钥的占位显示。
+	 *
+	 * <p>固定 10 个圆点、与真实长度无关：不给「从字符数反推密钥长度」留口子。
+	 * 这是 Cloth Config 没有密码框时的折衷——已存的值不再回显，新输入的内容才会显示。</p>
+	 */
+	private static final String API_KEY_MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+
 	private TurboMCConfigScreen() {
 	}
 
@@ -138,11 +146,23 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		ai.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.ai.api_key.hint"))
+				.build());
+
+		// 遮码：已保存的密钥不回显。字段显示掩码串，用户输入新值才覆盖；
+		// 保持掩码或留空都视为「不改」，避免误触把密钥清空。
+		ai.addEntry(entries
 				.startStrField(Text.translatable("config.turbomc.ai.api_key"),
-						section.apiKey == null ? "" : section.apiKey)
+						section.apiKey == null || section.apiKey.isBlank() ? "" : API_KEY_MASK)
 				.setDefaultValue("")
 				.setTooltip(Text.translatable("config.turbomc.ai.api_key.tooltip"))
-				.setSaveConsumer(value -> section.apiKey = value == null ? "" : value.trim())
+				.setSaveConsumer(value -> {
+					String text = value == null ? "" : value.trim();
+					if (text.isEmpty() || text.equals(API_KEY_MASK)) {
+						return;
+					}
+					section.apiKey = "-".equals(text) ? "" : text;
+				})
 				.build());
 
 		ai.addEntry(entries

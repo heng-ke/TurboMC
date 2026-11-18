@@ -83,11 +83,8 @@ public final class ScriptHudElement implements HudElement {
 		pollSpeech(now);
 		expire(now);
 
-		boolean running = ScriptEngine.get().isRunning();
-		String packName = ScriptEngine.get().activeName();
-
 		TextRenderer textRenderer = client.textRenderer;
-		List<Row> rows = buildRows(textRenderer, running, packName);
+		List<Row> rows = buildRows(textRenderer);
 		PerfProbe.end("hud.read", perf);
 		if (rows.isEmpty()) {
 			return;
@@ -99,13 +96,24 @@ public final class ScriptHudElement implements HudElement {
 	private record Row(Text text, int color) {
 	}
 
-	private List<Row> buildRows(TextRenderer textRenderer, boolean running, String packName) {
+	private List<Row> buildRows(TextRenderer textRenderer) {
 		List<Row> rows = new ArrayList<>();
-		if (running) {
-			String name = packName.isEmpty() ? Text.translatable("hud.turbomc.no_pack").getString() : packName;
-			rows.add(new Row(Text.literal("\u25CF " + name), 0xFF55FF55));
-		} else {
-			rows.add(new Row(Text.translatable("hud.turbomc.disabled"), 0xFF9A9A9A));
+
+		// 状态行：不再只有「运行中 / 已停用」两态。载入失败、跑崩、停止全部各有各的说法，
+		// 而且原因直接跟在后面——HUD 是玩家在游戏内唯一的自查出口。
+		ScriptEngine engine = ScriptEngine.get();
+		String prefix = switch (engine.status()) {
+			case RUNNING -> "\u25CF ";
+			case LOAD_FAILED, RUNTIME_ERROR -> "\u2715 ";
+			default -> "\u25CB ";
+		};
+		rows.add(new Row(
+				Text.literal(textRenderer.trimToWidth(prefix + engine.hudLine(), MAX_WIDTH)),
+				engine.statusColor()));
+		// 故障原因单独一行：挤在状态行里会被宽度裁掉，等于没显示
+		String detail = engine.statusDetail().getString();
+		if (!detail.isEmpty()) {
+			rows.add(new Row(Text.literal(textRenderer.trimToWidth(detail, MAX_WIDTH)), engine.statusColor()));
 		}
 
 		TurboMCConfig config = TurboMCConfig.get();

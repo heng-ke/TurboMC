@@ -113,10 +113,10 @@ src/client/java/xyz/turbomc/client/
     ├── block/                   积木定义（只服务于「渲染成一行文本」）
     ├── node/                    积木树结构
     └── ui/                      界面
-        ├── ScriptListScreen.java   F7：包列表 + 展开脚本名
+        ├── ScriptListScreen.java   F7：包列表（按行滚动，可开 imports 目录）+ 展开脚本名
         ├── ScriptEditScreen.java   只读脚本树
-        ├── ScriptHudElement.java   HUD
-        ├── RuntimePanelScreen.java 运行状态
+        ├── ScriptHudElement.java   HUD（状态行 + 气泡 + 监视器 + AI）
+        ├── RuntimePanelScreen.java 运行状态（可滚动、可重新载入复位故障）
         └── NodeChain / ParamLabels / WaitUnit / TextInputScreen
 ```
 
@@ -539,8 +539,29 @@ Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `Scri
 
 ## 六、HUD
 
-基础两行：引擎状态（`● 包名` / `○ 已停用`）与脚本的「说 / 思考」气泡；
-寻路进行时在其下追加两行状态（目标 / 距离 / 节点进度 / 规划耗时），受 `showPathHud` 控制。
+HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定，三处界面共用
+（HUD / 包列表 / 运行面板），不各自判断 `isRunning()`：
+
+| 状态 | 前缀 | 颜色 | 触发 |
+|---|---|---|---|
+| `RUNNING` | `●` | 绿 | 工程已载入并在推进 |
+| `OFF` / `NO_PACK` / `NO_WORLD` / `OFF_WORLD_EXIT` | `○` | 灰 | 没开、没选包、还没进世界、退出世界自动关 |
+| `HALTED` | `○` | 黄 | 脚本执行了「停止全部」，需按 F6 |
+| `LOAD_FAILED` / `RUNTIME_ERROR` | `✕` | 红 | 工程读不出/启动失败、运行期异常 |
+
+状态之后跟具体原因（异常摘要，截断 60 字），故障时单独占一行：挤在状态行里会被宽度
+裁掉，等于没显示。这是「为什么脚本不动」在游戏内唯一的自查出口。
+
+**故障状态不被覆盖**：`stop(status, detail)` 内部拆成 `teardown()` + `setStatus()`，
+`teardown()` 只收尾（会话、按键表、聊天队列、AI 请求），不改状态。否则「载入失败」
+会在下一 tick 被 `!healthy` 分支改写成普通的「已停止」，原因丢掉。
+
+**VM 不反向依赖引擎**：`RhinoVm` 在 `catch (RuntimeException)` 里只把摘要存进
+`fatalError`，由 `ScriptEngine.tick()` 用 `takeFatalError()` 拉取——结构与
+`takeProjectStops()` 一致。让 VM 直接调引擎会形成双向依赖。
+
+状态行之下是脚本的「说 / 思考」气泡；寻路进行时再追加两行（目标 / 距离 / 节点进度 /
+规划耗时），受 `showPathHud` 控制。
 
 这里补的是一个真实缺口：`looks_say` / `looks_think` 是 scratch-vm 的原生积木，
 游戏内原本**没有任何渲染出口**——不补的话脚本永远无法对外表达。
@@ -609,9 +630,9 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 
 1. 在 TurboWarp 里加载 `turbowarp/turbomc-extension.js`（否则扩展积木显示为未知块）
 2. 编写脚本，导出为 `.sb3`
-3. 放进 `.minecraft/config/turbomc/imports/`
-4. 游戏内按 **F7** → 点「导入」→ 点圆点启用
-5. 按 **F6** 开引擎，HUD 出现 `● 包名` 即表示在跑
+3. 放进 `.minecraft/config/turbomc/imports/`（F7 界面里的「文件夹」可直接打开该目录）
+4. 游戏内按 **F7** → 点「导入/更新」→ 点圆点启用
+5. 按 **F6** 开引擎，HUD 出现 `● 运行中：包名` 即表示在跑
    - 总开关是持久化的：配置里 `scriptEngineEnabled` 为 `true` 时，进世界第一帧就会
      `start()` + `greenFlag()`，与有没有按 F6 无关
    - 退出存档/断开服务器时默认复位为 `false`（配置 `disableEngineOnExit`，字段缺失视为

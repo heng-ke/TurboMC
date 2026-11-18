@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.runtime.PerfProbe;
@@ -47,13 +48,21 @@ public final class PackStore {
 	private final Map<String, Cache> cache = new HashMap<>();
 	private Path directory;
 	private boolean loaded;
-	private String lastMessage = "";
+	/**
+	 * 最近一次操作的结果。
+	 *
+	 * <p>类型是 {@link Text} 而非字符串：这些消息要显示在界面上，走翻译键才能跟随语言，
+	 * 否则英文客户端会看到中文（历史问题，见批次 P2-11）。</p>
+	 */
+	private Text lastMessage = Text.empty();
+	/** 最近一次失败的具体原因（文件名 + 原因），没有失败时为空。 */
+	private Text lastDetail = Text.empty();
 
 	private record Cache(long modifiedAt, Sb3Importer.Result result) {
 	}
 
-	/** 一次同步的结果：新增几个包、覆盖几个包、启用中的包是否被覆盖。 */
-	public record SyncResult(int added, int updated, boolean activeUpdated) {
+	/** 一次同步的结果：新增几个包、覆盖几个包、启用中的包是否被覆盖、失败明细。 */
+	public record SyncResult(int added, int updated, boolean activeUpdated, List<Text> failures) {
 	}
 
 	private PackStore() {
@@ -75,8 +84,12 @@ public final class PackStore {
 		return FabricLoader.getInstance().getConfigDir().resolve("turbomc").resolve("imports");
 	}
 
-	public String lastMessage() {
+	public Text lastMessage() {
 		return lastMessage;
+	}
+
+	public Text lastDetail() {
+		return lastDetail;
 	}
 
 	public void load() {
@@ -88,7 +101,8 @@ public final class PackStore {
 		// 升级路径：老版本把 sb3 放在 imports/ 里当整体工程跑，从未建过包目录。
 		// 首次没有包时自动搬一次，免得用户以为「升级后脚本全没了」。
 		if (packs.isEmpty()) {
-			int added = importFrom(importsDir()) + importFrom(importsDir().resolve("imported"));
+			int added = importFrom(importsDir(), new ArrayList<>())
+					+ importFrom(importsDir().resolve("imported"), new ArrayList<>());
 			if (added > 0) {
 				LOG.info("[pack] 首次启动：从 imports 自动接管 {} 个 sb3", added);
 				reload();
@@ -202,22 +216,23 @@ public final class PackStore {
 	 */
 	public SyncResult importAll() {
 		load();
-		int added = importFrom(importsDir()) + importFrom(importsDir().resolve("imported"));
+		List<Text> failures = new ArrayList<>();
+		int added = importFrom(importsDir(), failures) + importFrom(importsDir().resolve("imported"), failures);
 		if (added > 0) {
 			// 新包要出现在列表里，顺便让索引回到一致状态
 			reload();
 		}
 		ScriptPack active = activePack();
 		int updated = 0;
-		int failed = 0;
 		boolean activeUpdated = false;
 		for (ScriptPack pack : packs()) {
 			Path source = pendingUpdate(pack);
 			if (source == null) {
 				continue;
 			}
-			if (!copyInto(pack, source)) {
-				failed++;
+			String failure = copyInto(pack, source);
+			if (failure != null) {
+				failures.add(Text.translatable("message.turbomc.pack.fail_item", pack.fileName, failure));
 				continue;
 			}
 			updated++;
@@ -225,36 +240,52 @@ public final class PackStore {
 				activeUpdated = true;
 			}
 		}
-		if (failed > 0) {
-			lastMessage = "更新失败 " + failed + " 个，详见日志";
+		// 失败原因必须在界面上可见：只说「详见日志」等于让玩家自己去翻 latest.log
+		if (!failures.isEmpty()) {
+			lastMessage = Text.translatable("message.turbomc.pack.sync_failed", added, updated, failures.size());
+			lastDetail = Text.translatable("message.turbomc.pack.fail_detail", failures.get(0));
 		} else if (added == 0 && updated == 0) {
-			lastMessage = "imports 里没有新增或更新的 sb3";
+			lastMessage = Text.translatable("message.turbomc.pack.sync_empty");
+			lastDetail = Text.empty();
 		} else {
-			lastMessage = "新增 " + added + " 个，更新 " + updated + " 个";
+			lastMessage = Text.translatable("message.turbomc.pack.sync", added, updated);
+			lastDetail = Text.empty();
 		}
-		LOG.info("[pack] 同步完成：新增 {}，更新 {}，失败 {}", added, updated, failed);
-		return new SyncResult(added, updated, activeUpdated);
+		LOG.info("[pack] 同步完成：新增 {}，更新 {}，失败 {}", added, updated, failures.size());
+		return new SyncResult(added, updated, activeUpdated, List.copyOf(failures));
 	}
 
-	private int importFrom(Path dir) {
+	private int importFrom(Path dir, List<Text> failures) {
 		if (!Files.isDirectory(dir)) {
 			return 0;
 		}
 		int added = 0;
 		try {
 			Files.createDirectories(directory());
-			try (Stream<Path> files = Files.list(dir)) {
-				for (Path path : files.filter(PackStore::isSb3).toList()) {
-					Path target = directory().resolve(path.getFileName().toString());
-					if (Files.exists(target)) {
-						continue;
-					}
+		} catch (IOException e) {
+			LOG.error("[pack] 创建包目录失败: {}", directory(), e);
+			failures.add(Text.translatable("message.turbomc.pack.fail_item", directory().toString(), reasonOf(e)));
+			return 0;
+		}
+		try (Stream<Path> files = Files.list(dir)) {
+			for (Path path : files.filter(PackStore::isSb3).toList()) {
+				Path target = directory().resolve(path.getFileName().toString());
+				if (Files.exists(target)) {
+					continue;
+				}
+				// 逐个文件捕获：一个文件坏掉不该让同目录其余文件也导不进来
+				try {
 					Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING);
 					added++;
+				} catch (IOException e) {
+					LOG.error("[pack] 导入失败: {}", path, e);
+					failures.add(Text.translatable("message.turbomc.pack.fail_item",
+							path.getFileName().toString(), reasonOf(e)));
 				}
 			}
 		} catch (IOException e) {
-			LOG.error("[pack] 导入失败: {}", dir, e);
+			LOG.error("[pack] 导入目录读取失败: {}", dir, e);
+			failures.add(Text.translatable("message.turbomc.pack.fail_item", dir.toString(), reasonOf(e)));
 		}
 		return added;
 	}
@@ -283,25 +314,32 @@ public final class PackStore {
 		}
 	}
 
-	/** 用 {@code imports/} 里的同名文件覆盖包。 */
-	private boolean copyInto(ScriptPack pack, Path source) {
+	/** 用 {@code imports/} 里的同名文件覆盖包。成功返回 {@code null}，失败返回原因。 */
+	private String copyInto(ScriptPack pack, Path source) {
 		try {
 			Files.copy(source, pathOf(pack), StandardCopyOption.REPLACE_EXISTING);
 		} catch (IOException e) {
 			LOG.error("[pack] 更新失败: {}", pack.fileName, e);
-			return false;
+			return reasonOf(e);
 		}
 		// 解析缓存以 mtime 为键：保留时间戳的复制不会改 mtime，必须显式失效
 		cache.remove(pack.fileName);
 		LOG.info("[pack] 已用 imports 的新版本覆盖 {}", pack.fileName);
-		return true;
+		return null;
+	}
+
+	/** 异常转一句人能读的原因；{@code getMessage()} 为空的异常不在少数。 */
+	private static String reasonOf(Throwable e) {
+		String message = e.getMessage();
+		return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
 	}
 
 	/** 重命名包（同时改文件名）。重名时自动加后缀。 */
 	public boolean rename(ScriptPack pack, String newName) {
 		String safe = newName == null ? "" : newName.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
 		if (safe.isEmpty()) {
-			lastMessage = "名称不能为空";
+			lastMessage = Text.translatable("message.turbomc.pack.name_empty");
+			lastDetail = Text.empty();
 			return false;
 		}
 		if (!safe.toLowerCase(Locale.ROOT).endsWith(".sb3")) {
@@ -313,7 +351,8 @@ public final class PackStore {
 			Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
 		} catch (IOException e) {
 			LOG.error("[pack] 重命名失败: {}", pack.fileName, e);
-			lastMessage = "重命名失败，详见日志";
+			lastMessage = Text.translatable("message.turbomc.pack.rename_failed", reasonOf(e));
+			lastDetail = Text.empty();
 			return false;
 		}
 		boolean wasActive = pack.enabled;
@@ -327,7 +366,8 @@ public final class PackStore {
 			}
 			writeIndex();
 		}
-		lastMessage = "已重命名为 " + to.getFileName();
+		lastMessage = Text.translatable("message.turbomc.pack.renamed", to.getFileName().toString());
+		lastDetail = Text.empty();
 		return true;
 	}
 
@@ -347,7 +387,8 @@ public final class PackStore {
 			Files.deleteIfExists(pathOf(pack));
 		} catch (IOException e) {
 			LOG.error("[pack] 删除失败: {}", pack.fileName, e);
-			lastMessage = "删除失败，详见日志";
+			lastMessage = Text.translatable("message.turbomc.pack.delete_failed", reasonOf(e));
+			lastDetail = Text.empty();
 			return false;
 		}
 		boolean wasActive = pack.enabled;
@@ -358,7 +399,8 @@ public final class PackStore {
 			packs.get(0).enabled = true;
 			writeIndex();
 		}
-		lastMessage = "已删除 " + pack.fileName;
+		lastMessage = Text.translatable("message.turbomc.pack.deleted", pack.fileName);
+		lastDetail = Text.empty();
 		return true;
 	}
 

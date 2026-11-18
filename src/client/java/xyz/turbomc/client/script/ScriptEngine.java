@@ -1,6 +1,7 @@
 package xyz.turbomc.client.script;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.config.TurboMCConfig;
@@ -50,6 +51,10 @@ public final class ScriptEngine {
 	private boolean running;
 	private boolean halted;
 	private boolean healthy = true;
+	/** 引擎处于哪个阶段。把「没开」「包坏了」「脚本跑崩了」在界面上区分开。 */
+	private Status status = Status.OFF;
+	/** 状态的具体原因（异常摘要等），没有则为空。 */
+	private Text detail = Text.empty();
 	/** 预热只尝试一次：失败就交给进世界后的 start() 再 init。 */
 	private boolean warmUpTried;
 	private int scriptCount;
@@ -77,10 +82,10 @@ public final class ScriptEngine {
 
 	public void tick(MinecraftClient client) {
 		if (!healthy) {
-			// 工程读不出来时 VM 不再推进：先把会话与按键收干净，否则角色会带着
-			// 上一份工程按下的前进键一直往前走；按键到期也要照常推进。
+			// 工程读不出来 / 脚本跑崩时 VM 不再推进：先把会话与按键收干净，否则角色会带着
+			// 上一份工程按下的前进键一直往前走。状态与原因保留，交给界面显示。
 			if (running) {
-				stop("工程不可用");
+				teardown();
 			}
 			ScriptKeys.tick();
 			return;
@@ -88,7 +93,10 @@ public final class ScriptEngine {
 		if (client.player == null || client.world == null) {
 			halted = false;
 			if (running) {
-				stop("离开世界");
+				stop(Status.NO_WORLD, null);
+			} else if (status != Status.OFF_WORLD_EXIT) {
+				// 标题界面也要把话说清楚：这不是「引擎坏了」，只是还没进世界
+				setStatus(Status.NO_WORLD, null);
 			}
 			// 标题界面/加载界面期间把 VM 备好，进世界就不用再付那 0.6 秒
 			tryWarmUp();
@@ -99,8 +107,8 @@ public final class ScriptEngine {
 		ScriptKeys.tick();
 		if (!config.masterEnabled || !config.scriptEngineEnabled) {
 			halted = false;
-			if (running) {
-				stop("已关闭");
+			if (running || status == Status.RUNNING || status == Status.HALTED) {
+				stop(Status.OFF, null);
 			}
 			return;
 		}
@@ -124,12 +132,25 @@ public final class ScriptEngine {
 		RhinoVm vm = RhinoVm.get();
 		vm.setBudgetMs(config.scratchVmBudgetMs);
 		vm.tick(client);
+
+		// 运行期异常被 VM 内部 catch 掉了，不主动拉取的话界面上只会显示「已停止」，
+		// 玩家无从知道是脚本自己的 bug。拉取即视为引擎不可用，等 F6 / 重新载入复位。
+		String fatal = vm.takeFatalError();
+		if (fatal != null) {
+			healthy = false;
+			setStatus(Status.RUNTIME_ERROR, Text.literal(shorten(fatal)));
+			teardown();
+			LOG.error("[script] 运行期异常，脚本已停用：{}", fatal);
+			return;
+		}
+
 		// 聊天队列按 tick 推进：超长回复被切成多段，段间要拉开间隔
 		GameActions.tickChat();
 		// 「停止全部」是 VM 内部事件，Java 侧只有主动查询才看得见。
 		// 不查的话线程已经清空，「走向」会话却还会按着前进键再走满 MAX_TICKS。
 		if (vm.takeProjectStops() > 0) {
 			halted = true;
+			setStatus(Status.HALTED, null);
 			PathFollower.abort("停止全部");
 			TurnSession.abort("停止全部");
 			ScriptKeys.releaseEveryKey();
@@ -188,6 +209,7 @@ public final class ScriptEngine {
 			scriptCount = 0;
 			activeName = "";
 			cachedTriggerKeys = Set.of();
+			setStatus(Status.NO_PACK, null);
 			LOG.info("[script] 没有启用的脚本包，等待导入");
 			return;
 		}
@@ -195,6 +217,7 @@ public final class ScriptEngine {
 		String json = PackStore.get().projectJson(pack);
 		if (json == null) {
 			healthy = false;
+			setStatus(Status.LOAD_FAILED, Text.translatable("status.turbomc.detail.project_unreadable"));
 			LOG.error("[script] 无法读取工程 {}，脚本已停用", pack.fileName);
 			return;
 		}
@@ -220,10 +243,12 @@ public final class ScriptEngine {
 			scriptCount = countScripts(pack);
 			cachedTriggerKeys = collectKeys(pack);
 			PerfProbe.end("project.start", perf);
+			setStatus(Status.RUNNING, null);
 			LOG.info("[script] 已启动 {}：{} 个脚本，线程 {} 个，监听按键 {} 个",
 					pack.fileName, scriptCount, vm.threadCount(), cachedTriggerKeys.size());
 		} catch (RuntimeException e) {
 			healthy = false;
+			setStatus(Status.LOAD_FAILED, Text.literal(shorten(e.toString())));
 			LOG.error("[script] 工程启动失败，脚本已停用", e);
 		}
 	}
@@ -255,7 +280,20 @@ public final class ScriptEngine {
 		return Set.copyOf(keys);
 	}
 
-	private void stop(String reason) {
+	/** 停止并记录原因：界面靠 {@link #statusText()} 区分「没开」「包坏了」「跑崩了」。 */
+	private void stop(Status status, Text detail) {
+		teardown();
+		setStatus(status, detail);
+		LOG.info("[script] 已停止：{}", statusText().getString());
+	}
+
+	/**
+	 * 只做收尾，不改状态。
+	 *
+	 * <p>故障分支（载入失败、运行期异常）在别处已经写好了状态，这里若再写一次就会把
+	 * 具体原因覆盖成「已停止」，等于把唯一的诊断信息抹掉。</p>
+	 */
+	private void teardown() {
 		running = false;
 		scriptCount = 0;
 		// 键表与包名一起清：分发器只看 triggerKeys()，留着旧键表就等于「引擎关了
@@ -263,8 +301,8 @@ public final class ScriptEngine {
 		activeName = "";
 		cachedTriggerKeys = Set.of();
 		// 移动会话要先停：它下一 tick 会把前进键按回去，光松键没用
-		PathFollower.abort(reason);
-		TurnSession.abort(reason);
+		PathFollower.abort("引擎停止");
+		TurnSession.abort("引擎停止");
 		// 规划器的静态字段抓着当前 ClientWorld；停止后不再规划，就该放开它
 		PathPlanner.reset();
 		// 必须在这里松手：脚本按住的键由 KeyBindingMixin 从读取端接管，只要表里还登记着
@@ -277,7 +315,6 @@ public final class ScriptEngine {
 		AiService.get().cancelAll();
 		ChatState.clear();
 		GameActions.clearChatQueue();
-		LOG.info("[script] 已停止：{}", reason);
 	}
 
 	/**
@@ -298,7 +335,7 @@ public final class ScriptEngine {
 		TurboMCConfig.save();
 		// 不等下一 tick 的 player==null 分支：断线回调这一帧世界引用可能还在，
 		// 立刻收尾才能保证按键、会话与聊天队列在同一帧内释放干净。
-		stop("退出世界");
+		stop(Status.OFF_WORLD_EXIT, null);
 		LOG.info("[script] 已按配置关闭引擎，下次进入世界需按 F6 开启");
 	}
 
@@ -405,11 +442,98 @@ public final class ScriptEngine {
 		return cachedTriggerKeys;
 	}
 
+	/**
+	 * 引擎阶段。
+	 *
+	 * <p>与「是否运行」分开：{@code running} 只说明 VM 在推进，状态还要说明<b>为什么</b>。
+	 * 之前这四种情况在界面上都是同一句「脚本已停用」，玩家无法判断是自己没开、
+	 * 包坏了，还是脚本把自己跑崩了。</p>
+	 */
+	public enum Status {
+		/** 总开关或引擎开关关闭。 */
+		OFF,
+		/** 退出世界时按配置自动关闭。 */
+		OFF_WORLD_EXIT,
+		/** 没有启用任何脚本包。 */
+		NO_PACK,
+		/** 还没有进入世界。 */
+		NO_WORLD,
+		/** 正在运行。 */
+		RUNNING,
+		/** 脚本里执行了「停止全部」，需按 F6 重开。 */
+		HALTED,
+		/** 工程读取 / 启动失败。 */
+		LOAD_FAILED,
+		/** 运行期异常，VM 已停止。 */
+		RUNTIME_ERROR
+	}
+
+	public Status status() {
+		return status;
+	}
+
+	/** 状态短语（不含具体原因）。 */
+	public Text statusText() {
+		return switch (status) {
+			case OFF -> Text.translatable("status.turbomc.off");
+			case OFF_WORLD_EXIT -> Text.translatable("status.turbomc.off_world_exit");
+			case NO_PACK -> Text.translatable("status.turbomc.no_pack");
+			case NO_WORLD -> Text.translatable("status.turbomc.no_world");
+			case RUNNING -> activeName.isEmpty()
+					? Text.translatable("status.turbomc.no_pack")
+					: Text.translatable("status.turbomc.running", activeName);
+			case HALTED -> Text.translatable("status.turbomc.halted");
+			case LOAD_FAILED -> Text.translatable("status.turbomc.load_failed");
+			case RUNTIME_ERROR -> Text.translatable("status.turbomc.runtime_error");
+		};
+	}
+
+	/** 具体原因：载入失败 / 运行期异常的摘要，正常时为空。 */
+	public Text statusDetail() {
+		return detail;
+	}
+
+	/** 拼成一行的状态（含原因），HUD 与列表页用。 */
+	public String hudLine() {
+		String base = statusText().getString();
+		String extra = detail.getString();
+		return extra.isEmpty() ? base : base + "：" + extra;
+	}
+
+	/** 状态颜色：绿=运行，黄=停止全部，红=故障，灰=未运行。 */
+	public int statusColor() {
+		return switch (status) {
+			case RUNNING -> 0xFF55FF55;
+			case HALTED -> 0xFFFFD54F;
+			case LOAD_FAILED, RUNTIME_ERROR -> 0xFFFF5555;
+			default -> 0xFF9A9A9A;
+		};
+	}
+
+	private void setStatus(Status status, Text detail) {
+		this.status = status;
+		this.detail = detail == null ? Text.empty() : detail;
+	}
+
+	/** 异常摘要：HUD 一行只放得下几十个字。 */
+	private static String shorten(String text) {
+		if (text == null) {
+			return "";
+		}
+		int limit = 60;
+		if (text.codePointCount(0, text.length()) <= limit) {
+			return text;
+		}
+		return text.substring(0, text.offsetByCodePoints(0, limit)) + "…";
+	}
+
 	/** 重启：下次 tick 重新载入当前启用的包。 */
 	public void restart() {
 		running = false;
 		halted = false;
 		healthy = true;
+		// 故障标志复位后，状态也要跟着复位：下一次 tick 会重新判定成运行中/无包
+		setStatus(Status.NO_WORLD, null);
 		// 换工程等于上一批线程全部消失，它们的移动会话与按键同样没人来收
 		PathFollower.abort("切换工程");
 		TurnSession.abort("切换工程");

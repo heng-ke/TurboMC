@@ -37,6 +37,14 @@ public final class RhinoVm {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/vm");
 	private static final RhinoVm INSTANCE = new RhinoVm();
 
+	/**
+	 * 最近一次「执行异常导致停止全部」的摘要。
+	 *
+	 * <p>VM 不反向依赖 {@code ScriptEngine}（那会形成双向依赖），改为与
+	 * {@code takeProjectStops()} 同样的拉取式：由引擎每 tick 取走并显示到界面。</p>
+	 */
+	private String fatalError;
+
 	private static final int LANGUAGE_VERSION_ES6 = 200;
 	private static final int DEFAULT_BUDGET_MS = 4;
 	private static final int PROMISE_ROUNDS = 200_000;
@@ -245,6 +253,18 @@ public final class RhinoVm {
 		return toInt(callQuietly("__tmcTakeProjectStops", new Object[0]), 0);
 	}
 
+	/**
+	 * 取走最近一次执行异常（导致 VM 停止全部）的摘要；没有则为 {@code null}。
+	 *
+	 * <p>只在 {@link #tick} 的异常分支里写入，读一次即清空——同一个原因不需要在界面上
+	 * 反复播报，引擎会把它转成持久的状态行。</p>
+	 */
+	public String takeFatalError() {
+		String value = fatalError;
+		fatalError = null;
+		return value;
+	}
+
 	/** 读取 Stage 上的全局变量，供宿主/测试观测脚本状态。 */
 	public Object getVariable(String name) {
 		return callQuietly("__tmcGetVar", new Object[]{name});
@@ -324,6 +344,8 @@ public final class RhinoVm {
 						budgetNanos / 1_000_000L, DEADLINE_SLACK);
 			}
 		} catch (RuntimeException e) {
+			// 摘要交给引擎显示：只写日志的话，玩家在游戏里只会看到「脚本已停止」
+			fatalError = e.toString();
 			LOG.error("[vm] 执行异常，已停止全部脚本", e);
 			stopAll(cx);
 		} finally {
