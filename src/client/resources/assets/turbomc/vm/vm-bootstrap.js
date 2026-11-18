@@ -155,6 +155,12 @@ var __tmcBooleanBlocks = 0;
 
 for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 	(function (block) {
+		// 没有 opcode 的条目不是积木：LABEL（面板分类标题）与 BUTTON 都属于这类。
+		// 这类条目若被当成积木包一层，会往 Scratch.__instance 上写一个名为 "undefined" 的方法，
+		// 真正的问题（后续有积木忘了写 opcode）反而被掩盖。
+		if (!block.opcode) {
+			return;
+		}
 		// 形状判断一律大小写无关：垫片与上游常量不一致，这里不能依赖其中一个具体写法
 		var shape = String(block.blockType || '').toLowerCase();
 		if (shape === 'hat') {

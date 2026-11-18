@@ -1558,7 +1558,11 @@ class TurboMC {
 				color1: '#6F45B0',
 				color2: '#5A3894',
 				blocks: [
-					// ---- 事件 ----
+					// 分类标题：LABEL 只在 TurboWarp 编辑器里渲染成加粗标题，
+					// 没有 opcode、不进 sb3、不参与执行。数组顺序即面板顺序。
+					// 运行时副本（assets/turbomc/vm/turbomc-extension.es5.js）刻意不带 LABEL——
+					// 内嵌的 vm.es5.js 不支持 label，带上会在注册阶段出问题。
+					{blockType: Scratch.BlockType.LABEL, text: T('Events', '事件')},
 					{
 						opcode: 'whenDamaged',
 						blockType: Scratch.BlockType.HAT,
@@ -1583,61 +1587,7 @@ class TurboMC {
 							MATCH: {type: Scratch.ArgumentType.STRING, defaultValue: ''}
 					}
 					},
-
-					// ---- 输入 ----
-					{
-						opcode: 'key',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('key [KEY] [STATE]', '按键 [KEY] [STATE]'),
-						arguments: {
-							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
-							STATE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'down',
-								menu: 'keyState'
-					}
-					}
-					},
-					{
-						opcode: 'click',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('click [BUTTON]', '点击 [BUTTON]'),
-						arguments: {
-							BUTTON: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'left',
-								menu: 'mouseButton'
-					}
-					}
-					},
-					{
-						opcode: 'mouseDown',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('mouse [BUTTON] pressed?', '按下鼠标 [BUTTON]?'),
-						arguments: {
-							BUTTON: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'left',
-								menu: 'mouseButton'
-					}
-					}
-					},
-					{
-						opcode: 'tap',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('tap [KEY] for [HOLD] ticks', '点按 [KEY] 按住 [HOLD] tick'),
-						arguments: {
-							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
-							HOLD: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
-					}
-					},
-					{
-						opcode: 'stop',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('stop moving', '停止移动')
-					},
-
-					// ---- 移动与视角 ----
+					{blockType: Scratch.BlockType.LABEL, text: T('Movement & view', '移动与视角')},
 					{
 						opcode: 'moveToward',
 						blockType: Scratch.BlockType.COMMAND,
@@ -1687,8 +1637,59 @@ class TurboMC {
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 					}
 					},
-
-					// ---- 方块与挖掘 ----
+					{
+						opcode: 'stop',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('stop moving', '停止移动')
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('Input', '输入')},
+					{
+						opcode: 'key',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('key [KEY] [STATE]', '按键 [KEY] [STATE]'),
+						arguments: {
+							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
+							STATE: {
+								type: Scratch.ArgumentType.STRING,
+								defaultValue: 'down',
+								menu: 'keyState'
+					}
+					}
+					},
+					{
+						opcode: 'click',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('click [BUTTON]', '点击 [BUTTON]'),
+						arguments: {
+							BUTTON: {
+								type: Scratch.ArgumentType.STRING,
+								defaultValue: 'left',
+								menu: 'mouseButton'
+					}
+					}
+					},
+					{
+						opcode: 'tap',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('tap [KEY] for [HOLD] ticks', '点按 [KEY] 按住 [HOLD] tick'),
+						arguments: {
+							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
+							HOLD: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
+					}
+					},
+					{
+						opcode: 'mouseDown',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('mouse [BUTTON] pressed?', '按下鼠标 [BUTTON]?'),
+						arguments: {
+							BUTTON: {
+								type: Scratch.ArgumentType.STRING,
+								defaultValue: 'left',
+								menu: 'mouseButton'
+					}
+					}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('Mining', '挖掘')},
 					{
 						opcode: 'breakWait',
 						blockType: Scratch.BlockType.COMMAND,
@@ -1704,7 +1705,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('mining progress', '挖掘进度')
 					},
-					// ---- 容器交互 ----
+					{blockType: Scratch.BlockType.LABEL, text: T('Containers', '容器')},
 					{
 						opcode: 'openContainerAt',
 						blockType: Scratch.BlockType.COMMAND,
@@ -1770,81 +1771,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('close container', '关闭界面')
 					},
-
-					// ---- 交互与通讯 ----
-					{
-						opcode: 'chat',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
-						arguments: {
-							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
-					}
-					},
-					{
-						opcode: 'command',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
-						arguments: {
-							COMMAND: {type: Scratch.ArgumentType.STRING, defaultValue: 'time set day'}
-					}
-					},
-					{
-						opcode: 'respawn',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('respawn', '重生')
-					},
-
-					// ---- AI 对话 ----
-					// 输入必须来自「最近的聊天」：whenChat 帽子只过滤关键词，文本不进脚本
-					{
-						opcode: 'lastChat',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('last chat message', '最近的聊天')
-					},
-					// 触发本次脚本的那条聊天。与「最近的聊天」的差别只有一处：
-					// 后者是「全局最新」，被后到的消息覆盖；前者跟着线程走，永不串台。
-					// 不是聊天触发的线程（绿旗、广播、按键）拿到空串。
-					{
-						opcode: 'triggerChat',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('chat that triggered me', '触发我的聊天')
-					},
-					{
-						opcode: 'aiAsk',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('ask session [SESSION] to reply to [TEXT]', '让会话 [SESSION] 回应 [TEXT]'),
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
-							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
-					}
-					},
-					{
-						opcode: 'aiReply',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('last reply of session [SESSION]', '会话 [SESSION] 的最后回复'),
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-					}
-					},
-					{
-						opcode: 'aiReset',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-					}
-					},
-					{
-						opcode: 'aiSystem',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('set system prompt of session [SESSION] to [TEXT]', '设置会话 [SESSION] 的系统提示为 [TEXT]'),
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
-							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
-					}
-					},
-
-					// ---- 查询 · 玩家 ----
+					{blockType: Scratch.BlockType.LABEL, text: T('Player', '玩家状态')},
 					{
 						opcode: 'health',
 						blockType: Scratch.BlockType.REPORTER,
@@ -1859,11 +1786,6 @@ class TurboMC {
 						opcode: 'xpLevel',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('xp level', '经验等级')
-					},
-					{
-						opcode: 'inventoryFull',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('inventory full?', '背包已满?')
 					},
 					{
 						opcode: 'onGround',
@@ -1900,8 +1822,29 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('held durability %', '手持耐久百分比')
 					},
-
-					// ---- 查询 · 世界 ----
+					{
+						opcode: 'inventoryFull',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('inventory full?', '背包已满?')
+					},
+					{
+						opcode: 'itemCount',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
+						arguments: {
+							ITEM: {
+								type: Scratch.ArgumentType.STRING,
+								defaultValue: 'minecraft:stone',
+								menu: 'itemId'
+							}
+					}
+					},
+					{
+						opcode: 'respawn',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('respawn', '重生')
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('World', '世界查询')},
 					{
 						opcode: 'isDay',
 						blockType: Scratch.BlockType.BOOLEAN,
@@ -1952,8 +1895,27 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('block at crosshair', '准星所指方块')
 					},
-
-					// ---- 查询 · 实体 ----
+					{
+						opcode: 'aimX',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('aimed block x', '准星方块 X')
+					},
+					{
+						opcode: 'aimY',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('aimed block y', '准星方块 Y')
+					},
+					{
+						opcode: 'aimZ',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('aimed block z', '准星方块 Z')
+					},
+					{
+						opcode: 'ping',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('server ping (ms)', '服务端延迟(ms)')
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('Entities', '实体查询')},
 					{
 						opcode: 'nearestEntity',
 						blockType: Scratch.BlockType.REPORTER,
@@ -2026,24 +1988,28 @@ class TurboMC {
 							}
 					}
 					},
-
-					// ---- 运算与工具 ----
+					{blockType: Scratch.BlockType.LABEL, text: T('Display', '显示与日志')},
+					// 只画不记：坐标由用户在脚本里自己算，积木不保存"选区"概念，
+					// 因此也没有"当前选区"可查。同屏最多保留 128 个框，超出挤掉最旧的。
 					{
-						opcode: 'itemCount',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
+						opcode: 'drawFrame',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]',
+							'从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'),
 						arguments: {
-							ITEM: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:stone',
-								menu: 'itemId'
-							}
-					}
+							X1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							Y1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
+							Z1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							X2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10},
+							Y2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 70},
+							Z2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10},
+							COLOR: {type: Scratch.ArgumentType.COLOR, defaultValue: '#33ff66'}
+						}
 					},
 					{
-						opcode: 'ping',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('server ping (ms)', '服务端延迟(ms)')
+						opcode: 'clearFrames',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('clear all frames', '清除所有画框')
 					},
 					{
 						opcode: 'log',
@@ -2051,6 +2017,71 @@ class TurboMC {
 						text: T('log [TEXT]', '输出日志 [TEXT]'),
 						arguments: {
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
+					}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('Chat & AI', '聊天与 AI')},
+					{
+						opcode: 'chat',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
+						arguments: {
+							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
+					}
+					},
+					{
+						opcode: 'command',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
+						arguments: {
+							COMMAND: {type: Scratch.ArgumentType.STRING, defaultValue: 'time set day'}
+					}
+					},
+					// 输入必须来自「最近的聊天」：whenChat 帽子只过滤关键词，文本不进脚本
+					{
+						opcode: 'lastChat',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('last chat message', '最近的聊天')
+					},
+					// 触发本次脚本的那条聊天。与「最近的聊天」的差别只有一处：
+					// 后者是「全局最新」，被后到的消息覆盖；前者跟着线程走，永不串台。
+					// 不是聊天触发的线程（绿旗、广播、按键）拿到空串。
+					{
+						opcode: 'triggerChat',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('chat that triggered me', '触发我的聊天')
+					},
+					{
+						opcode: 'aiAsk',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('ask session [SESSION] to reply to [TEXT]', '让会话 [SESSION] 回应 [TEXT]'),
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
+							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
+					}
+					},
+					{
+						opcode: 'aiReply',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('last reply of session [SESSION]', '会话 [SESSION] 的最后回复'),
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
+					}
+					},
+					{
+						opcode: 'aiReset',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
+					}
+					},
+					{
+						opcode: 'aiSystem',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('set system prompt of session [SESSION] to [TEXT]', '设置会话 [SESSION] 的系统提示为 [TEXT]'),
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
+							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
 					}
 					},
 ],
@@ -2453,6 +2484,9 @@ class TurboMC {
 		blockBelow() { return 'minecraft:grass_block'; }
 		blockAt(args) { this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z); return 'minecraft:air'; }
 		frontBlock() { return 'minecraft:air'; }
+		aimX() { return 0; }
+		aimY() { return 64; }
+		aimZ() { return 0; }
 
 		// ---- 查询 · 实体 ----
 		nearestEntity() { return -1; }
@@ -2461,6 +2495,14 @@ class TurboMC {
 		nearestEntityZ() { return 0; }
 		nearestEntityName() { return ''; }
 		entityCount() { return 0; }
+
+		// ---- 画框 ----
+		// 浏览器里没有世界可画：只打日志。真正绘制在模组侧的 FrameOverlay。
+		drawFrame(args) {
+			this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1
+				+ ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR);
+		}
+		clearFrames() { this.preview('clearFrames'); }
 
 		// ---- 运算与工具 ----
 		itemCount() { return 0; }

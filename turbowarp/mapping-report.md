@@ -7,10 +7,10 @@
 
 | 项 | 数量 |
 |---|---|
-| 扩展积木 | 62 |
+| 扩展积木 | 67 |
 | 其中事件帽子（宿主触发） | 3 |
-| 需要动作实现 | 59 |
-| 映射表条目 | 129 |
+| 需要动作实现 | 64 |
+| 映射表条目 | 134 |
 | 其中原生积木 | 67 |
 
 ## 二、扩展积木
@@ -20,65 +20,70 @@
 | 1 | `turbomc_whenDamaged` | `event.damage` | HAT |
 | 2 | `turbomc_whenDeath` | `event.death` | HAT |
 | 3 | `turbomc_whenChat` | `event.chat` | HAT |
-| 4 | `turbomc_key` | `action.key` | COMMAND |
-| 5 | `turbomc_click` | `action.click` | COMMAND |
-| 6 | `turbomc_tap` | `action.tap` | COMMAND |
-| 7 | `turbomc_stop` | `action.stop` | COMMAND |
-| 8 | `turbomc_moveToward` | `action.move_toward` | COMMAND |
-| 9 | `turbomc_look` | `action.look` | COMMAND |
-| 10 | `turbomc_lookAt` | `action.look_at` | COMMAND |
-| 11 | `turbomc_lookSmooth` | `action.look_smooth` | COMMAND |
-| 12 | `turbomc_lookAtSmooth` | `action.look_at_smooth` | COMMAND |
-| 13 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
-| 14 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
-| 15 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
-| 16 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
-| 17 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
-| 18 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
-| 19 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
-| 20 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
-| 21 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
-| 22 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
-| 23 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
-| 24 | `turbomc_chat` | `action.chat` | COMMAND |
-| 25 | `turbomc_command` | `action.command` | COMMAND |
-| 26 | `turbomc_respawn` | `action.respawn` | COMMAND |
-| 27 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
-| 28 | `turbomc_triggerChat` | `query.trigger_chat` | REPORTER |
-| 29 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
-| 30 | `turbomc_aiReply` | `ai.reply` | REPORTER |
-| 31 | `turbomc_aiReset` | `ai.reset` | COMMAND |
-| 32 | `turbomc_aiSystem` | `ai.system` | COMMAND |
-| 33 | `turbomc_health` | `world.health` | REPORTER |
-| 34 | `turbomc_food` | `world.food` | REPORTER |
-| 35 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
-| 36 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
-| 37 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
-| 38 | `turbomc_posX` | `world.pos_x` | REPORTER |
-| 39 | `turbomc_posY` | `world.pos_y` | REPORTER |
-| 40 | `turbomc_posZ` | `world.pos_z` | REPORTER |
-| 41 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
-| 42 | `turbomc_heldItem` | `world.held_item` | REPORTER |
-| 43 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
-| 44 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
-| 45 | `turbomc_dimension` | `world.dimension` | REPORTER |
-| 46 | `turbomc_biome` | `world.biome` | REPORTER |
-| 47 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
-| 48 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
-| 49 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
-| 50 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
-| 51 | `turbomc_blockAt` | `world.block_at` | REPORTER |
-| 52 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
-| 53 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
-| 54 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
-| 55 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
-| 56 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
-| 57 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
-| 58 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
-| 59 | `turbomc_itemCount` | `world.item_count` | REPORTER |
-| 60 | `turbomc_ping` | `world.ping` | REPORTER |
-| 61 | `turbomc_log` | `debug.log` | COMMAND |
-| 62 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
+| 4 | `turbomc_moveToward` | `action.move_toward` | COMMAND |
+| 5 | `turbomc_look` | `action.look` | COMMAND |
+| 6 | `turbomc_lookAt` | `action.look_at` | COMMAND |
+| 7 | `turbomc_lookSmooth` | `action.look_smooth` | COMMAND |
+| 8 | `turbomc_lookAtSmooth` | `action.look_at_smooth` | COMMAND |
+| 9 | `turbomc_stop` | `action.stop` | COMMAND |
+| 10 | `turbomc_key` | `action.key` | COMMAND |
+| 11 | `turbomc_click` | `action.click` | COMMAND |
+| 12 | `turbomc_tap` | `action.tap` | COMMAND |
+| 13 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
+| 14 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
+| 15 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
+| 16 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
+| 17 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
+| 18 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
+| 19 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
+| 20 | `turbomc_slotAmount` | `world.slot_amount` | REPORTER |
+| 21 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
+| 22 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
+| 23 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
+| 24 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
+| 25 | `turbomc_health` | `world.health` | REPORTER |
+| 26 | `turbomc_food` | `world.food` | REPORTER |
+| 27 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
+| 28 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
+| 29 | `turbomc_posX` | `world.pos_x` | REPORTER |
+| 30 | `turbomc_posY` | `world.pos_y` | REPORTER |
+| 31 | `turbomc_posZ` | `world.pos_z` | REPORTER |
+| 32 | `turbomc_selectedSlot` | `world.selected_slot` | REPORTER |
+| 33 | `turbomc_heldItem` | `world.held_item` | REPORTER |
+| 34 | `turbomc_heldDurability` | `world.held_durability` | REPORTER |
+| 35 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
+| 36 | `turbomc_itemCount` | `world.item_count` | REPORTER |
+| 37 | `turbomc_respawn` | `action.respawn` | COMMAND |
+| 38 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
+| 39 | `turbomc_dimension` | `world.dimension` | REPORTER |
+| 40 | `turbomc_biome` | `world.biome` | REPORTER |
+| 41 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
+| 42 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
+| 43 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
+| 44 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
+| 45 | `turbomc_blockAt` | `world.block_at` | REPORTER |
+| 46 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
+| 47 | `turbomc_aimX` | `world.aim_x` | REPORTER |
+| 48 | `turbomc_aimY` | `world.aim_y` | REPORTER |
+| 49 | `turbomc_aimZ` | `world.aim_z` | REPORTER |
+| 50 | `turbomc_ping` | `world.ping` | REPORTER |
+| 51 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
+| 52 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
+| 53 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
+| 54 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
+| 55 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
+| 56 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
+| 57 | `turbomc_drawFrame` | `region.draw_frame` | COMMAND |
+| 58 | `turbomc_clearFrames` | `region.clear_frames` | COMMAND |
+| 59 | `turbomc_log` | `debug.log` | COMMAND |
+| 60 | `turbomc_chat` | `action.chat` | COMMAND |
+| 61 | `turbomc_command` | `action.command` | COMMAND |
+| 62 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
+| 63 | `turbomc_triggerChat` | `query.trigger_chat` | REPORTER |
+| 64 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
+| 65 | `turbomc_aiReply` | `ai.reply` | REPORTER |
+| 66 | `turbomc_aiReset` | `ai.reset` | COMMAND |
+| 67 | `turbomc_aiSystem` | `ai.system` | COMMAND |
 
 ## 三、原生积木
 
@@ -156,6 +161,10 @@
 
 ## 四、维护提示
 
+- **面板分类靠 `Scratch.BlockType.LABEL`**：标题块只有 `blockType` 与 `text`，没有 opcode，
+  不进本表、不进 `.sb3`、不参与执行。数组顺序就是面板顺序，改顺序不影响任何已导出工程。
+  运行时副本（`assets/turbomc/vm/turbomc-extension.es5.js`）刻意不带标题——内嵌的
+  `vm.es5.js` 不支持 label；`vm-bootstrap.js` 也对无 opcode 的条目直接跳过。
 - 一个内部类型只能对应一个 opcode。曾把「将变量增加」与「将变量设为」映射到同一类型，
   结果查看器把「增加 1」显示成「设为 1」——这类错误不报错，只是语义偏移。
 - 扩展 id 是 `turbomc`，所以 opcode 前缀是 `turbomc_`；改 id 等于让所有已导出工程失效。

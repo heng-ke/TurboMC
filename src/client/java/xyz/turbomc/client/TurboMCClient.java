@@ -28,6 +28,7 @@ import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.TriggerDispatcher;
+import xyz.turbomc.client.script.render.FrameOverlay;
 import xyz.turbomc.client.script.render.PathRenderer;
 import xyz.turbomc.client.script.ui.ScriptHudElement;
 import xyz.turbomc.client.script.ui.ScriptListScreen;
@@ -144,6 +145,10 @@ public class TurboMCClient implements ClientModInitializer {
 		// 「走向」的路线显示：实体之后、半透明之前，线与方块遮挡关系正常
 		WorldRenderEvents.AFTER_ENTITIES.register(PathRenderer::render);
 
+		// 「画框」的线框：同一个事件、独立监听器。分开注册是为了互不牵连——
+		// 任一方渲染抛异常时，另一方的显示不受影响。
+		WorldRenderEvents.AFTER_ENTITIES.register(FrameOverlay::render);
+
 		// 视角平滑：写入必须发生在渲染帧上。原版第一人称的 getYaw(float) 不做 tick 内插值，
 		// 在 tick 里每 50 ms 写一次就是每 3 帧跳一格的台阶（见 ViewSmoother 的类注释）。
 		// START_MAIN 是每帧能拿到的最早时机；写入下一帧才被相机读到，固定 1 帧延迟。
@@ -160,6 +165,8 @@ public class TurboMCClient implements ClientModInitializer {
 				client.execute(() -> {
 					PathFollower.abort("断开连接");
 					TurnSession.abort("断开连接");
+					// 框画在旧世界的坐标上，换存档后不该跟过来
+					FrameOverlay.clear();
 					// 视角控制也要收：引擎可能没在跑，光 abort 会话不覆盖 MANUAL 那一路
 					ViewSmoother.clear("断开连接");
 					ScriptKeys.releaseEveryKey();

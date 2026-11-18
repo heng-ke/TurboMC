@@ -51,6 +51,7 @@ public final class NativeRegistry {
 		}
 		bootstrapped = true;
 		GameActions.registerAll();
+		FrameActions.registerAll();
 		PathActions.registerAll();
 		TurnActions.registerAll();
 		ContainerActions.registerAll();

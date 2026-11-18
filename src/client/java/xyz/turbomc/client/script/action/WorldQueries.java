@@ -14,6 +14,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.runtime.ChatState;
@@ -41,6 +42,9 @@ public final class WorldQueries {
 
 	public static void registerAll() {
 		NativeRegistry.function("world.block_in_front", WorldQueries::blockInFront);
+		NativeRegistry.function("world.aim_x", WorldQueries::aimX);
+		NativeRegistry.function("world.aim_y", WorldQueries::aimY);
+		NativeRegistry.function("world.aim_z", WorldQueries::aimZ);
 		NativeRegistry.function("world.health", WorldQueries::health);
 		NativeRegistry.function("world.food", WorldQueries::food);
 		NativeRegistry.function("world.pos_x", WorldQueries::posX);
@@ -127,6 +131,43 @@ public final class WorldQueries {
 			return blockHit.getBlockPos().toImmutable();
 		}
 		return null;
+	}
+
+	/**
+	 * 准星指向的方块坐标（积木「准星方块 X/Y/Z」的数据源）。
+	 *
+	 * <p><b>为什么要有兜底</b>：空气没有碰撞箱，射线不会「命中空气」，所以朝天空看时
+	 * 游戏给的是 {@link HitResult.Type#MISS}，压根没有方块坐标——这不是「瞄准了一个空气格」。
+	 * 若此时返回 {@code 0,0,0}，脚本会把框画到世界原点，比没有值更难排查。
+	 * 因此这里退化为「眼睛沿视线走到触及距离终点所在的那一格」：永远有坐标，
+	 * 且与玩家看到的准星方向一致。注意该格可能位于空中，要判断「是否真的瞄到方块」
+	 * 请另用「前方有方块？」。</p>
+	 */
+	private static BlockPos aimBlockPos(MinecraftClient client) {
+		BlockPos hit = crosshairBlockPos(client);
+		if (hit != null) {
+			return hit;
+		}
+		if (client.player == null) {
+			return BlockPos.ORIGIN;
+		}
+		// 触及距离取自玩家属性（生存 4.5、创造 5，可被属性修饰符改动），不要写死常量
+		double reach = client.player.getBlockInteractionRange();
+		Vec3d eye = client.player.getEyePos();
+		Vec3d direction = client.player.getRotationVec(1.0f);
+		return BlockPos.ofFloored(eye.add(direction.multiply(reach)));
+	}
+
+	private static Object aimX(ScriptContext ctx, Object[] args) {
+		return (double) aimBlockPos(client(ctx)).getX();
+	}
+
+	private static Object aimY(ScriptContext ctx, Object[] args) {
+		return (double) aimBlockPos(client(ctx)).getY();
+	}
+
+	private static Object aimZ(ScriptContext ctx, Object[] args) {
+		return (double) aimBlockPos(client(ctx)).getZ();
 	}
 
 	/**

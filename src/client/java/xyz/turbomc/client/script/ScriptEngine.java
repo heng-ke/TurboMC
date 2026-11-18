@@ -20,6 +20,7 @@ import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
+import xyz.turbomc.client.script.render.FrameOverlay;
 import xyz.turbomc.client.script.store.PackStore;
 import xyz.turbomc.client.script.store.ScriptDefinition;
 import xyz.turbomc.client.script.store.ScriptPack;
@@ -315,6 +316,9 @@ public final class ScriptEngine {
 		AiService.get().cancelAll();
 		ChatState.clear();
 		GameActions.clearChatQueue();
+		// 引擎停了就没人能再清除这些框：留着等于世界里多出一批谁也消不掉的线框，
+		// 只能退出存档。与「停止移动」同理，脚本画的东西随脚本一起收走。
+		FrameOverlay.clear();
 	}
 
 	/**
@@ -547,6 +551,8 @@ public final class ScriptEngine {
 		AiService.get().cancelAll();
 		ChatState.clear();
 		GameActions.clearChatQueue();
+		// 旧工程画的框不该留到新工程里：坐标可能来自另一套脚本、甚至另一个维度
+		FrameOverlay.clear();
 	}
 
 	public boolean isRunning() {

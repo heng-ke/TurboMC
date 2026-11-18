@@ -214,6 +214,10 @@ final class Blocks {
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
+		// 准星方块坐标：命中就是命中格，未命中取视线尽头那一格（见 WorldQueries.aimBlockPos）
+		reg("world.aim_x", "world", BlockShape.REPORTER);
+		reg("world.aim_y", "world", BlockShape.REPORTER);
+		reg("world.aim_z", "world", BlockShape.REPORTER);
 		reg("world.is_day", "world", BlockShape.BOOLEAN);
 		reg("world.dimension", "world", BlockShape.REPORTER);
 		reg("world.in_water", "world", BlockShape.BOOLEAN);
@@ -226,6 +230,19 @@ final class Blocks {
 				BlockParam.text("TYPE", "minecraft:zombie"));
 		reg("world.biome", "world", BlockShape.REPORTER);
 		reg("world.ping", "world", BlockShape.REPORTER);
+
+		// 画框：只影响画面，不改世界状态。category 只决定查看器里的配色（见 ParamLabels），
+		// 与积木面板的分组标题无关——面板分组由扩展 js 里的 LABEL 决定。
+		regT("region.draw_frame", "region", BlockShape.STACK,
+				"从 x:{X1} y:{Y1} z:{Z1} 到 x:{X2} y:{Y2} z:{Z2} 画框 颜色:{COLOR}",
+				BlockParam.number("X1", "0"),
+				BlockParam.number("Y1", "64"),
+				BlockParam.number("Z1", "0"),
+				BlockParam.number("X2", "10"),
+				BlockParam.number("Y2", "70"),
+				BlockParam.number("Z2", "10"),
+				BlockParam.text("COLOR", "#33ff66"));
+		regT("region.clear_frames", "region", BlockShape.STACK, "清除所有画框");
 
 		// 动作
 		regT("action.key", "action", BlockShape.STACK, "按键 {KEY} {PRESSED}",

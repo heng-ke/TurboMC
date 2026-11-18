@@ -8,6 +8,12 @@
  * `Cannot read properties of undefined (reading 'call')`。
  * 这两类错误在模组侧冒烟测试里都发现不了，只能靠这个脚本兜住。
  *
+ * 另外守三条同样「不报错、只出错」的规则：
+ *   1. 每个积木 text 里的 [NAME] 必须与 arguments 同名同序——宿主按 text 的顺序取值，
+ *      两边错位就会把坐标灌进颜色；
+ *   2. arguments 引用的 menu 必须存在于 menus 里；
+ *   3. 分类标题（LABEL）不能带 opcode 或 arguments，否则面板会出怪东西。
+ *
  * 用法：node verify-extension.js [路径，默认同目录的 turbomc-extension.js]
  * 退出码 0 表示通过。
  */
@@ -57,11 +63,31 @@ for (const [name, menu] of Object.entries(menus)) {
 }
 
 for (const block of info.blocks) {
+	// 分类标题不是积木：没有 opcode、不该带 arguments，也不参与占位符校验
+	if (String(block.blockType || '').toLowerCase() === 'label') {
+		if (block.opcode) {
+			problems.push(`分类标题带了 opcode：${block.opcode}`);
+		}
+		if (block.arguments && Object.keys(block.arguments).length) {
+			problems.push(`分类标题带了 arguments：${block.text}`);
+		}
+		continue;
+	}
 	const args = block.arguments || {};
 	for (const [argName, arg] of Object.entries(args)) {
 		if (arg && arg.menu && !menus[arg.menu]) {
 			problems.push(`积木 ${block.opcode} 的参数 ${argName} 引用了不存在的菜单 ${arg.menu}`);
 		}
+	}
+	// 占位符与 arguments 必须同名同序。
+	// 宿主侧 vm-bootstrap 的 __tmcArgNames 是按 text 里的 [名字] 顺序取值的，
+	// arguments 只用于生成编辑器控件；两边一旦错位不会报任何错，
+	// 只会把坐标灌进颜色、把颜色灌进坐标。
+	const holes = (block.text || '').match(/\[([A-Za-z0-9_]+)\]/g) || [];
+	const fromText = holes.map((h) => h.slice(1, -1));
+	const fromArgs = Object.keys(args);
+	if (fromText.join(',') !== fromArgs.join(',')) {
+		problems.push(`积木 ${block.opcode} 的占位符 [${fromText.join(',')}] 与 arguments [${fromArgs.join(',')}] 不一致`);
 	}
 }
 
@@ -72,7 +98,9 @@ try {
 }
 
 const total = Object.values(menus).reduce((n, m) => n + (Array.isArray(m.items) ? m.items.length : 0), 0);
-console.log(`[verify] 积木 ${info.blocks.length} 个，菜单 ${Object.keys(menus).length} 个，菜单项 ${total} 条`);
+const labels = info.blocks.filter((b) => String(b.blockType || '').toLowerCase() === 'label').length;
+console.log(`[verify] 积木 ${info.blocks.length - labels} 个（另有 ${labels} 个分类标题），`
+	+ `菜单 ${Object.keys(menus).length} 个，菜单项 ${total} 条`);
 if (problems.length) {
 	problems.forEach((p) => console.error('[verify] ✗ ' + p));
 	process.exit(1);

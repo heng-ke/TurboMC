@@ -31,6 +31,7 @@ public final class ParamLabels {
 			case "world" -> 0xFF2E64B0;
 			case "sensing" -> 0xFF2E8FB0;
 			case "action" -> 0xFF6F45B0;
+			case "region" -> 0xFF2E8B57;
 			case "debug" -> 0xFF5A5A5A;
 			case "func" -> 0xFF8B3A62;
 			default -> 0xFF4A4A4A;

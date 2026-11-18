@@ -158,6 +158,10 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_frontBlock", "world.front_block"),
 			Map.entry("turbomc_blockBelow", "world.block_below"),
 			Map.entry("turbomc_blockAt", "world.block_at"),
+			// 准星方块坐标：命中给命中格，未命中给视线尽头那一格（见 WorldQueries.aimBlockPos）
+			Map.entry("turbomc_aimX", "world.aim_x"),
+			Map.entry("turbomc_aimY", "world.aim_y"),
+			Map.entry("turbomc_aimZ", "world.aim_z"),
 			Map.entry("turbomc_isDay", "world.is_day"),
 			Map.entry("turbomc_dimension", "world.dimension"),
 			Map.entry("turbomc_inWater", "world.in_water"),
@@ -171,6 +175,10 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_breakWait", "action.break_wait"),
 			Map.entry("turbomc_isMining", "world.is_mining"),
 			Map.entry("turbomc_miningProgress", "world.mining_progress"),
+
+			// ---- 画框（扩展）----
+			Map.entry("turbomc_drawFrame", "region.draw_frame"),
+			Map.entry("turbomc_clearFrames", "region.clear_frames"),
 
 			// ---- 调试（扩展）----
 			Map.entry("turbomc_log", "debug.log")

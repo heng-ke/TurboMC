@@ -15,6 +15,10 @@ function _toPrimitive(t, e) { if ("object" != _typeof(t) || !t) return t; var r;
    *
    * 注意：opcode 在 project.json 中呈现为 turbomc_<opcode>，模组按该规则映射，改名会导致导入失败。
    * 菜单项的 value 必须是英文（写入 sb3），显示文本才做本地化。
+   *
+   * 与仓库里 turbowarp/turbomc-extension.js 的差异：这份<b>不含</b> LABEL 分类标题。
+   * 那些标题只服务于编辑器面板；内嵌的 vm.es5.js 不认识 label，注册时可能出问题。
+   * 除此之外，积木的 opcode、文本、参数、菜单必须与编辑器副本保持一致。
    */
   var lang = 'en';
   try {
@@ -2007,6 +2011,18 @@ var TurboMC = /*#__PURE__*/function () {
             opcode: 'frontBlock',
             blockType: Scratch.BlockType.REPORTER,
             text: T('block at crosshair', '准星所指方块')
+          }, {
+            opcode: 'aimX',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('aimed block x', '准星方块 X')
+          }, {
+            opcode: 'aimY',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('aimed block y', '准星方块 Y')
+          }, {
+            opcode: 'aimZ',
+            blockType: Scratch.BlockType.REPORTER,
+            text: T('aimed block z', '准星方块 Z')
           },
           // ---- 查询 · 实体 ----
           {
@@ -2075,6 +2091,26 @@ var TurboMC = /*#__PURE__*/function () {
                 menu: 'entityType'
               }
             }
+          },
+          // ---- 画框 ----
+          // 只画不记：坐标由用户在脚本里自己算。同屏最多 128 个框，超出挤掉最旧的。
+          {
+            opcode: 'drawFrame',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]', '从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'),
+            arguments: {
+              X1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+              Y1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
+              Z1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+              X2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10},
+              Y2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 70},
+              Z2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10},
+              COLOR: {type: Scratch.ArgumentType.COLOR, defaultValue: '#33ff66'}
+            }
+          }, {
+            opcode: 'clearFrames',
+            blockType: Scratch.BlockType.COMMAND,
+            text: T('clear all frames', '清除所有画框')
           },
           // ---- 运算与工具 ----
           {
@@ -2962,6 +2998,23 @@ var TurboMC = /*#__PURE__*/function () {
         return 'minecraft:air';
       }
 
+      // ---- 查询 · 准星坐标 ----
+    }, {
+      key: "aimX",
+      value: function aimX() {
+        return 0;
+      }
+    }, {
+      key: "aimY",
+      value: function aimY() {
+        return 64;
+      }
+    }, {
+      key: "aimZ",
+      value: function aimZ() {
+        return 0;
+      }
+
       // ---- 查询 · 实体 ----
     }, {
       key: "nearestEntity",
@@ -2992,6 +3045,18 @@ var TurboMC = /*#__PURE__*/function () {
       key: "entityCount",
       value: function entityCount() {
         return 0;
+      }
+
+      // ---- 画框 ----
+    }, {
+      key: "drawFrame",
+      value: function drawFrame(args) {
+        this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1 + ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR);
+      }
+    }, {
+      key: "clearFrames",
+      value: function clearFrames() {
+        this.preview('clearFrames');
       }
 
       // ---- 运算与工具 ----

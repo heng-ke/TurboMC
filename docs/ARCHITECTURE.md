@@ -102,7 +102,9 @@ src/client/java/xyz/turbomc/client/
     ├── view/
     │   └── ViewSmoother.java    视角平滑：写入必须在渲染帧（tick 内写 50 ms 才一步，看得见台阶）
     ├── render/                  世界渲染出口
-    │   └── PathRenderer.java    「走向」的路线：折线（已走金黄 / 未走青色）+ 当前节点框 + 终点框
+    │   ├── PathRenderer.java    「走向」的路线：折线（已走金黄 / 未走青色）+ 当前节点框 + 终点框
+    │   ├── FrameOverlay.java    「画框」：最多 128 个线框，按帧从不可变快照重画
+    │   └── FrameBox.java        框的纯数据（坐标归一化 + 颜色解析，不依赖 MC，可纯 JVM 测试）
     ├── sb3/
     │   ├── Sb3Mapping.java      opcode ↔ 内部类型、字段/输入改名（全项目唯一一份）
     │   └── Sb3Importer.java     sb3 → 积木树（只读查看用）
@@ -233,7 +235,7 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 `project.json` 里写作 `turbomc_log`、`turbomc_tap` 这样。
 
 **改扩展 id 等于改所有积木的名字**：已经导出的工程会变成未知积木，而且不报错，
-只是积木消失。要改就必须同时改 `Sb3Mapping` 的 62 条映射、`ScriptEngine` 里三个
+只是积木消失。要改就必须同时改 `Sb3Mapping` 的 67 条扩展映射、`ScriptEngine` 里三个
 帽子 opcode、`vm-bootstrap.js` 的拼接前缀，以及所有既有的 `.sb3`。
 
 ### 11. 同一条聊天只触发一次
