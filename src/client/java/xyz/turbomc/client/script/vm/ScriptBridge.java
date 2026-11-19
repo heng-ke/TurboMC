@@ -64,6 +64,63 @@ public final class ScriptBridge {
 	}
 
 	/**
+	 * 扩展产物与宿主的 opcode 集合自检，返回给 HUD 的一句话（一致时为空串）。
+	 *
+	 * <p>两个方向都要报，因为症状完全不同：</p>
+	 * <ul>
+	 *   <li>扩展缺块（改了模组没重载扩展）→ 新积木拖不出来；</li>
+	 *   <li>扩展多块（换了扩展没换模组）→ 积木点下去没反应（未映射）。</li>
+	 * </ul>
+	 *
+	 * <p>明细写日志，HUD 只放结论——一行放不下清单。</p>
+	 */
+	public static String checkExtensionCoverage(String declaredCsv) {
+		java.util.Set<String> declared = new java.util.HashSet<>();
+		if (declaredCsv != null) {
+			for (String part : declaredCsv.split(",")) {
+				String name = part.trim();
+				if (!name.isEmpty()) {
+					declared.add(name);
+				}
+			}
+		}
+		java.util.Set<String> expected = Sb3Mapping.extensionOpcodes();
+		java.util.List<String> missing = new java.util.ArrayList<>();
+		for (String opcode : expected) {
+			if (!declared.contains(opcode)) {
+				missing.add(opcode);
+			}
+		}
+		java.util.List<String> extra = new java.util.ArrayList<>();
+		for (String opcode : declared) {
+			if (!expected.contains(opcode)) {
+				extra.add(opcode);
+			}
+		}
+		if (missing.isEmpty() && extra.isEmpty()) {
+			LOG.info("[vm] 扩展自检通过：{} 块积木与映射表一致", expected.size());
+			return "";
+		}
+		if (!missing.isEmpty()) {
+			LOG.warn("[vm] 扩展缺少 {} 块积木（多为扩展未重新加载）：{}", missing.size(), missing);
+		}
+		if (!extra.isEmpty()) {
+			LOG.warn("[vm] 扩展多出 {} 块未映射积木（多为模组版本较旧）：{}", extra.size(), extra);
+		}
+		StringBuilder message = new StringBuilder();
+		if (!missing.isEmpty()) {
+			message.append("扩展缺少 ").append(missing.size()).append(" 块积木，请重新加载扩展");
+		}
+		if (!extra.isEmpty()) {
+			if (message.length() > 0) {
+				message.append("；");
+			}
+			message.append("扩展多出 ").append(extra.size()).append(" 块未实现积木，请更新模组");
+		}
+		return message.toString();
+	}
+
+	/**
 	 * 「用户名」的宿主实现：当前登录账号名。
 	 *
 	 * <p>离线环境返回离线账号名。游戏未就绪时返回空串，避免积木拿到 null。</p>

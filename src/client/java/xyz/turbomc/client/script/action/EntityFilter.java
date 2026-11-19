@@ -49,15 +49,14 @@ final class EntityFilter {
 	}
 
 	/**
-	 * 解析积木参数。空值按 {@code any} 处理——老工程没有这个输入，
-	 * 语义必须与加参数之前完全一致。
+	 * 解析积木参数。
+	 *
+	 * <p>只有显式 {@code any} 才表示不限类型。空值按「匹配不到」处理——
+	 * 与 {@code InputKeys} 的取舍一致：参数没送到时宁可判否，也不要安静地匹配全部。</p>
 	 */
 	static Parsed parse(String raw) {
-		if (raw == null) {
-			return ANY;
-		}
-		String text = raw.trim();
-		if (text.isEmpty() || "any".equalsIgnoreCase(text)) {
+		String text = raw == null ? "" : raw.trim();
+		if ("any".equalsIgnoreCase(text)) {
 			return ANY;
 		}
 		if ("hostile".equalsIgnoreCase(text)) {

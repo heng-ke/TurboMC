@@ -14,6 +14,7 @@ import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.ScriptEngine;
 import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.ai.AiService;
+import xyz.turbomc.client.script.runtime.ExtensionHealth;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.vm.RhinoVm;
@@ -113,6 +114,14 @@ public final class ScriptHudElement implements HudElement {
 		String detail = engine.statusDetail().getString();
 		if (!detail.isEmpty()) {
 			rows.add(new Row(Text.literal(textRenderer.trimToWidth(detail, MAX_WIDTH)), engine.statusColor()));
+		}
+
+		// 扩展与模组对不上时，症状是「积木拖不出来」或「点了没反应」——都像模组坏了。
+		// 常驻一行，玩家才知道该重载扩展还是换 jar（明细在日志里）
+		String extensionWarning = ExtensionHealth.warning();
+		if (!extensionWarning.isEmpty()) {
+			rows.add(new Row(Text.literal(textRenderer.trimToWidth(
+					"\u26A0 " + extensionWarning, MAX_WIDTH)), 0xFFFF6B6B));
 		}
 
 		TurboMCConfig config = TurboMCConfig.get();

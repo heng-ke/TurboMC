@@ -50,6 +50,11 @@ class ParamLabelsTest {
 			"TYPE,     any,         value.turbomc.entity.any",
 			"TYPE,     HOSTILE,     value.turbomc.entity.hostile",
 			"TYPE,     minecraft:zombie, value.turbomc.entity.minecraft:zombie",
+			"AXIS,     x,           value.turbomc.field.x",
+			"FIELD,    distance,    value.turbomc.field.distance",
+			"FIELD,    durability,  value.turbomc.field.durability",
+			"SCREEN,   container,   value.turbomc.screen.container",
+			"KIND,     block_entity, value.turbomc.kind.block_entity",
 	})
 	void buildsNormalizedKey(String param, String value, String expected) {
 		assertEquals(expected, ParamLabels.translationKey(param, value));
@@ -72,6 +77,19 @@ class ParamLabelsTest {
 			"UNIT,     dayofweek", "MENU,     timer", "MENU,     loudness",
 			"SCOPE,    local", "SCOPE,    global", "DIRECTION, forward", "OP,       e ^",
 			"TYPE,     any", "TYPE,     hostile", "TYPE,     player",
+			"AXIS,     x", "AXIS,     y", "AXIS,     z",
+			"FIELD,    distance", "FIELD,    name", "FIELD,    id",
+			"FIELD,    amount", "FIELD,    durability",
+			// 快照批次新增的字段：两张语言表都必须有键，否则界面上退回英文原值
+			"FIELD,    health", "FIELD,    max_health", "FIELD,    type_id",
+			"FIELD,    count", "FIELD,    max_durability", "FIELD,    damage",
+			"FIELD,    custom_name",
+			// 「当打开 [界面]」的三档
+			"SCREEN,   container", "SCREEN,   inventory", "SCREEN,   any",
+			// 「[快照] 的字段」的十档
+			"KIND,     player", "KIND,     entity", "KIND,     item", "KIND,     screen",
+			"KIND,     block", "KIND,     block_entity", "KIND,     world", "KIND,     players",
+			"KIND,     scan", "KIND,     chat",
 	})
 	void languageFilesCoverValue(String param, String value) {
 		String key = ParamLabels.translationKey(param, value);

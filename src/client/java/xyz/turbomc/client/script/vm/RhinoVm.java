@@ -14,6 +14,7 @@ import org.mozilla.javascript.WrapFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.action.WorldQueries;
+import xyz.turbomc.client.script.runtime.ExtensionHealth;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 
@@ -151,6 +152,14 @@ public final class RhinoVm {
 			// 列表读写两块积木的实现在 vm 包（需要 VM 内部状态），注册点放这里，
 			// 保证「action → vm」不会多出一条新依赖边。重复注册是幂等的。
 			VmListActions.registerAll();
+			// 扩展产物与映射表必须一一对应：对不上时积木会静默失效——扩展旧了是新积木
+			// 拖不出来，模组旧了是积木点下去没反应。结论交给 HUD 常驻显示（见 §6.3）
+			try {
+				String declared = String.valueOf(call(cx, "__tmcExtensionOpcodes", new Object[0]));
+				ExtensionHealth.report(ScriptBridge.checkExtensionCoverage(declared));
+			} catch (RuntimeException e) {
+				ExtensionHealth.report("扩展未上报积木清单，无法自检");
+			}
 		} catch (RuntimeException e) {
 			LOG.error("[vm] 初始化失败", e);
 			throw e;
@@ -450,9 +459,16 @@ public final class RhinoVm {
 	}
 
 	/**
-	 * 触发带匹配字段的帽子积木（如「当聊天包含 [MATCH]」）。
+	 * 触发带匹配字段的帽子积木：「当按下 [键]」的 {@code KEY_OPTION}、
+	 * 「当打开 [界面]」的 {@code SCREEN}。
 	 *
-	 * @param fieldName 匹配字段名；为空表示不附带匹配条件
+	 * <p>{@code fieldName} 非空时走 JS 侧自建遍历（{@code __tmcStartHatField}），
+	 * 不用 {@code runtime.startHats}——实测压缩版 VM 对「带参数的扩展帽子」匹配失败，
+	 * 且失败时静默返回 0。详见 ARCHITECTURE §6.1.1。</p>
+	 *
+	 * <p>聊天帽子不在这里：它要按关键词前缀匹配，走 {@link #startChatHat}。</p>
+	 *
+	 * @param fieldName 匹配字段名；为空表示不附带匹配条件（「当受伤 / 当死亡」）
 	 */
 	public int startHat(String opcode, String fieldName, String value) {
 		if (!ready) {

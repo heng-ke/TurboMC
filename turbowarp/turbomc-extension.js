@@ -1566,9 +1566,20 @@ const ITEM_TABLE = [
 						isEdgeActivated: false
 					},
 					{
+						opcode: 'whenScreenOpen',
+						blockType: Scratch.BlockType.HAT,
+						text: T('when [SCREEN] opens', '当打开 [SCREEN]'),
+						argOrder: ['SCREEN'],
+						arguments: {
+							SCREEN: {type: Scratch.ArgumentType.STRING, defaultValue: 'container', menu: 'screenKind'}
+						},
+						isEdgeActivated: false
+					},
+					{
 						opcode: 'whenChat',
 						blockType: Scratch.BlockType.HAT,
 						text: T('when chat contains [MATCH]', '当聊天包含 [MATCH]'),
+						argOrder: ['MATCH'],
 						arguments: {
 							MATCH: {type: Scratch.ArgumentType.STRING, defaultValue: ''}
 						},
@@ -1579,6 +1590,7 @@ const ITEM_TABLE = [
 						opcode: 'moveToward',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('go to x:[X] y:[Y] z:[Z]', '走向 x:[X] y:[Y] z:[Z]'),
+						argOrder: ['X', 'Y', 'Z'],
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1589,6 +1601,7 @@ const ITEM_TABLE = [
 						opcode: 'look',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('set view yaw:[YAW] pitch:[PITCH]', '设置视角 水平:[YAW] 俯仰:[PITCH]'),
+						argOrder: ['YAW', 'PITCH'],
 						arguments: {
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
@@ -1598,6 +1611,7 @@ const ITEM_TABLE = [
 						opcode: 'lookAt',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('look at x:[X] y:[Y] z:[Z]', '看向 x:[X] y:[Y] z:[Z]'),
+						argOrder: ['X', 'Y', 'Z'],
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1608,6 +1622,7 @@ const ITEM_TABLE = [
 						opcode: 'lookSmooth',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('turn smoothly to yaw:[YAW] pitch:[PITCH]', '平滑转到视角 水平:[YAW] 俯仰:[PITCH]'),
+						argOrder: ['YAW', 'PITCH'],
 						arguments: {
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
@@ -1617,6 +1632,7 @@ const ITEM_TABLE = [
 						opcode: 'lookAtSmooth',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('look smoothly at x:[X] y:[Y] z:[Z]', '平滑看向 x:[X] y:[Y] z:[Z]'),
+						argOrder: ['X', 'Y', 'Z'],
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1633,6 +1649,7 @@ const ITEM_TABLE = [
 						opcode: 'key',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('key [KEY] [STATE]', '按键 [KEY] [STATE]'),
+						argOrder: ['KEY', 'STATE'],
 						arguments: {
 							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
 							STATE: {type: Scratch.ArgumentType.STRING, defaultValue: 'down', menu: 'keyState'}
@@ -1642,6 +1659,7 @@ const ITEM_TABLE = [
 						opcode: 'click',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('click [BUTTON]', '点击 [BUTTON]'),
+						argOrder: ['BUTTON'],
 						arguments: {
 							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'mouseButton'}
 						}
@@ -1650,6 +1668,7 @@ const ITEM_TABLE = [
 						opcode: 'tap',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('tap [KEY] for [HOLD] ticks', '点按 [KEY] 按住 [HOLD] tick'),
+						argOrder: ['KEY', 'HOLD'],
 						arguments: {
 							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
 							HOLD: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
@@ -1659,6 +1678,7 @@ const ITEM_TABLE = [
 						opcode: 'mouseDown',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('mouse [BUTTON] pressed?', '按下鼠标 [BUTTON]?'),
+						argOrder: ['BUTTON'],
 						arguments: {
 							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'mouseButton'}
 						}
@@ -1684,6 +1704,7 @@ const ITEM_TABLE = [
 						opcode: 'openContainerAt',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('open container at x:[X] y:[Y] z:[Z]', '打开坐标处的容器 x:[X] y:[Y] z:[Z]'),
+						argOrder: ['X', 'Y', 'Z'],
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1696,25 +1717,25 @@ const ITEM_TABLE = [
 						text: T('container slots', '界面槽位数')
 					},
 					{
-						opcode: 'slotItem',
+						opcode: 'slotField',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('item in slot [INDEX]', '槽位 [INDEX] 的物品'),
+						text: T('slot [INDEX] [FIELD]', '槽位 [INDEX] 的 [FIELD]'),
+						argOrder: ['INDEX', 'FIELD'],
 						arguments: {
-							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							FIELD: {type: Scratch.ArgumentType.STRING, defaultValue: 'id', menu: 'slotField'}
 						}
 					},
 					{
-						opcode: 'slotAmount',
+						opcode: 'screenJson',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('amount in slot [INDEX]', '槽位 [INDEX] 的数量'),
-						arguments: {
-							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-						}
+						text: T('open screen snapshot', '界面快照')
 					},
 					{
 						opcode: 'firstSlotOf',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('first slot with [ITEM]', '第一个装着 [ITEM] 的槽位'),
+						argOrder: ['ITEM'],
 						arguments: {
 							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:iron_ore', menu: 'itemId'}
 						}
@@ -1723,6 +1744,7 @@ const ITEM_TABLE = [
 						opcode: 'clickSlot',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('click slot [INDEX] with [BUTTON]', '点击槽位 [INDEX] 用 [BUTTON]'),
+						argOrder: ['INDEX', 'BUTTON'],
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'slotButton'}
@@ -1732,6 +1754,7 @@ const ITEM_TABLE = [
 						opcode: 'quickMoveSlot',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('quick move slot [INDEX]', '快速移动槽位 [INDEX]'),
+						argOrder: ['INDEX'],
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 						}
@@ -1763,19 +1786,13 @@ const ITEM_TABLE = [
 						text: T('on ground?', '站在地面？')
 					},
 					{
-						opcode: 'posX',
+						opcode: 'pos',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('x position', 'X 坐标')
-					},
-					{
-						opcode: 'posY',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('y position', 'Y 坐标')
-					},
-					{
-						opcode: 'posZ',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('z position', 'Z 坐标')
+						text: T('player [AXIS] position', '玩家 [AXIS] 坐标'),
+						argOrder: ['AXIS'],
+						arguments: {
+							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
+						}
 					},
 					{
 						opcode: 'selectedSlot',
@@ -1783,14 +1800,18 @@ const ITEM_TABLE = [
 						text: T('selected slot', '当前槽位')
 					},
 					{
-						opcode: 'heldItem',
+						opcode: 'heldItemField',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('held item', '手持物品')
+						text: T('held [FIELD]', '手中的 [FIELD]'),
+						argOrder: ['FIELD'],
+						arguments: {
+							FIELD: {type: Scratch.ArgumentType.STRING, defaultValue: 'id', menu: 'heldField'}
+						}
 					},
 					{
-						opcode: 'heldDurability',
+						opcode: 'inventoryJson',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('held durability %', '手持耐久百分比')
+						text: T('inventory snapshot', '背包快照')
 					},
 					{
 						opcode: 'inventoryFull',
@@ -1798,9 +1819,15 @@ const ITEM_TABLE = [
 						text: T('inventory full?', '背包已满?')
 					},
 					{
+						opcode: 'playerJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('player snapshot', '玩家快照')
+					},
+					{
 						opcode: 'itemCount',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
+						argOrder: ['ITEM'],
 						arguments: {
 							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'}
 						}
@@ -1850,6 +1877,7 @@ const ITEM_TABLE = [
 						opcode: 'blockAt',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('block at x:[X] y:[Y] z:[Z]', '坐标处方块 x:[X] y:[Y] z:[Z]'),
+						argOrder: ['X', 'Y', 'Z'],
 						arguments: {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1857,24 +1885,63 @@ const ITEM_TABLE = [
 						}
 					},
 					{
+						opcode: 'blockJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('snapshot of block x:[X] y:[Y] z:[Z]', '方块 x:[X] y:[Y] z:[Z] 的快照'),
+						argOrder: ['X', 'Y', 'Z'],
+						arguments: {
+							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
+							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+						}
+					},
+					{
+						opcode: 'playersJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('online players snapshot', '在线玩家快照')
+					},
+					{
+						opcode: 'scanJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('scan blocks from ([X1],[Y1],[Z1]) to ([X2],[Y2],[Z2]), up to [LIMIT]', '从 ([X1], [Y1], [Z1]) 到 ([X2], [Y2], [Z2]) 扫描方块 最多 [LIMIT] 个'),
+						argOrder: ['X1', 'Y1', 'Z1', 'X2', 'Y2', 'Z2', 'LIMIT'],
+						arguments: {
+							X1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							Y1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
+							Z1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							X2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 15},
+							Y2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 79},
+							Z2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 15},
+							LIMIT: {type: Scratch.ArgumentType.NUMBER, defaultValue: 4096}
+						}
+					},
+					{
+						opcode: 'snapshotKeys',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('fields of [KIND]', '[KIND] 的字段'),
+						argOrder: ['KIND'],
+						arguments: {
+							KIND: {type: Scratch.ArgumentType.STRING, defaultValue: 'player', menu: 'snapshotKind'}
+						}
+					},
+					{
+						opcode: 'worldJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('world snapshot', '世界快照')
+					},
+					{
 						opcode: 'frontBlock',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('block at crosshair', '准星所指方块')
 					},
 					{
-						opcode: 'aimX',
+						opcode: 'aimPos',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('aimed block x', '准星方块 X')
-					},
-					{
-						opcode: 'aimY',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('aimed block y', '准星方块 Y')
-					},
-					{
-						opcode: 'aimZ',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('aimed block z', '准星方块 Z')
+						text: T('aimed block [AXIS] position', '准星方块的 [AXIS] 坐标'),
+						argOrder: ['AXIS'],
+						arguments: {
+							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
+						}
 					},
 					{
 						opcode: 'ping',
@@ -1883,51 +1950,33 @@ const ITEM_TABLE = [
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Entities', '实体查询')},
 					{
-						opcode: 'nearestEntity',
+						opcode: 'nearestEntityField',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('distance to nearest [TYPE]', '最近 [TYPE] 的距离'),
+						text: T('nearest [TYPE] [FIELD]', '最近 [TYPE] 的 [FIELD]'),
+						argOrder: ['TYPE', 'FIELD'],
 						arguments: {
-							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
-						}
-					},
-					{
-						opcode: 'nearestEntityX',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('nearest [TYPE] x', '最近 [TYPE] 的 X'),
-						arguments: {
-							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
-						}
-					},
-					{
-						opcode: 'nearestEntityY',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('nearest [TYPE] y', '最近 [TYPE] 的 Y'),
-						arguments: {
-							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
-						}
-					},
-					{
-						opcode: 'nearestEntityZ',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('nearest [TYPE] z', '最近 [TYPE] 的 Z'),
-						arguments: {
-							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
-						}
-					},
-					{
-						opcode: 'nearestEntityName',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('nearest [TYPE] name', '最近 [TYPE] 的名称'),
-						arguments: {
-							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'},
+							FIELD: {type: Scratch.ArgumentType.STRING, defaultValue: 'distance', menu: 'entityField'}
 						}
 					},
 					{
 						opcode: 'entityCount',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('count of [TYPE] nearby', '附近 [TYPE] 数量'),
+						argOrder: ['TYPE'],
 						arguments: {
 							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
+						}
+					},
+					{
+						opcode: 'entitiesJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('snapshot of [TYPE] within [RADIUS] blocks, up to [LIMIT]', '附近 [TYPE] 的快照 半径 [RADIUS] 最多 [LIMIT] 个'),
+						argOrder: ['TYPE', 'RADIUS', 'LIMIT'],
+						arguments: {
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'},
+							RADIUS: {type: Scratch.ArgumentType.NUMBER, defaultValue: 16},
+							LIMIT: {type: Scratch.ArgumentType.NUMBER, defaultValue: 32}
 						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Display', '显示与日志')},
@@ -1935,6 +1984,7 @@ const ITEM_TABLE = [
 						opcode: 'drawFrame',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]', '从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'),
+						argOrder: ['X1', 'Y1', 'Z1', 'X2', 'Y2', 'Z2', 'COLOR'],
 						arguments: {
 							X1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -1954,6 +2004,7 @@ const ITEM_TABLE = [
 						opcode: 'log',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('log [TEXT]', '输出日志 [TEXT]'),
+						argOrder: ['TEXT'],
 						arguments: {
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
 						}
@@ -1963,6 +2014,7 @@ const ITEM_TABLE = [
 						opcode: 'chat',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
+						argOrder: ['TEXT'],
 						arguments: {
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
 						}
@@ -1971,6 +2023,7 @@ const ITEM_TABLE = [
 						opcode: 'command',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
+						argOrder: ['COMMAND'],
 						arguments: {
 							COMMAND: {type: Scratch.ArgumentType.STRING, defaultValue: 'time set day'}
 						}
@@ -1981,6 +2034,15 @@ const ITEM_TABLE = [
 						text: T('last chat message', '最近的聊天')
 					},
 					{
+						opcode: 'chatHistory',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('last [COUNT] chat messages', '最近 [COUNT] 条聊天'),
+						argOrder: ['COUNT'],
+						arguments: {
+							COUNT: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10}
+						}
+					},
+					{
 						opcode: 'triggerChat',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('chat that triggered me', '触发我的聊天')
@@ -1989,6 +2051,7 @@ const ITEM_TABLE = [
 						opcode: 'aiAsk',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('ask session [SESSION] to reply to [TEXT]', '让会话 [SESSION] 回应 [TEXT]'),
+						argOrder: ['SESSION', 'TEXT'],
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
@@ -1998,6 +2061,7 @@ const ITEM_TABLE = [
 						opcode: 'aiReply',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('last reply of session [SESSION]', '会话 [SESSION] 的最后回复'),
+						argOrder: ['SESSION'],
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
 						}
@@ -2006,6 +2070,7 @@ const ITEM_TABLE = [
 						opcode: 'aiReset',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
+						argOrder: ['SESSION'],
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
 						}
@@ -2014,6 +2079,7 @@ const ITEM_TABLE = [
 						opcode: 'aiSystem',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('set system prompt of session [SESSION] to [TEXT]', '设置会话 [SESSION] 的系统提示为 [TEXT]'),
+						argOrder: ['SESSION', 'TEXT'],
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
@@ -2024,6 +2090,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonIs',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('is [json] [check]?', '[json] 是 [check] 吗?'),
+						argOrder: ['json', 'check'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
 							check: {type: Scratch.ArgumentType.STRING, defaultValue: 'valid', menu: 'jsonCheck'}
@@ -2033,6 +2100,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonNew',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('new [json]', '新建 [json]'),
+						argOrder: ['json'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: 'Object', menu: 'jsonKind'}
 						}
@@ -2041,6 +2109,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonLength',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('length of [json]', '[json] 的长度'),
+						argOrder: ['json'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'}
 						}
@@ -2049,6 +2118,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonHasKey',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('[json] contains key [key]?', '[json] 包含键 [key] 吗?'),
+						argOrder: ['json', 'key'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
 							key: {type: Scratch.ArgumentType.STRING, defaultValue: 'key2'}
@@ -2058,6 +2128,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonGetAll',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('all [Stype] of [json]', '[json] 的全部 [Stype]'),
+						argOrder: ['json', 'Stype'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'},
 							Stype: {type: Scratch.ArgumentType.STRING, menu: 'jsonAll'}
@@ -2067,6 +2138,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonErrMsg',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('parse error from [json]', '[json] 的解析错误'),
+						argOrder: ['json'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value",}'}
 						}
@@ -2075,6 +2147,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonMinify',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('minify [json]', '压缩 [json]'),
+						argOrder: ['json'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: ' {"key" : "value" } '}
 						}
@@ -2084,6 +2157,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonGet',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('value of [item] in [json]', '[json] 中 [item] 的值'),
+						argOrder: ['json', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key'}
@@ -2093,6 +2167,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonSet',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('set [item] in [json] to [value]', '把 [json] 中 [item] 设为 [value]'),
+						argOrder: ['json', 'item', 'value'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key'},
@@ -2103,6 +2178,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonDelete',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('delete [item] in [json]', '删除 [json] 中的 [item]'),
+						argOrder: ['json', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'},
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key2'}
@@ -2112,6 +2188,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonGetPath',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('value by path [path] in [json]', '[json] 中路径 [path] 的值'),
+						argOrder: ['json', 'path'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":{"inner":[true,false]}}'},
 							path: {type: Scratch.ArgumentType.STRING, defaultValue: '["key","inner",1]'}
@@ -2121,6 +2198,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonSetPath',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('set value by path [path] in [json] to [data]', '把 [json] 中路径 [path] 的值设为 [data]'),
+						argOrder: ['json', 'path', 'data'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":{"inner":[true,false]}}'},
 							path: {type: Scratch.ArgumentType.STRING, defaultValue: '["key","inner",1]'},
@@ -2132,6 +2210,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayPush',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('add [item] to array [json]', '向数组 [json] 添加 [item]'),
+						argOrder: ['json', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch"]'},
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'TurboWarp'}
@@ -2141,6 +2220,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArraySet',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('replace item [pos] of [json] with [item]', '把数组 [json] 的第 [pos] 项换成 [item]'),
+						argOrder: ['json', 'pos', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
 							pos: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
@@ -2151,6 +2231,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayInsert',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('insert [item] at [pos] of array [json]', '在数组 [json] 的第 [pos] 项插入 [item]'),
+						argOrder: ['json', 'pos', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
 							pos: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
@@ -2161,6 +2242,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayDelete',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('delete item [item] of array [json]', '删除数组 [json] 的第 [item] 项'),
+						argOrder: ['json', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
 							item: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2}
@@ -2170,6 +2252,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayRemoveAll',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('delete all [item] in array [json]', '删除数组 [json] 中所有 [item]'),
+						argOrder: ['json', 'item'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","a","TurboWarp","a"]'},
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'a'}
@@ -2179,6 +2262,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayItemNum',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('item # of [item] in array [json]', '[item] 在数组 [json] 中的项号'),
+						argOrder: ['item', 'json'],
 						arguments: {
 							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'scratch'},
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","TurboWarp"]'}
@@ -2188,6 +2272,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayFromTo',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('items [item] to [item2] of array [json]', '数组 [json] 的第 [item] 到第 [item2] 项'),
+						argOrder: ['json', 'item', 'item2'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '[1,2,3,4]'},
 							item: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
@@ -2198,6 +2283,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArraySetLen',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('set length of array [json] to [len]', '把数组 [json] 的长度设为 [len]'),
+						argOrder: ['json', 'len'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","TurboWarp"]'},
 							len: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
@@ -2208,6 +2294,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayConcat',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('concatenate array [json] [json2]', '拼接数组 [json] 和 [json2]'),
+						argOrder: ['json', 'json2'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch"]'},
 							json2: {type: Scratch.ArgumentType.STRING, defaultValue: '["TurboWarp"]'}
@@ -2217,6 +2304,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayMapField',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('get all values with key [key] in array [json]', '数组 [json] 中所有对象的 [key] 值'),
+						argOrder: ['json', 'key'],
 						arguments: {
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '[{"id":12},{"id":24}]'},
 							key: {type: Scratch.ArgumentType.STRING, defaultValue: 'id'}
@@ -2226,6 +2314,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayCreate',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('create array by [text] with delimiter [d]', '按分隔符 [d] 把文本 [text] 拆成数组'),
+						argOrder: ['d', 'text'],
 						arguments: {
 							d: {type: Scratch.ArgumentType.STRING, defaultValue: ','},
 							text: {type: Scratch.ArgumentType.STRING, defaultValue: 'a,b,c'}
@@ -2235,6 +2324,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayJoin',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('join string by array [json] with delimiter [d]', '用分隔符 [d] 把数组 [json] 拼成文本'),
+						argOrder: ['d', 'json'],
 						arguments: {
 							d: {type: Scratch.ArgumentType.STRING, defaultValue: ','},
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["a","b","c"]'}
@@ -2244,6 +2334,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArraySort',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('sort array [list] in [order] order', '数组 [list] 按 [order] 排序'),
+						argOrder: ['list', 'order'],
 						arguments: {
 							list: {type: Scratch.ArgumentType.STRING, defaultValue: '[5.23,214,522,61,1,0]'},
 							order: {type: Scratch.ArgumentType.STRING, menu: 'jsonSort'}
@@ -2253,6 +2344,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayTextFilter',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('filter array [list] if text [options] [text] and return [type]', '筛选数组 [list]：文本 [options] [text]，返回 [type]'),
+						argOrder: ['list', 'options', 'text', 'type'],
 						arguments: {
 							list: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
 							options: {type: Scratch.ArgumentType.STRING, menu: 'jsonFilter'},
@@ -2264,6 +2356,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonArrayAnalysis',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('[analysis] of array [list]', '数组 [list] 的 [analysis]'),
+						argOrder: ['list', 'analysis'],
 						arguments: {
 							list: {type: Scratch.ArgumentType.STRING, defaultValue: '[17,1,2017,0,120,14]'},
 							analysis: {type: Scratch.ArgumentType.STRING, menu: 'jsonAnalysis'}
@@ -2274,6 +2367,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonVmGetList',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('get list [list] as array', '把列表 [list] 读成数组'),
+						argOrder: ['list'],
 						arguments: {
 							list: {type: Scratch.ArgumentType.STRING, defaultValue: 'mylist'}
 						}
@@ -2282,6 +2376,7 @@ const ITEM_TABLE = [
 						opcode: 'jsonVmSetList',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('set list [list] to [json]', '把列表 [list] 设为 [json]'),
+						argOrder: ['list', 'json'],
 						arguments: {
 							list: {type: Scratch.ArgumentType.STRING, defaultValue: 'mylist'},
 							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana"]'}
@@ -2320,6 +2415,34 @@ const ITEM_TABLE = [
 							{text: T('median', '中位数'), value: 'median'},
 							{text: T('mode', '众数'), value: 'mode'},
 							{text: T('variance', '方差'), value: 'variance'}
+					]},
+					axis: {acceptReporters: false, items: [
+							{text: T('X', 'X'), value: 'x'},
+							{text: T('Y', 'Y'), value: 'y'},
+							{text: T('Z', 'Z'), value: 'z'}
+					]},
+					entityField: {acceptReporters: false, items: [
+							{text: T('distance', '距离'), value: 'distance'},
+							{text: T('X', 'X'), value: 'x'},
+							{text: T('Y', 'Y'), value: 'y'},
+							{text: T('Z', 'Z'), value: 'z'},
+							{text: T('name', '名称'), value: 'name'},
+							{text: T('health', '血量'), value: 'health'},
+							{text: T('max health', '最大血量'), value: 'max_health'},
+							{text: T('registry id', '注册名'), value: 'type_id'}
+					]},
+					heldField: {acceptReporters: false, items: [
+							{text: T('item', '物品'), value: 'id'},
+							{text: T('durability %', '耐久百分比'), value: 'durability'},
+							{text: T('count', '数量'), value: 'count'},
+							{text: T('max durability', '最大耐久'), value: 'max_durability'}
+					]},
+					slotField: {acceptReporters: false, items: [
+							{text: T('item', '物品'), value: 'id'},
+							{text: T('amount', '数量'), value: 'amount'},
+							{text: T('max durability', '最大耐久'), value: 'max_durability'},
+							{text: T('damage', '已损耗'), value: 'damage'},
+							{text: T('custom name', '自定义名称'), value: 'custom_name'}
 					]},
 					itemId: {acceptReporters: true, items: itemMenuItems()},
 					entityType: {acceptReporters: true, items: [
@@ -2483,6 +2606,23 @@ const ITEM_TABLE = [
 							{text: T('Wind Charge', '风弹'), value: 'minecraft:wind_charge'},
 							{text: T('Wither Skull', '凋灵之首'), value: 'minecraft:wither_skull'}
 					]},
+					snapshotKind: {acceptReporters: false, items: [
+							{text: T('player snapshot', '玩家快照'), value: 'player'},
+							{text: T('entity (list item)', '实体（列表项）'), value: 'entity'},
+							{text: T('item entry', '物品条目'), value: 'item'},
+							{text: T('screen', '界面'), value: 'screen'},
+							{text: T('block', '方块'), value: 'block'},
+							{text: T('block entity', '方块实体'), value: 'block_entity'},
+							{text: T('world', '世界'), value: 'world'},
+							{text: T('online players (list item)', '在线玩家（列表项）'), value: 'players'},
+							{text: T('area scan', '区域扫描'), value: 'scan'},
+							{text: T('chat history', '聊天历史'), value: 'chat'}
+					]},
+					screenKind: {acceptReporters: false, items: [
+							{text: T('container', '容器'), value: 'container'},
+							{text: T('player inventory', '玩家背包'), value: 'inventory'},
+							{text: T('any screen', '任意界面'), value: 'any'}
+					]},
 					keyName: {acceptReporters: true, items: [
 							{text: T('a', 'a'), value: 'a'},
 							{text: T('b', 'b'), value: 'b'},
@@ -2641,8 +2781,8 @@ const ITEM_TABLE = [
 		miningProgress() { return 0; }
 		openContainerAt() { this.preview('openContainerAt'); }
 		containerSlots() { return 0; }
-		slotItem() { return ''; }
-		slotAmount() { return 0; }
+		slotField() { return ''; }
+		screenJson() { return '{}'; }
 		firstSlotOf() { return -1; }
 		clickSlot() { this.preview('clickSlot'); }
 		quickMoveSlot() { this.preview('quickMoveSlot'); }
@@ -2651,13 +2791,12 @@ const ITEM_TABLE = [
 		food() { return 20; }
 		xpLevel() { return 0; }
 		onGround() { this.preview('onGround'); return true; }
-		posX() { return 0; }
-		posY() { return 64; }
-		posZ() { return 0; }
+		pos() { return 0; }
 		selectedSlot() { return 1; }
-		heldItem() { return 'minecraft:air'; }
-		heldDurability() { return 100; }
+		heldItemField() { return ''; }
+		inventoryJson() { return '[]'; }
 		inventoryFull() { return false; }
+		playerJson() { return '{"name":"","uuid":"","health":0,"max_health":20,"absorption":0,"food":20,"saturation":5,"xp_level":0,"xp_progress":0,"armor":0,"air":300,"gamemode":"","dimension":"","x":0,"y":0,"z":0,"motion_x":0,"motion_y":0,"motion_z":0,"yaw":0,"pitch":0,"on_ground":false,"in_water":false,"in_lava":false,"selected_slot":1,"effects":[]}'; }
 		itemCount() { return 0; }
 		respawn() { this.preview('respawn'); }
 		isDay() { return true; }
@@ -2668,23 +2807,24 @@ const ITEM_TABLE = [
 		blockInFront() { this.preview('blockInFront'); return false; }
 		blockBelow() { return 'minecraft:grass_block'; }
 		blockAt(args) { this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z); return 'minecraft:air'; }
+		blockJson() { return '{"id":"","x":0,"y":0,"z":0,"state":{},"hardness":0,"is_air":false,"is_solid":false,"is_fluid":false,"light":0,"biome":"","block_entity":{"type":"","items":[],"items_total":0,"nbt":{},"text_front":"","text_back":""}}'; }
+		playersJson() { return '[]'; }
+		scanJson() { return '{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}'; }
+		snapshotKeys() { return '[]'; }
+		worldJson() { return '{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}'; }
 		frontBlock() { return 'minecraft:air'; }
-		aimX() { return 0; }
-		aimY() { return 64; }
-		aimZ() { return 0; }
+		aimPos() { return 0; }
 		ping() { return 0; }
-		nearestEntity() { return -1; }
-		nearestEntityX() { return 0; }
-		nearestEntityY() { return 64; }
-		nearestEntityZ() { return 0; }
-		nearestEntityName() { return ''; }
+		nearestEntityField() { return 0; }
 		entityCount() { return 0; }
+		entitiesJson() { return '[]'; }
 		drawFrame(args) { this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1 + ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR); }
 		clearFrames() { this.preview('clearFrames'); }
 		log(args) { console.log('[turbomc]', args.TEXT); }
 		chat(args) { this.preview('chat ' + args.TEXT); }
 		command(args) { this.preview('command ' + args.COMMAND); }
 		lastChat() { this.preview('lastChat'); return ''; }
+		chatHistory() { return '[]'; }
 		triggerChat() { this.preview('triggerChat'); return ''; }
 		aiAsk(args) { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }
 		aiReply() { this.preview('aiReply'); return ''; }

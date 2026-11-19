@@ -116,8 +116,8 @@ class Sb3RenderingTest {
 			  {"isStage":true,"name":"Stage","variables":{},"lists":{},"blocks":{}},
 			  {"isStage":false,"name":"Sprite1","variables":{},"lists":{},"blocks":{
 			    "a":{"opcode":"event_whenflagclicked","next":"b","topLevel":true,"shadow":false},
-			    "b":{"opcode":"turbomc_nearestEntityX","topLevel":false,"shadow":false,
-			         "inputs":{"TYPE":[1,"m"]}},
+			    "b":{"opcode":"turbomc_nearestEntityField","topLevel":false,"shadow":false,
+			         "inputs":{"TYPE":[1,"m"]},"fields":{"FIELD":["distance",null]}},
 			    "m":{"opcode":"turbomc_menu_entityType","topLevel":false,"shadow":true,
 			         "fields":{"entityType":["minecraft:zombie",null]},"inputs":{}}
 			  }}
@@ -129,7 +129,7 @@ class Sb3RenderingTest {
 		Sb3Importer.Result result = Sb3Importer.parse(JsonParser.parseString(ENTITY_PROJECT));
 		assertTrue(result.ok(), () -> "导入失败：" + result.error());
 		BlockNode node = result.scripts().get(0).hat.next;
-		assertEquals("world.nearest_entity_x", node.type);
+		assertEquals("world.nearest_entity_field", node.type);
 		assertEquals("minecraft:zombie", node.slot("TYPE").literal);
 		assertFalse(node.slot("TYPE").hasBlock(), "菜单不该作为嵌套积木挂在槽里");
 	}

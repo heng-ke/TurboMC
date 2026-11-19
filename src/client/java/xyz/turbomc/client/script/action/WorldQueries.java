@@ -2,13 +2,28 @@ package xyz.turbomc.client.script.action;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.SignBlockEntity;
+import net.minecraft.block.entity.SignText;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.AbstractNbtNumber;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtString;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.slot.Slot;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
@@ -21,44 +36,53 @@ import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.Values;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
- * 世界状态查询：血量、坐标、背包、方块、环境、实体。
+ * 世界状态查询：血量、坐标、背包、方块、环境、实体，以及九块「快照」（游戏状态 → JSON 文本）。
  *
  * <p>与 {@link GameActions} 的分工是「只读 vs 改变世界」。这样改动作不会碰到查询，
  * 也便于对查询单独做逻辑审查（它不产生任何副作用）。</p>
  *
- * <p>末尾的 {@code query.last_chat}（最近一条聊天）不属于世界状态，但同样是纯读取，
- * 所以并入本表而不另开注册表。写入方在 {@code TurboMCClient} 的聊天事件里。</p>
+ * <p>末尾的 {@code query.last_chat} / {@code query.chat_history} 不属于世界状态，但同样是纯读取，
+ * 所以并入本表而不另开注册表。写入方在 {@code TurboMCClient} 的聊天事件里，存储在
+ * {@link ChatState}。</p>
+ *
+ * <p>快照部分的分工：这里只负责把 Minecraft 对象拆成原语，字段名与 JSON 形状全在
+ * {@link Snapshots}（只收原语、纯 JVM 可测）。方向固定只读，见 ARCHITECTURE §26。</p>
  */
 public final class WorldQueries {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
 	static final double ENTITY_SEARCH_RANGE = 16d;
+	/**
+	 * 区域扫描的体积上限（格数）。{@code getBlockState} 是主线程调用，
+	 * 8192 格约等于 16×16×32，一次扫描的量级安全；超出的部分不扫，用 {@code truncated} 标记。
+	 */
+	static final int SCAN_VOLUME_LIMIT = 8192;
 
 	private WorldQueries() {
 	}
 
 	public static void registerAll() {
+		// 合并块：一个 opcode + 下拉菜单，取代原先的三轴/五字段细粒度积木。
+		// 被取代的旧 opcode（world.pos_x、world.aim_x、world.nearest_entity* 等）已删除，
+		// 含它们的旧工程会出现未知积木——见 ARCHITECTURE §6.2
+		NativeRegistry.function("world.pos", WorldQueries::pos);
+		NativeRegistry.function("world.aim_pos", WorldQueries::aimPos);
+		NativeRegistry.function("world.nearest_entity_field", WorldQueries::nearestEntityField);
+		NativeRegistry.function("world.held_item_field", WorldQueries::heldItemField);
 		NativeRegistry.function("world.block_in_front", WorldQueries::blockInFront);
-		NativeRegistry.function("world.aim_x", WorldQueries::aimX);
-		NativeRegistry.function("world.aim_y", WorldQueries::aimY);
-		NativeRegistry.function("world.aim_z", WorldQueries::aimZ);
 		NativeRegistry.function("world.health", WorldQueries::health);
 		NativeRegistry.function("world.food", WorldQueries::food);
-		NativeRegistry.function("world.pos_x", WorldQueries::posX);
-		NativeRegistry.function("world.pos_y", WorldQueries::posY);
-		NativeRegistry.function("world.pos_z", WorldQueries::posZ);
 		NativeRegistry.function("world.selected_slot", WorldQueries::selectedSlot);
-		NativeRegistry.function("world.nearest_entity", WorldQueries::nearestEntity);
-		NativeRegistry.function("world.nearest_entity_x", WorldQueries::nearestEntityX);
-		NativeRegistry.function("world.nearest_entity_y", WorldQueries::nearestEntityY);
-		NativeRegistry.function("world.nearest_entity_z", WorldQueries::nearestEntityZ);
 		NativeRegistry.function("world.on_ground", WorldQueries::onGround);
 		NativeRegistry.function("world.item_count", WorldQueries::itemCount);
-		NativeRegistry.function("world.held_item", WorldQueries::heldItem);
-		NativeRegistry.function("world.held_durability", WorldQueries::heldDurability);
 		NativeRegistry.function("world.front_block", WorldQueries::frontBlock);
 		NativeRegistry.function("world.block_below", WorldQueries::blockBelow);
 		NativeRegistry.function("world.block_at", WorldQueries::blockAt);
@@ -66,17 +90,28 @@ public final class WorldQueries {
 		NativeRegistry.function("world.dimension", WorldQueries::dimension);
 		NativeRegistry.function("world.in_water", WorldQueries::inWater);
 		NativeRegistry.function("world.in_lava", WorldQueries::inLava);
-		NativeRegistry.function("world.nearest_entity_name", WorldQueries::nearestEntityName);
 		NativeRegistry.function("world.xp_level", WorldQueries::xpLevel);
 		NativeRegistry.function("world.inventory_full", WorldQueries::inventoryFull);
 		NativeRegistry.function("world.entity_count", WorldQueries::entityCount);
 		NativeRegistry.function("world.biome", WorldQueries::biome);
 		NativeRegistry.function("world.ping", WorldQueries::ping);
+		// 快照：把游戏状态读成 JSON 文本，补上 JSON 积木缺的输入源。
+		// 单向只读，回归写必须走动作积木——见 ARCHITECTURE §26
+		NativeRegistry.function("world.player_json", WorldQueries::playerJson);
+		NativeRegistry.function("world.entities_json", WorldQueries::entitiesJson);
+		NativeRegistry.function("world.block_json", WorldQueries::blockJson);
+		NativeRegistry.function("world.inventory_json", WorldQueries::inventoryJson);
+		NativeRegistry.function("world.screen_json", WorldQueries::screenJson);
+		NativeRegistry.function("world.world_json", WorldQueries::worldJson);
+		NativeRegistry.function("world.players_json", WorldQueries::playersJson);
+		NativeRegistry.function("world.scan_json", WorldQueries::scanJson);
+		NativeRegistry.function("world.snapshot_keys", WorldQueries::snapshotKeys);
 		NativeRegistry.function("world.is_mining", WorldQueries::isMining);
 		NativeRegistry.function("world.mining_progress", WorldQueries::miningProgress);
 		// 聊天不是「世界状态」，但同样是纯读取，放在这里不必单开一张注册表。
 		// 写入方在 TurboMCClient 的聊天事件里（ChatGate 通过之后）
 		NativeRegistry.function("query.last_chat", (context, args) -> ChatState.last());
+		NativeRegistry.function("query.chat_history", WorldQueries::chatHistory);
 		// 「触发我的聊天」由引导脚本在线程上下文里直接返回（见 vm-bootstrap 的 __tmcThreadChat），
 		// 这里只是兜底：万一某个调用路径绕过了包装器，拿到空串而不是一次「未映射」警告。
 		// 刻意不回落 ChatState.last()——那会让它和「最近的聊天」变成同一个积木。
@@ -158,18 +193,6 @@ public final class WorldQueries {
 		return BlockPos.ofFloored(eye.add(direction.multiply(reach)));
 	}
 
-	private static Object aimX(ScriptContext ctx, Object[] args) {
-		return (double) aimBlockPos(client(ctx)).getX();
-	}
-
-	private static Object aimY(ScriptContext ctx, Object[] args) {
-		return (double) aimBlockPos(client(ctx)).getY();
-	}
-
-	private static Object aimZ(ScriptContext ctx, Object[] args) {
-		return (double) aimBlockPos(client(ctx)).getZ();
-	}
-
 	/**
 	 * 是否处于挖掘状态（按住挖掘键且已锁定目标）。
 	 */
@@ -215,45 +238,88 @@ public final class WorldQueries {
 		return client.player == null ? 0d : (double) client.player.getHungerManager().getFoodLevel();
 	}
 
-	private static Object posX(ScriptContext ctx, Object[] args) {
+	// ---- 合并块实现（一块 + 下拉选择轴/字段）----
+	// 被它取代的细粒度旧 opcode 已删除；这些方法只服务面板上仍存在的合并块。
+
+	private static Object pos(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : client.player.getX();
+		if (client.player == null) {
+			return 0d;
+		}
+		return switch (axisOf(args)) {
+			case 1 -> client.player.getY();
+			case 2 -> client.player.getZ();
+			default -> client.player.getX();
+		};
 	}
 
-	private static Object posY(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : client.player.getY();
+	private static Object aimPos(ScriptContext ctx, Object[] args) {
+		BlockPos pos = aimBlockPos(client(ctx));
+		return switch (axisOf(args)) {
+			case 1 -> (double) pos.getY();
+			case 2 -> (double) pos.getZ();
+			default -> (double) pos.getX();
+		};
 	}
 
-	private static Object posZ(ScriptContext ctx, Object[] args) {
+	/**
+	 * 最近实体的某个字段：距离 / 三轴坐标 / 名称。
+	 *
+	 * <p>无目标时坐标给 {@code NaN}（数值比较恒假）、距离给 {@code -1}、名称给空串，
+	 * 与它取代的五个旧积木逐一对齐——合并只减少面板条目，不改变任何语义。</p>
+	 */
+	private static Object nearestEntityField(ScriptContext ctx, Object[] args) {
+		Entity entity = nearestEntityOrNull(ctx, args);
+		String field = args.length > 1
+				? Values.asString(args[1]).trim().toLowerCase(Locale.ROOT) : "distance";
 		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : client.player.getZ();
+		return switch (field) {
+			case "x" -> coordinateOf(entity, 0);
+			case "y" -> coordinateOf(entity, 1);
+			case "z" -> coordinateOf(entity, 2);
+			case "name" -> entity == null ? "" : entity.getType().getName().getString();
+			// 血量与注册名：打怪脚本要判断「还剩多少」，抓特定实体要按注册名精确匹配。
+			// 无目标时分别给 0 与空串，与距离 -1、名称空串的取舍一致（不返回 NaN，避免显示成「非数字」）
+			case "health" -> entity == null ? 0d : (double) healthOf(entity);
+			case "max_health" -> entity == null ? 0d : (double) maxHealthOf(entity);
+			case "type_id" -> entity == null
+					? "" : Registries.ENTITY_TYPE.getId(entity.getType()).toString();
+			default -> entity == null || client.player == null ? -1d : (double) client.player.distanceTo(entity);
+		};
+	}
+
+	private static Object heldItemField(ScriptContext ctx, Object[] args) {
+		String field = args.length > 0
+				? Values.asString(args[0]).trim().toLowerCase(Locale.ROOT) : "id";
+		MinecraftClient client = client(ctx);
+		// 数量与最大耐久：判断「这一组还剩几个」「这工具还能修几次」，都是背包类脚本的常用判断。
+		// 空手时数量给 0、最大耐久给 0（不可损坏物品的耐久百分比另由 durability 给 100）
+		if ("count".equals(field) || "max_durability".equals(field)) {
+			ItemStack stack = client.player == null ? null : client.player.getMainHandStack();
+			if (stack == null || stack.isEmpty()) {
+				return 0d;
+			}
+			return "count".equals(field) ? (double) stack.getCount() : (double) stack.getMaxDamage();
+		}
+		if ("durability".equals(field)) {
+			return heldDurabilityPercent(client);
+		}
+		return heldItemId(client);
+	}
+
+	/** 菜单值 x/y/z → 轴序号；未知值按 x 处理。 */
+	private static int axisOf(Object[] args) {
+		String axis = args.length > 0 ? Values.asString(args[0]).trim().toLowerCase(Locale.ROOT) : "x";
+		return switch (axis) {
+			case "y" -> 1;
+			case "z" -> 2;
+			default -> 0;
+		};
 	}
 
 	private static Object selectedSlot(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
 		return client.player == null ? 0d : (double) (client.player.getInventory().getSelectedSlot() + 1);
-	}
-
-	private static Object nearestEntity(ScriptContext ctx, Object[] args) {
-		Entity entity = nearestEntityOrNull(ctx, args);
-		MinecraftClient client = client(ctx);
-		if (entity == null || client.player == null) {
-			return -1d;
-		}
-		return (double) client.player.distanceTo(entity);
-	}
-
-	private static Object nearestEntityX(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx, args), 0);
-	}
-
-	private static Object nearestEntityY(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx, args), 1);
-	}
-
-	private static Object nearestEntityZ(ScriptContext ctx, Object[] args) {
-		return coordinateOf(nearestEntityOrNull(ctx, args), 2);
 	}
 
 	private static Object onGround(ScriptContext ctx, Object[] args) {
@@ -281,8 +347,8 @@ public final class WorldQueries {
 		return (double) total;
 	}
 
-	private static Object heldItem(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
+	/** 主手物品的注册名；空手返回空串。 */
+	private static String heldItemId(MinecraftClient client) {
 		if (client.player == null) {
 			return "";
 		}
@@ -294,8 +360,7 @@ public final class WorldQueries {
 	 * 手持物品剩余耐久百分比（0–100，保留一位小数）。
 	 * 空手返回 0，不可损坏物品（方块、工具材料等）返回 100。
 	 */
-	private static Object heldDurability(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
+	private static double heldDurabilityPercent(MinecraftClient client) {
 		if (client.player == null) {
 			return 0d;
 		}
@@ -372,11 +437,6 @@ public final class WorldQueries {
 	private static Object inLava(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
 		return client.player != null && client.player.isInLava();
-	}
-
-	private static Object nearestEntityName(ScriptContext ctx, Object[] args) {
-		Entity entity = nearestEntityOrNull(ctx, args);
-		return entity == null ? "" : entity.getType().getName().getString();
 	}
 
 	private static Object xpLevel(ScriptContext ctx, Object[] args) {
@@ -460,15 +520,23 @@ public final class WorldQueries {
 	/**
 	 * 单 tick 缓存的「附近实体」列表：最近实体与实体计数共用同一次世界遍历。
 	 */
-	@SuppressWarnings("unchecked")
 	private static List<Entity> nearbyEntities(ScriptContext ctx) {
-		return (List<Entity>) ctx.cached("nearby_entities", () -> {
+		return nearbyEntities(ctx, ENTITY_SEARCH_RANGE);
+	}
+
+	/**
+	 * 同上，半径可调（实体快照用）。缓存键带半径：不同半径是同一次遍历的不同结果，
+	 * 共用一个键会让 {@code 16} 格的结果顶替 {@code 32} 格。
+	 */
+	@SuppressWarnings("unchecked")
+	private static List<Entity> nearbyEntities(ScriptContext ctx, double radius) {
+		return (List<Entity>) ctx.cached("nearby_entities:" + radius, () -> {
 			MinecraftClient client = client(ctx);
 			if (client.player == null || client.world == null) {
 				return List.of();
 			}
 			return client.world.getOtherEntities(client.player,
-					client.player.getBoundingBox().expand(ENTITY_SEARCH_RANGE));
+					client.player.getBoundingBox().expand(radius));
 		});
 	}
 
@@ -484,9 +552,9 @@ public final class WorldQueries {
 				"nearest_entity:" + filter.cacheKey());
 	}
 
-	/** 读积木的「实体类型」参数；没有输入时为空串，由 {@link EntityFilter#parse} 归一到 any。 */
+	/** 读积木的「实体类型」参数；菜单必有值，缺失时按空串进解析（匹配不到）。 */
 	private static EntityFilter.Parsed filterOf(Object[] args) {
-		return EntityFilter.parse(args.length > 0 ? Values.asString(args[0]) : "");
+		return EntityFilter.parse(Values.asString(args[0]));
 	}
 
 	static Entity nearestEntityOrNull(ScriptContext ctx, Predicate<Entity> filter, String cacheKey) {
@@ -510,6 +578,467 @@ public final class WorldQueries {
 			}
 			return best;
 		});
+	}
+
+	// ---- 快照（JSON 文本出口）----
+	// 只读：返回普通字符串，脚本改它不会回到世界（ARCHITECTURE §26）。
+	// 这里只负责把 Minecraft 对象拆成原语，字段名与格式全在 Snapshots 里，便于纯 JVM 单测。
+
+	/** 玩家快照。无玩家时给 {@code {}}：空串会让下游 {@code json.get_path} 直接失败。 */
+	private static Object playerJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.player == null) {
+			return "{}";
+		}
+		ClientPlayerEntity player = client.player;
+		List<Snapshots.Effect> effects = new ArrayList<>();
+		for (StatusEffectInstance instance : player.getStatusEffects()) {
+			effects.add(new Snapshots.Effect(
+					instance.getEffectType().getKey().map(key -> key.getValue().toString()).orElse(""),
+					instance.getAmplifier(),
+					instance.getDuration()));
+		}
+		String gamemode = client.interactionManager == null
+				? "" : client.interactionManager.getCurrentGameMode().getId();
+		String dimension = client.world == null
+				? "" : client.world.getRegistryKey().getValue().toString();
+		return Snapshots.player(new Snapshots.Player(
+				player.getGameProfile().name(),
+				player.getUuidAsString(),
+				player.getHealth(),
+				player.getMaxHealth(),
+				player.getAbsorptionAmount(),
+				player.getHungerManager().getFoodLevel(),
+				player.getHungerManager().getSaturationLevel(),
+				player.experienceLevel,
+				player.experienceProgress,
+				player.getArmor(),
+				player.getAir(),
+				gamemode,
+				dimension,
+				new Snapshots.Vec(player.getX(), player.getY(), player.getZ()),
+				motion(player),
+				player.getYaw(),
+				player.getPitch(),
+				player.isOnGround(),
+				player.isTouchingWater(),
+				player.isInLava(),
+				// 与「当前槽位」积木同为 1 基：两处读数不一致比少一个字段更难查
+				player.getInventory().getSelectedSlot() + 1,
+				effects));
+	}
+
+	/**
+	 * 附近实体快照（数组），按距离升序。
+	 *
+	 * <p>半径钳到 1–64 格、数量钳到 1–256：世界遍历在主线程跑，误填 {@code 1000} 会直接卡帧。
+	 * 同一 tick 内重复调用只遍历一次（缓存键带过滤器与两个参数）。</p>
+	 */
+	private static Object entitiesJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.player == null || client.world == null) {
+			return "[]";
+		}
+		EntityFilter.Parsed filter = EntityFilter.parse(args.length > 0 ? Values.asString(args[0]) : "");
+		double radius = args.length > 1 ? clamp(Values.asNumber(args[1]), 1d, 64d) : ENTITY_SEARCH_RANGE;
+		int limit = args.length > 2 ? (int) clamp(Values.asNumber(args[2]), 1d, 256d) : 32;
+		String key = "entities_json:" + filter.cacheKey() + ':' + radius + ':' + limit;
+		return ctx.cached(key, () -> buildEntitiesJson(ctx, filter, radius, limit));
+	}
+
+	private static String buildEntitiesJson(ScriptContext ctx, EntityFilter.Parsed filter,
+											double radius, int limit) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.player == null) {
+			return "[]";
+		}
+		ClientPlayerEntity player = client.player;
+		List<Snapshots.Entity> out = new ArrayList<>();
+		for (Entity entity : nearbyEntities(ctx, radius)) {
+			if (!entity.isAlive() || !EntityFilter.matches(entity, filter)) {
+				continue;
+			}
+			out.add(new Snapshots.Entity(
+					Registries.ENTITY_TYPE.getId(entity.getType()).toString(),
+					entity.getType().getName().getString(),
+					entity.getCustomName() == null ? "" : entity.getCustomName().getString(),
+					entity.getUuidAsString(),
+					(double) player.distanceTo(entity),
+					position(entity),
+					motion(entity),
+					(double) healthOf(entity),
+					(double) maxHealthOf(entity),
+					entity instanceof LivingEntity living && living.isBaby(),
+					entity.isOnGround()));
+		}
+		out.sort(Comparator.comparingDouble(Snapshots.Entity::distance));
+		if (out.size() > limit) {
+			out = new ArrayList<>(out.subList(0, limit));
+		}
+		return Snapshots.entities(out);
+	}
+
+	/** 方块快照：id + 方块状态 + 硬度/光照/群系 + 方块实体内容。 */
+	private static Object blockJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.world == null) {
+			return "{}";
+		}
+		BlockPos pos = new BlockPos(
+				GameActions.clampCoord(Values.asNumber(args.length > 0 ? args[0] : 0)),
+				GameActions.clampCoord(Values.asNumber(args.length > 1 ? args[1] : 0)),
+				GameActions.clampCoord(Values.asNumber(args.length > 2 ? args[2] : 0)));
+		BlockState state = client.world.getBlockState(pos);
+		Map<String, String> properties = new LinkedHashMap<>();
+		for (var entry : state.getEntries().entrySet()) {
+			properties.put(entry.getKey().getName(), String.valueOf(entry.getValue()));
+		}
+		return Snapshots.block(new Snapshots.Block(
+				Registries.BLOCK.getId(state.getBlock()).toString(),
+				pos.getX(),
+				pos.getY(),
+				pos.getZ(),
+				properties,
+				state.getHardness(client.world, pos),
+				state.isAir(),
+				state.isSolidBlock(client.world, pos),
+				!state.getFluidState().isEmpty(),
+				client.world.getLightLevel(pos),
+				biomeAt(client, pos),
+				blockEntity(client, pos)));
+	}
+
+	/**
+	 * 背包快照：41 格（0–35 主背包、36–39 盔甲、40 副手），只列非空槽位。
+	 *
+	 * <p>不走 {@code currentScreenHandler}：那个界面里的玩家格编号会随打开的容器整体后移
+	 * （大箱子里是 27–62），拿它当背包编号会随场景变化。这里固定用 inventory 索引。</p>
+	 */
+	private static Object inventoryJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.player == null) {
+			return "[]";
+		}
+		PlayerInventory inventory = client.player.getInventory();
+		List<Snapshots.Item> items = new ArrayList<>();
+		for (int i = 0; i < inventory.size(); i++) {
+			ItemStack stack = inventory.getStack(i);
+			if (!stack.isEmpty()) {
+				items.add(itemOf(i, stack));
+			}
+		}
+		return Snapshots.inventory(items);
+	}
+
+	/**
+	 * 界面快照：当前打开界面的槽位，编号与「点击槽位」同一套。
+	 *
+	 * <p>没有界面时给 {@code {}}：此时 {@code currentScreenHandler} 仍指向玩家自己的
+	 * 46 格合成界面，那不是「打开了一个界面」，照搬会让脚本以为有东西可点。</p>
+	 */
+	private static Object screenJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.player == null || client.currentScreen == null) {
+			return "{}";
+		}
+		ScreenHandler handler = client.player.currentScreenHandler;
+		if (handler == null) {
+			return "{}";
+		}
+		String type = screenType(client.currentScreen, handler);
+		int total = handler.slots.size();
+		List<Snapshots.ScreenItem> items = new ArrayList<>();
+		for (int i = 0; i < Math.min(total, Snapshots.SCREEN_LIMIT); i++) {
+			Slot slot = handler.slots.get(i);
+			ItemStack stack = slot.getStack();
+			if (stack == null || stack.isEmpty()) {
+				continue;
+			}
+			// player_slot：点之前要能判断这格是自己的背包还是容器，避免把自己的东西搬进箱子
+			items.add(new Snapshots.ScreenItem(itemOf(i, stack), slot.inventory instanceof PlayerInventory));
+		}
+		return Snapshots.screen(type, total, items);
+	}
+
+	/** 世界快照：时间、天数、月相、天气、维度、群系、光照。 */
+	private static Object worldJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.world == null) {
+			return "{}";
+		}
+		long timeOfDay = client.world.getTimeOfDay();
+		long days = Math.floorDiv(timeOfDay, 24000L);
+		BlockPos pos = client.player == null ? BlockPos.ORIGIN : client.player.getBlockPos();
+		return Snapshots.world(new Snapshots.WorldFacts(
+				Math.floorMod(timeOfDay, 24000L),
+				// 1 基天数与 F3 的 Day 一致：第 0 天在界面上显示为第 1 天
+				(int) (days + 1),
+				// 月相 0–7，0 是满月；每 8 天一轮
+				(int) Math.floorMod(days, 8L),
+				client.world.isRaining(),
+				client.world.isThundering(),
+				client.world.getRegistryKey().getValue().toString(),
+				biomeAt(client, pos),
+				client.world.getLightLevel(pos)));
+	}
+
+	/**
+	 * 「快照字段」：返回该快照的键名数组，供作者自助查询。
+	 *
+	 * <p>键名只存在于代码里，用户在 TurboWarp 里看不到；这块积木把清单直接交给脚本，
+	 * 接到「说」或「日志」上就能一次看全，不必翻文档。</p>
+	 */
+	private static Object snapshotKeys(ScriptContext ctx, Object[] args) {
+		return Snapshots.stringArray(Snapshots.keysOf(args.length > 0 ? Values.asString(args[0]) : ""));
+	}
+
+	/** 在线玩家快照：uuid / 名称 / 延迟 / 游戏模式。顺序由服务端给出（tab 列表顺序）。 */
+	private static Object playersJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.getNetworkHandler() == null) {
+			return "[]";
+		}
+		List<Snapshots.PlayerEntry> out = new ArrayList<>();
+		for (PlayerListEntry entry : client.getNetworkHandler().getPlayerList()) {
+			var profile = entry.getProfile();
+			out.add(new Snapshots.PlayerEntry(
+					profile.id() == null ? "" : profile.id().toString(),
+					profile.name() == null ? "" : profile.name(),
+					entry.getLatency(),
+					// 单人/旁观等场景可能没有模式信息，给空串而不是 null
+					entry.getGameMode() == null ? "" : entry.getGameMode().getId()));
+		}
+		return Snapshots.players(out);
+	}
+
+	/**
+	 * 最近 N 条聊天（旧的在前）。
+	 *
+	 * <p>N 夹在 1–{@link ChatState#CAPACITY}：缓冲容量固定，要更多得先改 ChatState，
+	 * 不能靠参数绕过（否则等于开了个无界队列）。</p>
+	 */
+	private static Object chatHistory(ScriptContext ctx, Object[] args) {
+		int count = args.length > 0
+				? (int) clamp(Values.asNumber(args[0]), 1d, ChatState.CAPACITY) : 10;
+		return Snapshots.chat(ChatState.history(count));
+	}
+
+	/**
+	 * 区域扫描：两角之间的**非空气**方块。
+	 *
+	 * <p>只返回非空气：完整体积的 JSON 轻易上百 KB，每帧一次就能拖垮帧率；
+	 * 「哪里有方块」是绝大多数脚本要的，「哪格是空的」用坐标反推即可。</p>
+	 *
+	 * <p>两道闸：体积不超过 {@link #SCAN_VOLUME_LIMIT}（超出部分不扫），
+	 * 列出的方块不超过 {@code LIMIT} 个。任一触发都置 {@code truncated=true}——
+	 * 它表示「结果不全」，脚本应缩小范围或提高上限。遍历顺序 y → x → z，
+	 * 因此截断先丢高层。</p>
+	 */
+	private static Object scanJson(ScriptContext ctx, Object[] args) {
+		MinecraftClient client = client(ctx);
+		if (client == null || client.world == null) {
+			return "{}";
+		}
+		int x1 = GameActions.clampCoord(Values.asNumber(args.length > 0 ? args[0] : 0));
+		int y1 = GameActions.clampCoord(Values.asNumber(args.length > 1 ? args[1] : 0));
+		int z1 = GameActions.clampCoord(Values.asNumber(args.length > 2 ? args[2] : 0));
+		int x2 = GameActions.clampCoord(Values.asNumber(args.length > 3 ? args[3] : 0));
+		int y2 = GameActions.clampCoord(Values.asNumber(args.length > 4 ? args[4] : 0));
+		int z2 = GameActions.clampCoord(Values.asNumber(args.length > 5 ? args[5] : 0));
+		int limit = args.length > 6 ? (int) clamp(Values.asNumber(args[6]), 1d, 16384d) : 4096;
+		int minX = Math.min(x1, x2);
+		int minY = Math.min(y1, y2);
+		int minZ = Math.min(z1, z2);
+		int maxX = Math.max(x1, x2);
+		int maxY = Math.max(y1, y2);
+		int maxZ = Math.max(z1, z2);
+		// 同一 tick 内重复调用只扫一次：扫描是这里最贵的操作，脚本常在循环里反复取
+		String key = "scan_json:" + minX + ',' + minY + ',' + minZ + ','
+				+ maxX + ',' + maxY + ',' + maxZ + ',' + limit;
+		return ctx.cached(key, () -> buildScan(client, minX, minY, minZ, maxX, maxY, maxZ, limit));
+	}
+
+	private static String buildScan(MinecraftClient client, int minX, int minY, int minZ,
+									int maxX, int maxY, int maxZ, int limit) {
+		long volume = (long) (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+		boolean truncated = volume > SCAN_VOLUME_LIMIT;
+		List<Snapshots.BlockEntry> blocks = new ArrayList<>();
+		int visited = 0;
+		outer:
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					if (visited++ >= SCAN_VOLUME_LIMIT) {
+						truncated = true;
+						break outer;
+					}
+					BlockPos pos = new BlockPos(x, y, z);
+					BlockState state = client.world.getBlockState(pos);
+					if (state.isAir()) {
+						continue;
+					}
+					if (blocks.size() >= limit) {
+						truncated = true;
+						break outer;
+					}
+					blocks.add(new Snapshots.BlockEntry(x, y, z,
+							Registries.BLOCK.getId(state.getBlock()).toString()));
+				}
+			}
+		}
+		return Snapshots.scan(new Snapshots.Scan(minX, minY, minZ, maxX, maxY, maxZ, truncated, blocks));
+	}
+
+	/**
+	 * 界面的类型 id。
+	 *
+	 * <p><b>玩家背包与创造背包会抛异常</b>：{@code PlayerScreenHandler} 与
+	 * {@code CreativeScreenHandler} 构造时传的类型都是 {@code null}（它们不是网络菜单），
+	 * {@code getType()} 直接抛 {@code UnsupportedOperationException: Unable to construct this menu
+	 * by type}。这不是异常状态，是原版的设计——所以这里兜住并给固定值，而不是让整块积木失败。</p>
+	 *
+	 * <p>两者**分开命名**：创造背包是 45 格物品栏 + 9 格快捷栏（实测 `slots=54`），
+	 * 生存背包 46 格，脚本按 `type` 分流时不能混为一谈。</p>
+	 */
+	private static String screenType(Screen screen, ScreenHandler handler) {
+		try {
+			return Registries.SCREEN_HANDLER.getId(handler.getType()).toString();
+		} catch (UnsupportedOperationException e) {
+			return screen instanceof CreativeInventoryScreen
+					? "minecraft:creative_inventory" : "minecraft:player";
+		}
+	}
+
+	/** 物品条目：背包、界面、方块实体共用一份，附魔也在这里取。 */
+	private static Snapshots.Item itemOf(int slot, ItemStack stack) {
+		java.util.Map<String, Integer> enchantments = new LinkedHashMap<>();
+		var component = stack.getEnchantments();
+		if (component != null && !component.isEmpty()) {
+			for (var entry : component.getEnchantments()) {
+				String id = entry.getKey().map(key -> key.getValue().toString()).orElse("");
+				if (!id.isEmpty()) {
+					enchantments.put(id, component.getLevel(entry));
+				}
+			}
+		}
+		return new Snapshots.Item(slot,
+				Registries.ITEM.getId(stack.getItem()).toString(),
+				stack.getCount(),
+				stack.getDamage(),
+				stack.getMaxDamage(),
+				stack.getCustomName() == null ? "" : stack.getCustomName().getString(),
+				enchantments);
+	}
+
+	/**
+	 * 方块实体的内容：容器槽位、告示牌文本、标量 NBT。
+	 *
+	 * <p>不做整棵 NBT 的 JSON 化：箱子的 {@code Items} 是列表，原样倒出来既大又难用，
+	 * 而列表内容已由 {@code items} 结构化给出。标量仍然有用——熔炉的 {@code CookTime} /
+	 * {@code BurnTime} 只存在于 NBT 里，客户端没有对应的 getter。</p>
+	 */
+	private static Snapshots.BlockEntity blockEntity(MinecraftClient client, BlockPos pos) {
+		BlockEntity be = client.world.getBlockEntity(pos);
+		if (be == null) {
+			return null;
+		}
+		String type = Registries.BLOCK_ENTITY_TYPE.getId(be.getType()).toString();
+		List<Snapshots.Item> items = new ArrayList<>();
+		int total = 0;
+		if (be instanceof Inventory inventory) {
+			total = inventory.size();
+			// 截断到 ITEM_LIMIT 条；items_total 给出真实槽位数，脚本据此判断有没有漏
+			for (int i = 0; i < Math.min(total, Snapshots.ITEM_LIMIT); i++) {
+				ItemStack stack = inventory.getStack(i);
+				if (!stack.isEmpty()) {
+					items.add(itemOf(i, stack));
+				}
+			}
+		}
+		Map<String, Object> nbt = new LinkedHashMap<>();
+		try {
+			NbtCompound compound = be.createNbtWithIdentifyingData(client.world.getRegistryManager());
+			for (String key : compound.getKeys()) {
+				if (nbt.size() >= Snapshots.NBT_LIMIT) {
+					break;
+				}
+				// x / y / z 与 id 已在顶层给过，且 id 在 1.21.11 里序列化成
+				// "Optional[minecraft:furnace]" 这种噪声，不进 nbt
+				if ("x".equals(key) || "y".equals(key) || "z".equals(key) || "id".equals(key)) {
+					continue;
+				}
+				NbtElement element = compound.get(key);
+				if (element instanceof AbstractNbtNumber number) {
+					nbt.put(key, number.doubleValue());
+				} else if (element instanceof NbtString string) {
+					nbt.put(key, string.asString());
+				}
+			}
+		} catch (RuntimeException e) {
+			// 模组方块实体可能拒绝客户端取 NBT；只丢 nbt 段，id/items/文本照常给
+			LOG.debug("[script] 方块实体 NBT 读取失败 {}", pos, e);
+		}
+		String front = "";
+		String back = "";
+		if (be instanceof SignBlockEntity sign) {
+			front = signText(sign.getFrontText());
+			back = signText(sign.getBackText());
+		}
+		return new Snapshots.BlockEntity(type, items, total, nbt, front, back);
+	}
+
+	/** 告示牌四行文本，行间保留 {@code \n}（空行有版式意义），整体去掉首尾空白。 */
+	private static String signText(SignText text) {
+		if (text == null) {
+			return "";
+		}
+		StringBuilder out = new StringBuilder();
+		for (int i = 0; i < 4; i++) {
+			if (i > 0) {
+				out.append('\n');
+			}
+			out.append(text.getMessage(i, false).getString());
+		}
+		return out.toString().strip();
+	}
+
+	private static Snapshots.Vec position(Entity entity) {
+		return new Snapshots.Vec(entity.getX(), entity.getY(), entity.getZ());
+	}
+
+	/**
+	 * 上一 tick 的位移（格/tick）。
+	 *
+	 * <p>不用 {@code getVelocity()}：客户端自己的速度基本恒为 0（移动由客户端权威），
+	 * 用它算「移动速度」会永远得到 0。位移差分对玩家与实体都成立。</p>
+	 */
+	private static Snapshots.Vec motion(Entity entity) {
+		return new Snapshots.Vec(
+				entity.getX() - entity.lastX,
+				entity.getY() - entity.lastY,
+				entity.getZ() - entity.lastZ);
+	}
+
+	/** 血量：箭、掉落物这类非生物实体没有血量，给 0 而不是让整个快照失败。 */
+	private static float healthOf(Entity entity) {
+		return entity instanceof LivingEntity living ? living.getHealth() : 0f;
+	}
+
+	private static float maxHealthOf(Entity entity) {
+		return entity instanceof LivingEntity living ? living.getMaxHealth() : 0f;
+	}
+
+	private static String biomeAt(MinecraftClient client, BlockPos pos) {
+		return client.world == null
+				? "" : client.world.getBiome(pos).getKey().map(key -> key.getValue().toString()).orElse("");
+	}
+
+	/** 参数钳制：NaN（参数缺失或填了非数字）落到下限，其余夹在区间内。 */
+	private static double clamp(double value, double min, double max) {
+		if (Double.isNaN(value)) {
+			return min;
+		}
+		return Math.max(min, Math.min(max, value));
 	}
 
 	private static MinecraftClient client(ScriptContext ctx) {

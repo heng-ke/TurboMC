@@ -20,6 +20,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const MAPPING_JAVA = path.join(ROOT, 'src/client/java/xyz/turbomc/client/script/sb3/Sb3Mapping.java');
+const BLOCKS_JAVA = path.join(ROOT, 'src/client/java/xyz/turbomc/client/script/block/Blocks.java');
 const BLOCKS_DATA = path.join(ROOT, 'turbowarp/src/blocks.data.js');
 const OUTPUT = path.join(ROOT, 'turbowarp/mapping-report.md');
 
@@ -52,6 +53,16 @@ const MAINTENANCE = `## 四、维护提示
 - 不提供攻击积木：自动选目标会打掉落物/经验球，服务端判定无效实体直接断开连接。
   攻击用「点击左键」，走原版射线。`;
 
+/**
+ * 查看器侧的已知改名：sb3 字段名 → 模板占位符名。
+ *
+ * <p>目前只有一处：{@code action.key} 的状态字段在 sb3 里叫 {@code STATE}，
+ * 导入时由 {@code Sb3Mapping.fieldName} 改成 {@code PRESSED}，查看器模板用后者。
+ * 这张表只用于把校验的两边对齐；**真正的改名规则仍在 Sb3Mapping**，
+ * 那边新增映射时这里要同步，否则校验会报错提醒（这正是想要的效果）。</p>
+ */
+const VIEWER_RENAMES = {STATE: 'PRESSED', ONOFF: 'PRESSED'};
+
 /** 按出现顺序读出 Sb3Mapping 里的 Map.entry("a", "b")。 */
 function readMapping() {
 	const text = fs.readFileSync(MAPPING_JAVA, 'utf8');
@@ -62,6 +73,75 @@ function readMapping() {
 		entries.push({ opcode: m[1], type: m[2] });
 	}
 	return entries;
+}
+
+/**
+ * 解析 Blocks.java 的 regT/reg 调用：内部类型 → { 模板占位符, 参数名 }。
+ *
+ * <p>为什么要解析源码而不是只信参数数量：{@code RhinoVm.argsSelfTest} 只比个数，
+ * 把 {@code AXIS} 改成 {@code AXES} 这种改法照样通过，运行时却按位置把错的实参
+ * 传进 Java（§6.1 的静默错位）。这里把「名字与顺序」也钉住。</p>
+ */
+function readBlockRegistry() {
+	const text = fs.readFileSync(BLOCKS_JAVA, 'utf8');
+	const out = new Map();
+	const re = /\breg(T)?\s*\(/g;
+	let m;
+	while ((m = re.exec(text))) {
+		const open = text.indexOf('(', m.index);
+		const close = matchParen(text, open);
+		if (close < 0) {
+			continue;
+		}
+		const call = text.slice(open + 1, close);
+		const first = call.match(/"((?:[^"\\]|\\.)*)"/);
+		if (!first) {
+			continue;
+		}
+		// 模板是 BlockShape.XXX 之后的第一个字符串字面量；reg() 版本没有模板
+		const shapeAt = call.indexOf('BlockShape.');
+		let template = '';
+		if (shapeAt >= 0) {
+			const found = call.slice(shapeAt).match(/,\s*"((?:[^"\\]|\\.)*)"/);
+			if (found) {
+				template = found[1];
+			}
+		}
+		out.set(first[1], {
+			// 占位符大小写都要认：JSON 组的参数名是小写（{json}、{item}），其余组是大写
+			placeholders: [...template.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map((x) => x[1]),
+			params: [...call.matchAll(/BlockParam\.\w+\("([^"]+)"/g)].map((x) => x[1])
+		});
+	}
+	return out;
+}
+
+/** 从 open 处的左括号找到配对的右括号（跳过字符串内部）。 */
+function matchParen(text, open) {
+	let depth = 0;
+	let inString = false;
+	for (let i = open; i < text.length; i += 1) {
+		const ch = text[i];
+		if (inString) {
+			if (ch === '\\') {
+				i += 1;
+			} else if (ch === '"') {
+				inString = false;
+			}
+			continue;
+		}
+		if (ch === '"') {
+			inString = true;
+		} else if (ch === '(') {
+			depth += 1;
+		} else if (ch === ')') {
+			depth -= 1;
+			if (depth === 0) {
+				return i;
+			}
+		}
+	}
+	return -1;
 }
 
 function build() {
@@ -88,6 +168,44 @@ function build() {
 			problems.push('映射表有、数据源缺：' + op);
 		}
 	}
+
+	// 参数名与顺序：中文文案是权威顺序（产物里的 argOrder 也由它生成），
+	// 数据源、Blocks.java 必须逐字对上。只比个数拦不住改名。
+	const registry = readBlockRegistry();
+	const grab = (text) => [...String(text || '').matchAll(/\[([A-Za-z0-9_]+)\]/g)].map((x) => x[1]);
+	for (const block of blocks) {
+		const opcode = PREFIX + block.opcode;
+		const zh = grab(block.text && block.text.zh);
+		const en = grab(block.text && block.text.en);
+		const args = Object.keys(block.arguments || {});
+		if (zh.join(',') !== args.join(',')) {
+			problems.push('数据源：文案与 arguments 顺序不一致 ' + opcode
+				+ '（文案 ' + zh.join(',') + ' / 参数 ' + args.join(',') + '）');
+		}
+		// 英文顺序允许不同（实参顺序由 argOrder 固定，与界面语言无关），
+		// 但占位符名字集合必须一致——少一个就等于该参数在英文界面上填不了
+		if ([...en].sort().join(',') !== [...zh].sort().join(',')) {
+			problems.push('中英文占位符集合不一致 ' + opcode
+				+ '（zh ' + zh.join(',') + ' / en ' + en.join(',') + '）');
+		}
+		const type = typeOf.get(opcode);
+		const spec = registry.get(type);
+		if (!spec) {
+			problems.push('Blocks.java 未登记：' + type + '（' + opcode + '）');
+			continue;
+		}
+		// 查看器模板里的名字经过 fieldName 改名，比对前先对齐
+		const viewerZh = zh.map((name) => VIEWER_RENAMES[name] || name);
+		if (spec.placeholders.join(',') !== viewerZh.join(',')) {
+			problems.push('Blocks.java 模板占位符不一致 ' + opcode
+				+ '（' + spec.placeholders.join(',') + ' vs ' + viewerZh.join(',') + '）');
+		}
+		if (spec.params.join(',') !== viewerZh.join(',')) {
+			problems.push('Blocks.java 参数名不一致 ' + opcode
+				+ '（' + spec.params.join(',') + ' vs ' + viewerZh.join(',') + '）');
+		}
+	}
+
 	if (problems.length) {
 		throw new Error('扩展数据源与 Sb3Mapping 不一致：\n  ' + problems.join('\n  '));
 	}

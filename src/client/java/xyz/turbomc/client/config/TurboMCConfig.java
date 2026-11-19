@@ -12,6 +12,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -32,30 +33,29 @@ public final class TurboMCConfig {
 			.getConfigDir()
 			.resolve("turbomc.json");
 
+	/**
+	 * 默认黑名单：聊天、命令、截图、全屏、暂停、进度、社交。
+	 *
+	 * <p>这几个键一按就会抢走键盘焦点或影响游戏外行为，脚本按下后后续按键会打进输入框。</p>
+	 *
+	 * <p><b>必须声明在 {@link #instance} 之前</b>：构造器里的
+	 * {@code blockedKeys = new ArrayList<>(DEFAULT_BLOCKED_KEYS)} 会读这个常量，
+	 * 而静态初始化按源码顺序执行——放到后面时它还是 {@code null}，
+	 * {@code new ArrayList<>(null)} 会让模组在客户端启动阶段直接崩掉。</p>
+	 */
+	public static final List<String> DEFAULT_BLOCKED_KEYS =
+			List.of("t", "slash", "f2", "f11", "escape", "l", "p");
+
 	private static TurboMCConfig instance = new TurboMCConfig();
 
 	// ---- 常规 ----
 	public boolean masterEnabled = true;
 
-	/**
-	 * 旧版 HUD 停靠角落。仅用于读取旧配置时推导初始百分比，不再由界面写入。
-	 *
-	 * <p>保留字段而不是删掉，是为了让老 json 里的 {@code hudCorner} 继续有意义：
-	 * 它决定 {@link #hudOffsetX} / {@link #hudOffsetY} 未设置时的回退位置。
-	 * 新的唯一定位真源是下面两个百分比。</p>
-	 */
-	public HudCorner hudCorner = HudCorner.TOP_LEFT;
-
-	/**
-	 * HUD 左上角相对屏幕「可放置区域」的水平百分比，0–100；{@code null} = 未设置。
-	 *
-	 * <p>用包装类型而不是 {@code double}：缺字段与「显式设成 0」必须能区分，
-	 * 否则旧配置里的「右上」会被一个默认 0 直接抹成左上。</p>
-	 */
-	public Double hudOffsetX;
+	/** HUD 左上角相对屏幕「可放置区域」的水平百分比，0–100。 */
+	public double hudOffsetX;
 
 	/** 垂直百分比，语义同 {@link #hudOffsetX}。 */
-	public Double hudOffsetY;
+	public double hudOffsetY;
 
 	// ---- 脚本引擎 ----
 	/**
@@ -156,20 +156,15 @@ public final class TurboMCConfig {
 	/**
 	 * 「走向」的精度与搜索参数。
 	 *
-	 * <p>与 {@link Ai} 同样的问题：旧配置文件里没有这一段，Gson 用 Unsafe 建实例、
-	 * 不执行字段初始化器，所以字段可能整体为 {@code null}。读取一律走
-	 * {@link #pathingSection()} 系列 getter（缺段/缺字段回退默认值并钳制），
-	 * 写入走 {@link #pathingOrCreate()}。</p>
+	 * <p>字段全用包装类型：缺字段与「配成 0」必须能区分。读取走下面的系列 getter
+	 * （缺字段回退默认值并钳制）。</p>
 	 */
 	public Pathing pathing = new Pathing();
 
 	/**
 	 * 脚本禁止按下的键。为空列表表示不拦截任何键（不建议）。
-	 *
-	 * <p>{@code null} 表示「从未配置过」，读取时回退到 {@link #DEFAULT_BLOCKED_KEYS}——
-	 * 旧配置文件没有这个字段时，Gson 会留 null，用空列表兜底会让所有键突然都能按了。</p>
 	 */
-	public List<String> blockedKeys;
+	public List<String> blockedKeys = new ArrayList<>(DEFAULT_BLOCKED_KEYS);
 
 	/**
 	 * 脚本允许按下的键。**空表示不限制**（除黑名单外全部放行）。
@@ -177,10 +172,7 @@ public final class TurboMCConfig {
 	public List<String> allowedKeys;
 
 	/**
-	 * 大模型对话配置。
-	 *
-	 * <p><b>从旧配置文件加载时这一段是 {@code null}</b>：Gson 用 Unsafe 建实例，字段初始化
-	 * 不执行。所以读取一律走 {@link #aiOrCreate()} 或 {@link #aiSettings()}，不要直接读字段。</p>
+	 * 大模型对话配置。段内字段用包装类型，读取走 {@link #aiSettings()} 等 getter。
 	 */
 	public Ai ai = new Ai();
 
@@ -233,46 +225,22 @@ public final class TurboMCConfig {
 		return disableEngineOnExit == null || disableEngineOnExit;
 	}
 
-	/**
-	 * HUD 水平位置百分比（0–100）。
-	 *
-	 * <p>未配置时按 {@link #hudCorner} 推导，于是旧配置的四角落点原样落到
-	 * 0 / 100 上，行为与改造前一致；枚举本身也可能是 {@code null}（手改过的 json），
-	 * 一并按左上处理，不抛空指针。</p>
-	 */
+	/** HUD 水平位置百分比（0–100）。 */
 	public double hudPercentX() {
-		if (hudOffsetX != null) {
-			return clamp(hudOffsetX, 0.0, 100.0);
-		}
-		return hudCorner == HudCorner.TOP_RIGHT || hudCorner == HudCorner.BOTTOM_RIGHT ? 100.0 : 0.0;
+		return clamp(hudOffsetX, 0.0, 100.0);
 	}
 
-	/** HUD 垂直位置百分比（0–100），推导规则同 {@link #hudPercentX()}。 */
+	/** HUD 垂直位置百分比（0–100）。 */
 	public double hudPercentY() {
-		if (hudOffsetY != null) {
-			return clamp(hudOffsetY, 0.0, 100.0);
-		}
-		return hudCorner == HudCorner.BOTTOM_LEFT || hudCorner == HudCorner.BOTTOM_RIGHT ? 100.0 : 0.0;
+		return clamp(hudOffsetY, 0.0, 100.0);
 	}
 
-
-	/**
-	 * 默认黑名单：聊天、命令、截图、全屏、暂停、进度、社交。
-	 *
-	 * <p>这几个键一按就会抢走键盘焦点或影响游戏外行为，脚本按下后后续按键会打进输入框。</p>
-	 */
-	public static final List<String> DEFAULT_BLOCKED_KEYS =
-			List.of("t", "slash", "f2", "f11", "escape", "l", "p");
-
-	public List<String> blockedKeysOrDefault() {
-		return blockedKeys == null ? DEFAULT_BLOCKED_KEYS : blockedKeys;
-	}
 
 	/**
 	 * 归一化后的黑名单集合。
 	 */
 	public Set<String> blockedKeySet() {
-		return canonicalSet(blockedKeysOrDefault());
+		return canonicalSet(blockedKeys);
 	}
 
 	/**
@@ -299,11 +267,10 @@ public final class TurboMCConfig {
 	/**
 	 * 归一化后的大模型配置。
 	 *
-	 * <p>缺失字段一律回退到安全默认值：旧版本的配置文件里没有 {@code ai} 段，
-	 * 直接读字段会得到一串 {@code null}。</p>
+	 * <p>段内字段仍用包装类型：缺失与「配成 0」必须能区分。</p>
 	 */
 	public AiService.Settings aiSettings() {
-		Ai section = ai == null ? new Ai() : ai;
+		Ai section = ai;
 		return new AiService.Settings(
 				trim(section.baseUrl),
 				trim(section.apiKey),
@@ -315,33 +282,22 @@ public final class TurboMCConfig {
 				section.maxConcurrent == null ? 2 : Math.max(1, Math.min(16, section.maxConcurrent)));
 	}
 
-	/** HUD 结论停留时长（毫秒）。缺字段按 5 秒——旧配置文件没有这一段。 */
+	/** HUD 结论停留时长（毫秒）。 */
 	public int aiHudHoldMs() {
-		Ai section = ai;
-		Integer value = section == null ? null : section.hudHoldSeconds;
+		Integer value = ai.hudHoldSeconds;
 		return (value == null ? 5 : Math.max(1, Math.min(20, value))) * 1000;
 	}
 
 	/** HUD 上同时显示几个会话。 */
 	public int aiHudMaxRows() {
-		Ai section = ai;
-		Integer value = section == null ? null : section.hudMaxRows;
+		Integer value = ai.hudMaxRows;
 		return value == null ? 2 : Math.max(1, Math.min(5, value));
 	}
 
 	/** HUD 上回复预览的字数上限。 */
 	public int aiHudReplyChars() {
-		Ai section = ai;
-		Integer value = section == null ? null : section.hudReplyChars;
+		Integer value = ai.hudReplyChars;
 		return value == null ? 24 : Math.max(8, Math.min(64, value));
-	}
-
-	/** 配置界面用：需要写入时确保对象存在。 */
-	public Ai aiOrCreate() {
-		if (ai == null) {
-			ai = new Ai();
-		}
-		return ai;
 	}
 
 	/**
@@ -410,30 +366,15 @@ public final class TurboMCConfig {
 		public Integer maxDistance = 128;
 	}
 
-	/** 缺段时的只读兜底。绝不写回：写入一律走 {@link #pathingOrCreate()}。 */
-	private static final Pathing PATHING_DEFAULTS = new Pathing();
-
-	private Pathing pathingSection() {
-		return pathing == null ? PATHING_DEFAULTS : pathing;
-	}
-
-	/** 配置界面用：需要写入时确保对象存在。 */
-	public Pathing pathingOrCreate() {
-		if (pathing == null) {
-			pathing = new Pathing();
-		}
-		return pathing;
-	}
-
 	/** 水平到达半径（格），钳制到 0.30–1.20。 */
 	public double pathArriveHorizontal() {
-		Double value = pathingSection().arriveHorizontal;
+		Double value = pathing.arriveHorizontal;
 		return value == null ? 0.6 : clamp(value, 0.30, 1.20);
 	}
 
 	/** 垂直到达容差（格），钳制到 0.50–0.90。 */
 	public double pathArriveVertical() {
-		Double value = pathingSection().arriveVertical;
+		Double value = pathing.arriveVertical;
 		return value == null ? 0.6 : clamp(value, 0.50, 0.90);
 	}
 
@@ -443,25 +384,25 @@ public final class TurboMCConfig {
 	 * <p>上限 0.60 是刻意的：再大就会提前切角，贴着拐角内壁走。</p>
 	 */
 	public double pathNodeReach() {
-		Double value = pathingSection().nodeReach;
+		Double value = pathing.nodeReach;
 		return value == null ? 0.5 : clamp(value, 0.35, 0.60);
 	}
 
 	/** A\* 到达容差（格），钳制到 0–2。 */
 	public int pathAccuracy() {
-		Integer value = pathingSection().accuracy;
+		Integer value = pathing.accuracy;
 		return value == null ? 1 : Math.max(0, Math.min(2, value));
 	}
 
 	/** 站定转向阈值（度），钳制到 20–60。 */
 	public double pathStandTurnDeg() {
-		Double value = pathingSection().standTurnDeg;
+		Double value = pathing.standTurnDeg;
 		return value == null ? 30.0 : clamp(value, 20.0, 60.0);
 	}
 
 	/** 搜索强度档位；缺字段按 {@link PathEffort#NORMAL}。 */
 	public PathEffort pathEffort() {
-		PathEffort value = pathingSection().effort;
+		PathEffort value = pathing.effort;
 		return value == null ? PathEffort.NORMAL : value;
 	}
 
@@ -472,7 +413,7 @@ public final class TurboMCConfig {
 
 	/** 最远目标距离（格），钳制到 32–192。 */
 	public int pathMaxDistance() {
-		Integer value = pathingSection().maxDistance;
+		Integer value = pathing.maxDistance;
 		return value == null ? 128 : Math.max(32, Math.min(192, value));
 	}
 
@@ -494,11 +435,33 @@ public final class TurboMCConfig {
 		try (Reader reader = Files.newBufferedReader(PATH, StandardCharsets.UTF_8)) {
 			TurboMCConfig loaded = GSON.fromJson(reader, TurboMCConfig.class);
 			if (loaded != null) {
+				loaded.normalizeSections();
 				instance = loaded;
 			}
 			TurboMC.LOGGER.info("配置已加载: {}", PATH);
 		} catch (Exception e) {
 			TurboMC.LOGGER.error("配置读取失败，保持默认值: {}", PATH, e);
+		}
+	}
+
+	/**
+	 * 补齐缺失的段。
+	 *
+	 * <p>不是版本兼容，而是 Gson 的固有行为：它用 Unsafe 建实例、不执行字段初始化器，
+	 * 所以 json 里缺 {@code ai} / {@code pathing} / {@code blockedKeys} 时这几个字段是
+	 * {@code null}。集中在加载后补一次，比让 20 多个 getter 各写一遍 null 判断更省。</p>
+	 *
+	 * <p>段内字段仍可能为 null（缺字段与「配成 0」要能区分），由各自的 getter 兜底。</p>
+	 */
+	private void normalizeSections() {
+		if (ai == null) {
+			ai = new Ai();
+		}
+		if (pathing == null) {
+			pathing = new Pathing();
+		}
+		if (blockedKeys == null) {
+			blockedKeys = new ArrayList<>(DEFAULT_BLOCKED_KEYS);
 		}
 	}
 

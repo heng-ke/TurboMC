@@ -19,6 +19,8 @@ import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.Values;
 
+import java.util.Locale;
+
 /**
  * 容器交互：打开指定容器、点击槽位、快速转移、关闭界面。
  *
@@ -47,8 +49,7 @@ public final class ContainerActions {
 		NativeRegistry.action("action.quick_move_slot", ContainerActions::quickMove);
 		NativeRegistry.action("action.close_container", ContainerActions::close);
 		NativeRegistry.function("world.container_slots", ContainerActions::containerSlots);
-		NativeRegistry.function("world.slot_item", ContainerActions::slotItem);
-		NativeRegistry.function("world.slot_amount", ContainerActions::slotAmount);
+		NativeRegistry.function("world.slot_field", ContainerActions::slotField);
 		NativeRegistry.function("world.first_slot_of", ContainerActions::firstSlotOf);
 	}
 
@@ -151,22 +152,39 @@ public final class ContainerActions {
 	}
 
 	/**
-	 * 某个槽位里的物品 ID，例如 {@code minecraft:iron_ore}；空槽返回空串。
+	 * 「槽位 [INDEX] 的 [字段]」合并块：注册名、数量、耐久上限、已损耗、自定义名称。
 	 *
-	 * <p>返回的是注册名而不是显示名：显示名会随语言变化，脚本判断会跟着坏掉。</p>
+	 * <p>只做字段分派，取栈走 {@link #stackAt}：未开界面或越界都是 {@code null}，
+	 * 于是文本字段给空串、数值字段给 0，与旧的 slotItem / slotAmount 完全一致。</p>
+	 *
+	 * <p>「已损耗」与「耐久上限」分开给而不直接给百分比：两者相除才是有意义的进度，
+	 * 由脚本自己决定怎么算（百分比在「耐久百分比」那块里已有一份），这里不做第二次约定。</p>
 	 */
-	private static Object slotItem(ScriptContext ctx, Object[] args) {
+	private static Object slotField(ScriptContext ctx, Object[] args) {
+		String field = args.length > 1
+				? Values.asString(args[1]).trim().toLowerCase(Locale.ROOT) : "id";
 		ItemStack stack = stackAt(ctx, args);
-		if (stack == null || stack.isEmpty()) {
-			return "";
+		boolean empty = stack == null || stack.isEmpty();
+		switch (field) {
+			case "amount" -> {
+				return empty ? 0d : (double) stack.getCount();
+			}
+			case "max_durability" -> {
+				return empty ? 0d : (double) stack.getMaxDamage();
+			}
+			case "damage" -> {
+				return empty ? 0d : (double) stack.getDamage();
+			}
+			case "custom_name" -> {
+				if (empty || stack.getCustomName() == null) {
+					return "";
+				}
+				return stack.getCustomName().getString();
+			}
+			default -> {
+				return empty ? "" : Registries.ITEM.getId(stack.getItem()).toString();
+			}
 		}
-		return Registries.ITEM.getId(stack.getItem()).toString();
-	}
-
-	/** 某个槽位里的物品数量；空槽返回 0。 */
-	private static Object slotAmount(ScriptContext ctx, Object[] args) {
-		ItemStack stack = stackAt(ctx, args);
-		return stack == null || stack.isEmpty() ? 0d : (double) stack.getCount();
 	}
 
 	/**

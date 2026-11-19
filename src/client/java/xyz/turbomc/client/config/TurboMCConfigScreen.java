@@ -142,7 +142,7 @@ public final class TurboMCConfigScreen {
 		// ---- 寻路 ----
 		// 放在脚本引擎之后：这些是「走向」积木的精度参数，改完下一 tick 即生效，无需重启。
 		ConfigCategory pathing = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.pathing"));
-		TurboMCConfig.Pathing path = config.pathingOrCreate();
+		TurboMCConfig.Pathing path = config.pathing;
 
 		pathing.addEntry(entries
 				.startTextDescription(Text.translatable("config.turbomc.pathing.hint"))
@@ -213,7 +213,7 @@ public final class TurboMCConfigScreen {
 
 		// ---- AI 对话 ----
 		ConfigCategory ai = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.ai"));
-		TurboMCConfig.Ai section = config.aiOrCreate();
+		TurboMCConfig.Ai section = config.ai;
 
 		ai.addEntry(entries
 				.startTextDescription(Text.translatable("config.turbomc.ai.hint"))
@@ -349,7 +349,7 @@ public final class TurboMCConfigScreen {
 
 		keys.addEntry(entries
 				.startStrList(Text.translatable("config.turbomc.blocked_keys"),
-						new ArrayList<>(config.blockedKeysOrDefault()))
+						new ArrayList<>(config.blockedKeys))
 				.setDefaultValue(TurboMCConfig.DEFAULT_BLOCKED_KEYS)
 				.setTooltip(Text.translatable("config.turbomc.blocked_keys.tooltip"))
 				.setSaveConsumer(value -> config.blockedKeys = new ArrayList<>(value))

@@ -8,6 +8,13 @@ import java.util.List;
  * <p>这份清单只服务于「把 sb3 积木渲染成文本」。脚本由 TurboWarp 编写，
  * 游戏内不提供拼接，因此这里不生成任何控件；新增积木时若忘了在此声明，
  * 查看器会把它显示成未注册的原始 opcode（不影响运行）。</p>
+ *
+ * <p><b>参数登记里真正被消费的只有两样</b>：模板里的 {@code {NAME}}（值从 sb3 的
+ * fields / inputs 现取，先 fields 后 inputs）与参数<b>个数</b>（{@code RhinoVm.argsSelfTest}
+ * 拿它和扩展的占位符数比对）。{@link BlockParam} 的 {@code kind} / {@code options} /
+ * {@code defaultValue} 目前不参与渲染——所以登记成 field 还是 input 不影响显示，
+ * 别把它当渲染依据。名字与顺序的一致性由 {@code tools/build-mapping-report.js} 在
+ * 构建期校验（见 ARCHITECTURE §6.1）。</p>
  */
 final class Blocks {
 	private Blocks() {
@@ -26,6 +33,8 @@ final class Blocks {
 				BlockParam.fieldText("KEY", "f"));
 		reg("event.damage", "event", BlockShape.HAT);
 		regT("event.death", "event", BlockShape.HAT, "当玩家死亡");
+		regT("event.screen_open", "event", BlockShape.HAT, "当打开 {SCREEN}",
+				BlockParam.fieldOption("SCREEN", "container", "container", "inventory", "any"));
 		regT("event.chat", "event", BlockShape.HAT, "当聊天包含 {MATCH}",
 				BlockParam.fieldOrExpr("MATCH", ""));
 		regT("event.broadcast", "event", BlockShape.HAT, "当收到 {MSG}",
@@ -177,37 +186,33 @@ final class Blocks {
 		reg("world.mining_progress", "world", BlockShape.REPORTER);
 		reg("world.health", "world", BlockShape.REPORTER);
 		reg("world.food", "world", BlockShape.REPORTER);
-		reg("world.pos_x", "world", BlockShape.REPORTER);
-		reg("world.pos_y", "world", BlockShape.REPORTER);
-		reg("world.pos_z", "world", BlockShape.REPORTER);
+		// 三轴合并成一块下拉（旧的 world.pos_x/y/z 已删除，见 ARCHITECTURE §6.2）
+		regT("world.pos", "world", BlockShape.REPORTER, "玩家 {AXIS} 坐标",
+				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
 		reg("world.selected_slot", "world", BlockShape.REPORTER);
 		reg("world.container_slots", "world", BlockShape.REPORTER);
-		regT("world.slot_item", "world", BlockShape.REPORTER, "槽位 {INDEX} 的物品",
-				BlockParam.number("INDEX", "0"));
-		regT("world.slot_amount", "world", BlockShape.REPORTER, "槽位 {INDEX} 的数量",
-				BlockParam.number("INDEX", "0"));
+		regT("world.slot_field", "world", BlockShape.REPORTER, "槽位 {INDEX} 的 {FIELD}",
+				BlockParam.number("INDEX", "0"),
+				BlockParam.fieldOption("FIELD", "id", "id", "amount",
+						"max_durability", "damage", "custom_name"));
 		// 物品参数是下拉菜单（扩展的 itemId 菜单，1.21.11 全部 1505 个物品）；
 		// 查看器把 id 显示成物品中文名（见 ParamLabels.itemName）
 		regT("world.first_slot_of", "world", BlockShape.REPORTER, "第一个装着 {ITEM} 的槽位",
 				BlockParam.text("ITEM", "minecraft:iron_ore"));
 		// 实体类型在编辑器里是下拉菜单（扩展的 entityType 菜单，1.21.11 全部 157 个实体）；
 		// 查看器只拿到最终值：关键字走语言文件，具体 id 走注册表查中文名（见 ParamLabels）
-		regT("world.nearest_entity", "world", BlockShape.REPORTER, "最近 {TYPE} 的距离",
-				BlockParam.text("TYPE", "minecraft:zombie"));
-		regT("world.nearest_entity_x", "world", BlockShape.REPORTER, "最近 {TYPE} 的 X",
-				BlockParam.text("TYPE", "minecraft:zombie"));
-		regT("world.nearest_entity_y", "world", BlockShape.REPORTER, "最近 {TYPE} 的 Y",
-				BlockParam.text("TYPE", "minecraft:zombie"));
-		regT("world.nearest_entity_z", "world", BlockShape.REPORTER, "最近 {TYPE} 的 Z",
-				BlockParam.text("TYPE", "minecraft:zombie"));
+		regT("world.nearest_entity_field", "world", BlockShape.REPORTER, "最近 {TYPE} 的 {FIELD}",
+				BlockParam.text("TYPE", "minecraft:zombie"),
+				BlockParam.fieldOption("FIELD", "distance", "distance", "x", "y", "z", "name",
+						"health", "max_health", "type_id"));
 		// 物品菜单同上（itemId）
 		regT("world.item_count", "world", BlockShape.REPORTER, "背包里 {ITEM} 的数量",
 				BlockParam.text("ITEM", "minecraft:stone"));
 		reg("world.on_ground", "world", BlockShape.BOOLEAN);
 
 		// ---- 状态与物品 ----
-		reg("world.held_item", "world", BlockShape.REPORTER);
-		reg("world.held_durability", "world", BlockShape.REPORTER);
+		regT("world.held_item_field", "world", BlockShape.REPORTER, "手中的 {FIELD}",
+				BlockParam.fieldOption("FIELD", "id", "id", "durability", "count", "max_durability"));
 		reg("world.front_block", "world", BlockShape.REPORTER);
 		reg("world.block_below", "world", BlockShape.REPORTER);
 		regT("world.block_at", "world", BlockShape.REPORTER, "({X}, {Y}, {Z}) 的方块",
@@ -215,21 +220,47 @@ final class Blocks {
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
 		// 准星方块坐标：命中就是命中格，未命中取视线尽头那一格（见 WorldQueries.aimBlockPos）
-		reg("world.aim_x", "world", BlockShape.REPORTER);
-		reg("world.aim_y", "world", BlockShape.REPORTER);
-		reg("world.aim_z", "world", BlockShape.REPORTER);
+		regT("world.aim_pos", "world", BlockShape.REPORTER, "准星方块的 {AXIS} 坐标",
+				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
 		reg("world.is_day", "world", BlockShape.BOOLEAN);
 		reg("world.dimension", "world", BlockShape.REPORTER);
 		reg("world.in_water", "world", BlockShape.BOOLEAN);
 		reg("world.in_lava", "world", BlockShape.BOOLEAN);
-		regT("world.nearest_entity_name", "world", BlockShape.REPORTER, "最近 {TYPE} 的名称",
-				BlockParam.text("TYPE", "minecraft:zombie"));
 		reg("world.xp_level", "world", BlockShape.REPORTER);
 		reg("world.inventory_full", "world", BlockShape.BOOLEAN);
 		regT("world.entity_count", "world", BlockShape.REPORTER, "附近 {TYPE} 的数量",
 				BlockParam.text("TYPE", "minecraft:zombie"));
 		reg("world.biome", "world", BlockShape.REPORTER);
 		reg("world.ping", "world", BlockShape.REPORTER);
+
+		// ---- 快照（游戏状态 → JSON 文本，只读，见 ARCHITECTURE §26）----
+		// 返回的是字符串，可直接接 JSON 那批积木；字段名是契约，只增不删
+		regT("world.player_json", "world", BlockShape.REPORTER, "玩家快照");
+		regT("world.block_json", "world", BlockShape.REPORTER, "方块 x:{X} y:{Y} z:{Z} 的快照",
+				BlockParam.number("X", "0"),
+				BlockParam.number("Y", "64"),
+				BlockParam.number("Z", "0"));
+		regT("world.entities_json", "world", BlockShape.REPORTER,
+				"附近 {TYPE} 的快照 半径 {RADIUS} 最多 {LIMIT} 个",
+				BlockParam.text("TYPE", "minecraft:zombie"),
+				BlockParam.number("RADIUS", "16"),
+				BlockParam.number("LIMIT", "32"));
+		regT("world.inventory_json", "world", BlockShape.REPORTER, "背包快照");
+		regT("world.screen_json", "world", BlockShape.REPORTER, "界面快照");
+		regT("world.world_json", "world", BlockShape.REPORTER, "世界快照");
+		regT("world.players_json", "world", BlockShape.REPORTER, "在线玩家快照");
+		regT("world.snapshot_keys", "world", BlockShape.REPORTER, "{KIND} 的字段",
+				BlockParam.fieldOption("KIND", "player", "player", "entity", "item", "screen",
+						"block", "block_entity", "world", "players", "scan", "chat"));
+		regT("world.scan_json", "world", BlockShape.REPORTER,
+				"从 ({X1}, {Y1}, {Z1}) 到 ({X2}, {Y2}, {Z2}) 扫描方块 最多 {LIMIT} 个",
+				BlockParam.number("X1", "0"),
+				BlockParam.number("Y1", "64"),
+				BlockParam.number("Z1", "0"),
+				BlockParam.number("X2", "15"),
+				BlockParam.number("Y2", "79"),
+				BlockParam.number("Z2", "15"),
+				BlockParam.number("LIMIT", "4096"));
 
 		// 画框：只影响画面，不改世界状态。category 只决定查看器里的配色（见 ParamLabels），
 		// 与积木面板的分组标题无关——面板分组由扩展 js 里的 LABEL 决定。
@@ -275,7 +306,6 @@ final class Blocks {
 				BlockParam.fieldOption("BUTTON", "left", "left", "right", "middle"));
 		// 无参数：等待上限由宿主侧固定（走 requestWaitUntil 的条件等待），
 		// 与扩展里 breakWait 的「等待方块被挖破」一致。
-		// 早前这里登记过 TICKS 参数，是自研引擎时代的残留——那时的积木要自己传上限。
 		regT("action.break_wait", "action", BlockShape.C_SHAPE, "等待方块被挖破");
 		regT("action.look", "action", BlockShape.STACK, "视角转到 ({YAW}, {PITCH})",
 				BlockParam.number("YAW", "0"),
@@ -298,6 +328,8 @@ final class Blocks {
 		regT("query.last_chat", "sensing", BlockShape.REPORTER, "最近的聊天");
 		// 与上一块同一族：前者是「全局最新」，后者是「触发我的那条」（跟着线程走，不会被覆盖）
 		regT("query.trigger_chat", "sensing", BlockShape.REPORTER, "触发我的聊天");
+		regT("query.chat_history", "sensing", BlockShape.REPORTER, "最近 {COUNT} 条聊天",
+				BlockParam.number("COUNT", "10"));
 		regT("ai.ask", "action", BlockShape.STACK, "让会话 {SESSION} 回应 {TEXT}",
 				BlockParam.text("SESSION", "main"),
 				BlockParam.text("TEXT", ""));

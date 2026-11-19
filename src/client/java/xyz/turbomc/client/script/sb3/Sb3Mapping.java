@@ -22,6 +22,7 @@ public final class Sb3Mapping {
 			Map.entry("event_whenbroadcastreceived", "event.broadcast"),
 			Map.entry("event_whengreaterthan", "event.when_greater"),
 			Map.entry("turbomc_whenDamaged", "event.damage"),
+			Map.entry("turbomc_whenScreenOpen", "event.screen_open"),
 			Map.entry("turbomc_whenChat", "event.chat"),
 			Map.entry("turbomc_whenDeath", "event.death"),
 
@@ -115,17 +116,17 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_aiSystem", "ai.system"),
 
 			// ---- 世界查询（扩展）----
+			// 合并后的粗粒度积木。被它取代的细粒度 opcode（posX/aimX/nearestEntity* 等）
+			// 已随 2026-11-19 的减块一并删除：含它们的旧工程会出现未知积木（§6.2）
+			Map.entry("turbomc_pos", "world.pos"),
+			Map.entry("turbomc_aimPos", "world.aim_pos"),
+			Map.entry("turbomc_nearestEntityField", "world.nearest_entity_field"),
+			Map.entry("turbomc_heldItemField", "world.held_item_field"),
+			Map.entry("turbomc_slotField", "world.slot_field"),
 			Map.entry("turbomc_blockInFront", "world.block_in_front"),
 			Map.entry("turbomc_health", "world.health"),
 			Map.entry("turbomc_food", "world.food"),
-			Map.entry("turbomc_posX", "world.pos_x"),
-			Map.entry("turbomc_posY", "world.pos_y"),
-			Map.entry("turbomc_posZ", "world.pos_z"),
 			Map.entry("turbomc_selectedSlot", "world.selected_slot"),
-			Map.entry("turbomc_nearestEntity", "world.nearest_entity"),
-			Map.entry("turbomc_nearestEntityX", "world.nearest_entity_x"),
-			Map.entry("turbomc_nearestEntityY", "world.nearest_entity_y"),
-			Map.entry("turbomc_nearestEntityZ", "world.nearest_entity_z"),
 			Map.entry("turbomc_onGround", "world.on_ground"),
 			Map.entry("turbomc_itemCount", "world.item_count"),
 
@@ -142,8 +143,6 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_quickMoveSlot", "action.quick_move_slot"),
 			Map.entry("turbomc_closeContainer", "action.close_container"),
 			Map.entry("turbomc_containerSlots", "world.container_slots"),
-			Map.entry("turbomc_slotItem", "world.slot_item"),
-			Map.entry("turbomc_slotAmount", "world.slot_amount"),
 			Map.entry("turbomc_firstSlotOf", "world.first_slot_of"),
 			Map.entry("turbomc_moveToward", "action.move_toward"),
 			Map.entry("turbomc_look", "action.look"),
@@ -153,20 +152,13 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_stop", "action.stop"),
 
 			// ---- 物品与方块查询（扩展）----
-			Map.entry("turbomc_heldItem", "world.held_item"),
-			Map.entry("turbomc_heldDurability", "world.held_durability"),
 			Map.entry("turbomc_frontBlock", "world.front_block"),
 			Map.entry("turbomc_blockBelow", "world.block_below"),
 			Map.entry("turbomc_blockAt", "world.block_at"),
-			// 准星方块坐标：命中给命中格，未命中给视线尽头那一格（见 WorldQueries.aimBlockPos）
-			Map.entry("turbomc_aimX", "world.aim_x"),
-			Map.entry("turbomc_aimY", "world.aim_y"),
-			Map.entry("turbomc_aimZ", "world.aim_z"),
 			Map.entry("turbomc_isDay", "world.is_day"),
 			Map.entry("turbomc_dimension", "world.dimension"),
 			Map.entry("turbomc_inWater", "world.in_water"),
 			Map.entry("turbomc_inLava", "world.in_lava"),
-			Map.entry("turbomc_nearestEntityName", "world.nearest_entity_name"),
 			Map.entry("turbomc_xpLevel", "world.xp_level"),
 			Map.entry("turbomc_inventoryFull", "world.inventory_full"),
 			Map.entry("turbomc_entityCount", "world.entity_count"),
@@ -175,6 +167,18 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_breakWait", "action.break_wait"),
 			Map.entry("turbomc_isMining", "world.is_mining"),
 			Map.entry("turbomc_miningProgress", "world.mining_progress"),
+
+			// ---- 快照（扩展）：游戏状态 → JSON 文本，只读 ----
+			Map.entry("turbomc_playerJson", "world.player_json"),
+			Map.entry("turbomc_entitiesJson", "world.entities_json"),
+			Map.entry("turbomc_blockJson", "world.block_json"),
+			Map.entry("turbomc_inventoryJson", "world.inventory_json"),
+			Map.entry("turbomc_screenJson", "world.screen_json"),
+			Map.entry("turbomc_worldJson", "world.world_json"),
+			Map.entry("turbomc_playersJson", "world.players_json"),
+			Map.entry("turbomc_scanJson", "world.scan_json"),
+			Map.entry("turbomc_chatHistory", "query.chat_history"),
+			Map.entry("turbomc_snapshotKeys", "world.snapshot_keys"),
 
 			// ---- 画框（扩展）----
 			Map.entry("turbomc_drawFrame", "region.draw_frame"),
@@ -221,6 +225,23 @@ public final class Sb3Mapping {
 
 	public static boolean isSupported(String opcode) {
 		return TYPES.containsKey(opcode);
+	}
+
+	/**
+	 * 扩展侧应声明的全部 opcode（去掉 {@code turbomc_} 前缀）。
+	 *
+	 * <p>用途是启动时与扩展产物比对：两边集合必须相等。
+	 * 扩展旧了会缺（改了模组没重载扩展），模组旧了会多（换了扩展没换 jar），
+	 * 两种症状都不报错，只是积木静默失效。</p>
+	 */
+	public static java.util.Set<String> extensionOpcodes() {
+		java.util.Set<String> opcodes = new java.util.TreeSet<>();
+		for (String opcode : TYPES.keySet()) {
+			if (opcode.startsWith("turbomc_")) {
+				opcodes.add(opcode.substring("turbomc_".length()));
+			}
+		}
+		return opcodes;
 	}
 
 	/**

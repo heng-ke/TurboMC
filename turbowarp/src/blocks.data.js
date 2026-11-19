@@ -6,7 +6,7 @@
  *   {label}                    面板分组标题（只在编辑器显示，运行时不渲染）
  *   {opcode, blockType, text}  积木；text 必须中英各一份
  *   arguments                  参数名/类型/默认值/菜单；名称与顺序必须与 text 的 [占位符] 一致
- *   props                      额外属性，目前只有帽子的 isEdgeActivated
+ *   props                      额外属性：目前只有帽子的 isEdgeActivated（hideFromPalette 仍被 VM 支持，按需使用）
  *   stub                       编辑器里的占位方法体（浏览器内没有 Java，只能返回假值）
  */
 module.exports = {
@@ -18,6 +18,8 @@ module.exports = {
 		{label: {en: 'Events', zh: '事件'}},
 		{opcode: 'whenDamaged', blockType: 'hat', text: {en: 'when damaged', zh: '当受伤时'}, props: {isEdgeActivated: false}},
 		{opcode: 'whenDeath', blockType: 'hat', text: {en: 'when player dies', zh: '当玩家死亡'}, props: {isEdgeActivated: false}},
+		// 界面打开：界面里按键是被拦截的（TriggerDispatcher），「打开箱子就执行」只能靠这个事件
+		{opcode: 'whenScreenOpen', blockType: 'hat', text: {en: 'when [SCREEN] opens', zh: '当打开 [SCREEN]'}, arguments: {SCREEN: {type: 'string', defaultValue: "container", menu: 'screenKind'}}, props: {isEdgeActivated: false}},
 		{opcode: 'whenChat', blockType: 'hat', text: {en: 'when chat contains [MATCH]', zh: '当聊天包含 [MATCH]'}, arguments: {MATCH: {type: 'string', defaultValue: ""}}, props: {isEdgeActivated: false}},
 		{label: {en: 'Movement & view', zh: '移动与视角'}},
 		{opcode: 'moveToward', blockType: 'command', text: {en: 'go to x:[X] y:[Y] z:[Z]', zh: '走向 x:[X] y:[Y] z:[Z]'}, arguments: {X: {type: 'number', defaultValue: 0}, Y: {type: 'number', defaultValue: 64}, Z: {type: 'number', defaultValue: 0}}, stub: 'this.preview(\'moveToward \' + args.X + \',\' + args.Y + \',\' + args.Z);'},
@@ -38,8 +40,9 @@ module.exports = {
 		{label: {en: 'Containers', zh: '容器'}},
 		{opcode: 'openContainerAt', blockType: 'command', text: {en: 'open container at x:[X] y:[Y] z:[Z]', zh: '打开坐标处的容器 x:[X] y:[Y] z:[Z]'}, arguments: {X: {type: 'number', defaultValue: 0}, Y: {type: 'number', defaultValue: 64}, Z: {type: 'number', defaultValue: 0}}, stub: 'this.preview(\'openContainerAt\');'},
 		{opcode: 'containerSlots', blockType: 'reporter', text: {en: 'container slots', zh: '界面槽位数'}, stub: 'return 0;'},
-		{opcode: 'slotItem', blockType: 'reporter', text: {en: 'item in slot [INDEX]', zh: '槽位 [INDEX] 的物品'}, arguments: {INDEX: {type: 'number', defaultValue: 0}}, stub: 'return \'\';'},
-		{opcode: 'slotAmount', blockType: 'reporter', text: {en: 'amount in slot [INDEX]', zh: '槽位 [INDEX] 的数量'}, arguments: {INDEX: {type: 'number', defaultValue: 0}}, stub: 'return 0;'},
+		{opcode: 'slotField', blockType: 'reporter', text: {en: 'slot [INDEX] [FIELD]', zh: '槽位 [INDEX] 的 [FIELD]'}, arguments: {INDEX: {type: 'number', defaultValue: 0}, FIELD: {type: 'string', defaultValue: "id", menu: 'slotField'}}, stub: 'return \'\';'},
+		// 界面快照：槽位号与「点击槽位」同一套（都来自 ScreenHandler），没开界面时返回 {}
+		{opcode: 'screenJson', blockType: 'reporter', text: {en: 'open screen snapshot', zh: '界面快照'}, stub: 'return \'{}\';'},
 		{opcode: 'firstSlotOf', blockType: 'reporter', text: {en: 'first slot with [ITEM]', zh: '第一个装着 [ITEM] 的槽位'}, arguments: {ITEM: {type: 'string', defaultValue: "minecraft:iron_ore", menu: 'itemId'}}, stub: 'return -1;'},
 		{opcode: 'clickSlot', blockType: 'command', text: {en: 'click slot [INDEX] with [BUTTON]', zh: '点击槽位 [INDEX] 用 [BUTTON]'}, arguments: {INDEX: {type: 'number', defaultValue: 0}, BUTTON: {type: 'string', defaultValue: "left", menu: 'slotButton'}}, stub: 'this.preview(\'clickSlot\');'},
 		{opcode: 'quickMoveSlot', blockType: 'command', text: {en: 'quick move slot [INDEX]', zh: '快速移动槽位 [INDEX]'}, arguments: {INDEX: {type: 'number', defaultValue: 0}}, stub: 'this.preview(\'quickMoveSlot\');'},
@@ -49,13 +52,17 @@ module.exports = {
 		{opcode: 'food', blockType: 'reporter', text: {en: 'food level', zh: '饱食度'}, stub: 'return 20;'},
 		{opcode: 'xpLevel', blockType: 'reporter', text: {en: 'xp level', zh: '经验等级'}, stub: 'return 0;'},
 		{opcode: 'onGround', blockType: 'boolean', text: {en: 'on ground?', zh: '站在地面？'}, stub: 'this.preview(\'onGround\'); return true;'},
-		{opcode: 'posX', blockType: 'reporter', text: {en: 'x position', zh: 'X 坐标'}, stub: 'return 0;'},
-		{opcode: 'posY', blockType: 'reporter', text: {en: 'y position', zh: 'Y 坐标'}, stub: 'return 64;'},
-		{opcode: 'posZ', blockType: 'reporter', text: {en: 'z position', zh: 'Z 坐标'}, stub: 'return 0;'},
+		// 三轴合并成一块下拉。旧的三块（posX/posY/posZ）已删除——sb3 里存的是 opcode，
+		// 删掉就意味着含它们的旧工程会出现未知积木（见 ARCHITECTURE §6.2）
+		{opcode: 'pos', blockType: 'reporter', text: {en: 'player [AXIS] position', zh: '玩家 [AXIS] 坐标'}, arguments: {AXIS: {type: 'string', defaultValue: "x", menu: 'axis'}}, stub: 'return 0;'},
 		{opcode: 'selectedSlot', blockType: 'reporter', text: {en: 'selected slot', zh: '当前槽位'}, stub: 'return 1;'},
-		{opcode: 'heldItem', blockType: 'reporter', text: {en: 'held item', zh: '手持物品'}, stub: 'return \'minecraft:air\';'},
-		{opcode: 'heldDurability', blockType: 'reporter', text: {en: 'held durability %', zh: '手持耐久百分比'}, stub: 'return 100;'},
+		{opcode: 'heldItemField', blockType: 'reporter', text: {en: 'held [FIELD]', zh: '手中的 [FIELD]'}, arguments: {FIELD: {type: 'string', defaultValue: "id", menu: 'heldField'}}, stub: 'return \'\';'},
+		// 背包快照：41 格（0–35 主背包、36–39 盔甲、40 副手），只列非空槽位，裸数组
+		{opcode: 'inventoryJson', blockType: 'reporter', text: {en: 'inventory snapshot', zh: '背包快照'}, stub: 'return \'[]\';'},
 		{opcode: 'inventoryFull', blockType: 'boolean', text: {en: 'inventory full?', zh: '背包已满?'}, stub: 'return false;'},
+		// 快照：游戏状态 → JSON 文本，只读（ARCHITECTURE §26）。占位方法返回带真实键名的骨架，
+		// 这样作者在浏览器里也能用 json.get_path 把取值路径调通，只是数值是假的
+		{opcode: 'playerJson', blockType: 'reporter', text: {en: 'player snapshot', zh: '玩家快照'}, stub: 'return \'{"name":"","uuid":"","health":0,"max_health":20,"absorption":0,"food":20,"saturation":5,"xp_level":0,"xp_progress":0,"armor":0,"air":300,"gamemode":"","dimension":"","x":0,"y":0,"z":0,"motion_x":0,"motion_y":0,"motion_z":0,"yaw":0,"pitch":0,"on_ground":false,"in_water":false,"in_lava":false,"selected_slot":1,"effects":[]}\';'},
 		{opcode: 'itemCount', blockType: 'reporter', text: {en: 'count of [ITEM]', zh: '背包中 [ITEM] 的数量'}, arguments: {ITEM: {type: 'string', defaultValue: "minecraft:stone", menu: 'itemId'}}, stub: 'return 0;'},
 		{opcode: 'respawn', blockType: 'command', text: {en: 'respawn', zh: '重生'}, stub: 'this.preview(\'respawn\');'},
 		{label: {en: 'World', zh: '世界查询'}},
@@ -67,18 +74,23 @@ module.exports = {
 		{opcode: 'blockInFront', blockType: 'boolean', text: {en: 'block in front?', zh: '前方有方块？'}, stub: 'this.preview(\'blockInFront\'); return false;'},
 		{opcode: 'blockBelow', blockType: 'reporter', text: {en: 'block below', zh: '脚下方块'}, stub: 'return \'minecraft:grass_block\';'},
 		{opcode: 'blockAt', blockType: 'reporter', text: {en: 'block at x:[X] y:[Y] z:[Z]', zh: '坐标处方块 x:[X] y:[Y] z:[Z]'}, arguments: {X: {type: 'number', defaultValue: 0}, Y: {type: 'number', defaultValue: 64}, Z: {type: 'number', defaultValue: 0}}, stub: 'this.preview(\'blockAt \' + args.X + \',\' + args.Y + \',\' + args.Z); return \'minecraft:air\';'},
+		{opcode: 'blockJson', blockType: 'reporter', text: {en: 'snapshot of block x:[X] y:[Y] z:[Z]', zh: '方块 x:[X] y:[Y] z:[Z] 的快照'}, arguments: {X: {type: 'number', defaultValue: 0}, Y: {type: 'number', defaultValue: 64}, Z: {type: 'number', defaultValue: 0}}, stub: 'return \'{"id":"","x":0,"y":0,"z":0,"state":{},"hardness":0,"is_air":false,"is_solid":false,"is_fluid":false,"light":0,"biome":"","block_entity":{"type":"","items":[],"items_total":0,"nbt":{},"text_front":"","text_back":""}}\';'},
+		// 在线玩家：只有 uuid/名称/延迟/游戏模式可靠，坐标血量背包服务端不下发
+		{opcode: 'playersJson', blockType: 'reporter', text: {en: 'online players snapshot', zh: '在线玩家快照'}, stub: 'return \'[]\';'},
+		// 区域扫描：只给非空气方块；体积上限 8192 格、条数上限 [LIMIT]，超出置 truncated
+		{opcode: 'scanJson', blockType: 'reporter', text: {en: 'scan blocks from ([X1],[Y1],[Z1]) to ([X2],[Y2],[Z2]), up to [LIMIT]', zh: '从 ([X1], [Y1], [Z1]) 到 ([X2], [Y2], [Z2]) 扫描方块 最多 [LIMIT] 个'}, arguments: {X1: {type: 'number', defaultValue: 0}, Y1: {type: 'number', defaultValue: 64}, Z1: {type: 'number', defaultValue: 0}, X2: {type: 'number', defaultValue: 15}, Y2: {type: 'number', defaultValue: 79}, Z2: {type: 'number', defaultValue: 15}, LIMIT: {type: 'number', defaultValue: 4096}}, stub: 'return \'{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}\';'},
+		// 快照字段：键清单的运行时出口，接到「说」上就能看全（键盘名不必翻文档）
+		{opcode: 'snapshotKeys', blockType: 'reporter', text: {en: 'fields of [KIND]', zh: '[KIND] 的字段'}, arguments: {KIND: {type: 'string', defaultValue: "player", menu: 'snapshotKind'}}, stub: 'return \'[]\';'},
+		{opcode: 'worldJson', blockType: 'reporter', text: {en: 'world snapshot', zh: '世界快照'}, stub: 'return \'{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}\';'},
 		{opcode: 'frontBlock', blockType: 'reporter', text: {en: 'block at crosshair', zh: '准星所指方块'}, stub: 'return \'minecraft:air\';'},
-		{opcode: 'aimX', blockType: 'reporter', text: {en: 'aimed block x', zh: '准星方块 X'}, stub: 'return 0;'},
-		{opcode: 'aimY', blockType: 'reporter', text: {en: 'aimed block y', zh: '准星方块 Y'}, stub: 'return 64;'},
-		{opcode: 'aimZ', blockType: 'reporter', text: {en: 'aimed block z', zh: '准星方块 Z'}, stub: 'return 0;'},
+		{opcode: 'aimPos', blockType: 'reporter', text: {en: 'aimed block [AXIS] position', zh: '准星方块的 [AXIS] 坐标'}, arguments: {AXIS: {type: 'string', defaultValue: "x", menu: 'axis'}}, stub: 'return 0;'},
 		{opcode: 'ping', blockType: 'reporter', text: {en: 'server ping (ms)', zh: '服务端延迟(ms)'}, stub: 'return 0;'},
 		{label: {en: 'Entities', zh: '实体查询'}},
-		{opcode: 'nearestEntity', blockType: 'reporter', text: {en: 'distance to nearest [TYPE]', zh: '最近 [TYPE] 的距离'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return -1;'},
-		{opcode: 'nearestEntityX', blockType: 'reporter', text: {en: 'nearest [TYPE] x', zh: '最近 [TYPE] 的 X'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return 0;'},
-		{opcode: 'nearestEntityY', blockType: 'reporter', text: {en: 'nearest [TYPE] y', zh: '最近 [TYPE] 的 Y'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return 64;'},
-		{opcode: 'nearestEntityZ', blockType: 'reporter', text: {en: 'nearest [TYPE] z', zh: '最近 [TYPE] 的 Z'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return 0;'},
-		{opcode: 'nearestEntityName', blockType: 'reporter', text: {en: 'nearest [TYPE] name', zh: '最近 [TYPE] 的名称'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return \'\';'},
+		// 距离 / 三轴 / 名称合成一块：共享同一次世界遍历（WorldQueries 的单 tick 缓存按类型键控）
+		{opcode: 'nearestEntityField', blockType: 'reporter', text: {en: 'nearest [TYPE] [FIELD]', zh: '最近 [TYPE] 的 [FIELD]'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}, FIELD: {type: 'string', defaultValue: "distance", menu: 'entityField'}}, stub: 'return 0;'},
 		{opcode: 'entityCount', blockType: 'reporter', text: {en: 'count of [TYPE] nearby', zh: '附近 [TYPE] 数量'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}}, stub: 'return 0;'},
+		// 半径与上限都可调：半径钳 1–64 格、上限钳 1–256 个（宿主侧做，防止误填卡主线程）
+		{opcode: 'entitiesJson', blockType: 'reporter', text: {en: 'snapshot of [TYPE] within [RADIUS] blocks, up to [LIMIT]', zh: '附近 [TYPE] 的快照 半径 [RADIUS] 最多 [LIMIT] 个'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}, RADIUS: {type: 'number', defaultValue: 16}, LIMIT: {type: 'number', defaultValue: 32}}, stub: 'return \'[]\';'},
 		{label: {en: 'Display', zh: '显示与日志'}},
 		{opcode: 'drawFrame', blockType: 'command', text: {en: 'draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]', zh: '从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'}, arguments: {X1: {type: 'number', defaultValue: 0}, Y1: {type: 'number', defaultValue: 64}, Z1: {type: 'number', defaultValue: 0}, X2: {type: 'number', defaultValue: 10}, Y2: {type: 'number', defaultValue: 70}, Z2: {type: 'number', defaultValue: 10}, COLOR: {type: 'color', defaultValue: "#33ff66"}}, stub: 'this.preview(\'drawFrame \' + args.X1 + \',\' + args.Y1 + \',\' + args.Z1\r\n\t\t\t\t+ \' -> \' + args.X2 + \',\' + args.Y2 + \',\' + args.Z2 + \' \' + args.COLOR);'},
 		{opcode: 'clearFrames', blockType: 'command', text: {en: 'clear all frames', zh: '清除所有画框'}, stub: 'this.preview(\'clearFrames\');'},
@@ -87,6 +99,8 @@ module.exports = {
 		{opcode: 'chat', blockType: 'command', text: {en: 'say [TEXT] in chat', zh: '在聊天栏说 [TEXT]'}, arguments: {TEXT: {type: 'string', defaultValue: "hello"}}, stub: 'this.preview(\'chat \' + args.TEXT);'},
 		{opcode: 'command', blockType: 'command', text: {en: 'run command [COMMAND]', zh: '执行命令 [COMMAND]'}, arguments: {COMMAND: {type: 'string', defaultValue: "time set day"}}, stub: 'this.preview(\'command \' + args.COMMAND);'},
 		{opcode: 'lastChat', blockType: 'reporter', text: {en: 'last chat message', zh: '最近的聊天'}, stub: 'this.preview(\'lastChat\'); return \'\';'},
+		// 聊天历史：环形缓冲 32 条，这里按「最近 N 条」取，旧的在前
+		{opcode: 'chatHistory', blockType: 'reporter', text: {en: 'last [COUNT] chat messages', zh: '最近 [COUNT] 条聊天'}, arguments: {COUNT: {type: 'number', defaultValue: 10}}, stub: 'return \'[]\';'},
 		{opcode: 'triggerChat', blockType: 'reporter', text: {en: 'chat that triggered me', zh: '触发我的聊天'}, stub: 'this.preview(\'triggerChat\'); return \'\';'},
 		{opcode: 'aiAsk', blockType: 'command', text: {en: 'ask session [SESSION] to reply to [TEXT]', zh: '让会话 [SESSION] 回应 [TEXT]'}, arguments: {SESSION: {type: 'string', defaultValue: "main"}, TEXT: {type: 'string', defaultValue: "hello"}}, stub: 'this.preview(\'aiAsk \' + args.SESSION + \' \' + args.TEXT);'},
 		{opcode: 'aiReply', blockType: 'reporter', text: {en: 'last reply of session [SESSION]', zh: '会话 [SESSION] 的最后回复'}, arguments: {SESSION: {type: 'string', defaultValue: "main"}}, stub: 'this.preview(\'aiReply\'); return \'\';'},
@@ -160,6 +174,38 @@ module.exports = {
 			{text: {en: 'median', zh: '中位数'}, value: 'median'},
 			{text: {en: 'mode', zh: '众数'}, value: 'mode'},
 			{text: {en: 'variance', zh: '方差'}, value: 'variance'}
+		]},
+		// ---- 合并积木用的下拉菜单 ----
+		// acceptReporters: false ⇒ 渲染成字段下拉（不能塞报告器），Blocks.java 用 fieldOption 登记。
+		// value 一律 ASCII 且与语言无关：工程文件里存的是 value，切语言不能变。
+		axis: {acceptReporters: false, items: [
+			{text: {en: 'X', zh: 'X'}, value: 'x'},
+			{text: {en: 'Y', zh: 'Y'}, value: 'y'},
+			{text: {en: 'Z', zh: 'Z'}, value: 'z'}
+		]},
+		entityField: {acceptReporters: false, items: [
+			{text: {en: 'distance', zh: '距离'}, value: 'distance'},
+			{text: {en: 'X', zh: 'X'}, value: 'x'},
+			{text: {en: 'Y', zh: 'Y'}, value: 'y'},
+			{text: {en: 'Z', zh: 'Z'}, value: 'z'},
+			{text: {en: 'name', zh: '名称'}, value: 'name'},
+			{text: {en: 'health', zh: '血量'}, value: 'health'},
+			{text: {en: 'max health', zh: '最大血量'}, value: 'max_health'},
+			// 注册名与「名称」不同：name 是本地化显示名（僵尸），type_id 是 minecraft:zombie
+			{text: {en: 'registry id', zh: '注册名'}, value: 'type_id'}
+		]},
+		heldField: {acceptReporters: false, items: [
+			{text: {en: 'item', zh: '物品'}, value: 'id'},
+			{text: {en: 'durability %', zh: '耐久百分比'}, value: 'durability'},
+			{text: {en: 'count', zh: '数量'}, value: 'count'},
+			{text: {en: 'max durability', zh: '最大耐久'}, value: 'max_durability'}
+		]},
+		slotField: {acceptReporters: false, items: [
+			{text: {en: 'item', zh: '物品'}, value: 'id'},
+			{text: {en: 'amount', zh: '数量'}, value: 'amount'},
+			{text: {en: 'max durability', zh: '最大耐久'}, value: 'max_durability'},
+			{text: {en: 'damage', zh: '已损耗'}, value: 'damage'},
+			{text: {en: 'custom name', zh: '自定义名称'}, value: 'custom_name'}
 		]},
 		itemId: {dynamic: 'items', acceptReporters: true},
 		entityType: {acceptReporters: true, items: [
@@ -322,6 +368,23 @@ module.exports = {
 			{text: {en: 'Trident', zh: '三叉戟'}, value: 'minecraft:trident'},
 			{text: {en: 'Wind Charge', zh: '风弹'}, value: 'minecraft:wind_charge'},
 			{text: {en: 'Wither Skull', zh: '凋灵之首'}, value: 'minecraft:wither_skull'}
+		]},
+		snapshotKind: {acceptReporters: false, items: [
+			{text: {en: 'player snapshot', zh: '玩家快照'}, value: 'player'},
+			{text: {en: 'entity (list item)', zh: '实体（列表项）'}, value: 'entity'},
+			{text: {en: 'item entry', zh: '物品条目'}, value: 'item'},
+			{text: {en: 'screen', zh: '界面'}, value: 'screen'},
+			{text: {en: 'block', zh: '方块'}, value: 'block'},
+			{text: {en: 'block entity', zh: '方块实体'}, value: 'block_entity'},
+			{text: {en: 'world', zh: '世界'}, value: 'world'},
+			{text: {en: 'online players (list item)', zh: '在线玩家（列表项）'}, value: 'players'},
+			{text: {en: 'area scan', zh: '区域扫描'}, value: 'scan'},
+			{text: {en: 'chat history', zh: '聊天历史'}, value: 'chat'}
+		]},
+		screenKind: {acceptReporters: false, items: [
+			{text: {en: 'container', zh: '容器'}, value: 'container'},
+			{text: {en: 'player inventory', zh: '玩家背包'}, value: 'inventory'},
+			{text: {en: 'any screen', zh: '任意界面'}, value: 'any'}
 		]},
 		keyName: {acceptReporters: true, items: [
 			{text: {en: 'a', zh: 'a'}, value: 'a'},

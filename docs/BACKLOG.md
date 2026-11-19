@@ -41,6 +41,7 @@
 | JSON-03 | 手写解析器比 Rhino 原生 `JSON.parse` 慢约 15% | 待实施 | 同上 D3；改基本类型容器，预期收回 20–30% |
 | JSON-04 | 9 块「可选」积木未实现：`json_has_value` / `json_equal` / `json_flip` / `json_array_from` / `json_array_reverse` / `json_array_flat` / `json_merge` / `json_vm_export_var` / `json_vm_import_var` | 待决策 | 语义对照见 `turbowarp/vendor/README.md`；其中后两块（导出/导入全部变量）建议永久排除：全变量副作用大，与多目标语义不合 |
 | JSON-05 | 与现成的 `skyhigh173JSON` 工程不兼容（opcode 前缀是 `turbomc_`） | 待决策 | 保留原前缀需改成多扩展注册，即 ENG-03 的同一套改造 |
+| SNAP-04 | 事件类积木：「当打开界面」已上线；还剩 当实体进入范围 / 当血量低于 X / 当准星方块变化 | 待决策 | 已实现的界面帽子见 §6.1.1（字段匹配要自建）；其余三项需先定轮询频率与走 VM 每帧比较还是宿主轮询 |
 
 ## 聊天与 AI
 

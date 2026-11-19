@@ -1,6 +1,7 @@
 package xyz.turbomc.client.script.vm;
 
 import xyz.turbomc.client.script.action.NativeRegistry;
+import xyz.turbomc.client.script.runtime.ExtensionHealth;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 
 import java.io.IOException;
@@ -31,7 +32,8 @@ public final class VmSmokeTest {
 		if (json == null) {
 			System.err.println("找不到工程夹具: " + source);
 			System.err.println("可用的 classpath 夹具: project.json / hat-project.json /"
-					+ " block-project.json / ask-project.json / wait-mouse-project.json");
+					+ " block-project.json / ask-project.json / wait-mouse-project.json /"
+					+ " merged-project.json");
 			System.exit(2);
 		}
 
@@ -59,18 +61,37 @@ public final class VmSmokeTest {
 		boolean monitorOk = vm.monitorHooked();
 		// 映射了但动作层没实现时，桥只会记一次 miss 并返回 null，积木看起来"永远为假"
 		boolean mouseBlockOk = NativeRegistry.getFunction("input.mouse_button_down") != null;
+		// 合并块：注册表里缺一个，面板上就有、游戏里就没反应，
+		// 而夹具只能端到端跑 slotField（其余读世界状态，纯 JVM 无客户端会 NPE），
+		// 所以这里直接查注册表，覆盖「漏实现」这一层
+		String[] merged = {"world.pos", "world.aim_pos", "world.nearest_entity_field",
+				"world.held_item_field", "world.slot_field"};
+		boolean mergedOk = allImplemented(merged);
+		// 快照三块同理：漏实现时积木照常能拖，只是永远返回空对象/空数组
+		boolean snapshotOk = allImplemented(new String[]{
+				"world.player_json", "world.entities_json", "world.block_json",
+				"world.inventory_json", "world.screen_json", "world.world_json",
+				"world.players_json", "world.scan_json", "query.chat_history",
+				"world.snapshot_keys"});
 		boolean boolOk = vm.booleanNormalizeOk();
 		// 扩展积木的占位符数必须与查看器侧登记的参数数一致：不等就说明参数会错位
 		String argProblems = vm.argsSelfTest();
 		boolean argsOk = argProblems.isEmpty();
+		// 扩展产物的 opcode 集合必须与 Sb3Mapping 完全一致。对不上时游戏里只会表现为
+		// 「新积木拖不出来」或「点了没反应」，HUD 虽会警告，但 CI 上先失败更省事
+		String extensionWarning = ExtensionHealth.warning();
+		boolean extensionOk = extensionWarning.isEmpty();
 		System.out.println("[smoke] 钩子：键盘 " + (keyboardOk ? "已装" : "缺失")
 				+ "，鼠标 " + (mouseOk ? "已装" : "缺失")
 				+ "，用户名 " + (userOk ? "已装" : "缺失")
 				+ "，询问 " + (askOk ? "已装" : "缺失")
 				+ "，监视器 " + (monitorOk ? "已装" : "缺失")
 				+ "，鼠标积木 " + (mouseBlockOk ? "已注册" : "未实现")
+				+ "，合并块 " + (mergedOk ? "已实现" : "有缺失")
+				+ "，快照 " + (snapshotOk ? "已实现" : "有缺失")
 				+ "，布尔归一化 " + (boolOk ? "正常" : "异常"));
 		System.out.println("[smoke] 扩展参数名 " + (argsOk ? "一致" : "不一致：" + argProblems));
+		System.out.println("[smoke] 扩展自检 " + (extensionOk ? "一致" : "不一致：" + extensionWarning));
 
 		boolean hatMode = args.length > 1 && "hat".equals(args[1]);
 		boolean blockMode = args.length > 1 && "block".equals(args[1]);
@@ -150,9 +171,20 @@ public final class VmSmokeTest {
 
 		boolean ok = ScriptBridge.callCount() > 0 && ScriptBridge.missCount() == 0
 				&& keyboardOk && mouseOk && userOk && askOk && monitorOk && mouseBlockOk && boolOk
-				&& argsOk && stopHookOk;
+				&& argsOk && stopHookOk && mergedOk && extensionOk;
 		System.out.println(ok ? "SMOKE PASS" : "SMOKE FAIL");
 		System.exit(ok ? 0 : 1);
+	}
+
+	/** 逐个查动作层的实现；缺哪个就打印出来，不靠一次性的布尔值埋线索。 */
+	private static boolean allImplemented(String[] types) {
+		for (String type : types) {
+			if (NativeRegistry.getFunction(type) == null) {
+				System.out.println("[smoke] 缺少实现: " + type);
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

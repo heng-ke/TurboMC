@@ -18,16 +18,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class EntityFilterTest {
 
 	@ParameterizedTest(name = "\"{0}\" → any")
-	@DisplayName("空值与 any 都表示不限类型（老工程没有这个输入，走的就是空值）")
-	@ValueSource(strings = {"", "   ", "any", "ANY", " Any "})
-	void blankOrAnyMeansAny(String raw) {
+	@DisplayName("只有显式 any 表示不限类型")
+	@ValueSource(strings = {"any", "ANY", " Any "})
+	void anyMeansAny(String raw) {
 		assertEquals(EntityFilter.Kind.ANY, EntityFilter.parse(raw).kind());
 	}
 
 	@Test
-	@DisplayName("null 也按 any 处理，不抛异常")
-	void nullMeansAny() {
-		assertEquals(EntityFilter.Kind.ANY, EntityFilter.parse(null).kind());
+	@DisplayName("空值不再放宽：按「匹配不到」处理，避免参数没送到时安静地匹配全部")
+	void blankDoesNotMatchAll() {
+		assertEquals(EntityFilter.Kind.TYPE, EntityFilter.parse("").kind());
+		assertEquals(EntityFilter.Kind.TYPE, EntityFilter.parse("   ").kind());
+		assertEquals(EntityFilter.Kind.TYPE, EntityFilter.parse(null).kind());
 	}
 
 	@ParameterizedTest(name = "\"{0}\"")

@@ -53,20 +53,12 @@ function __tmcBooleanSelfTest() {
 		&& __tmcAsBoolean(wrappedFalse) === false;
 }
 
-function __tmcArgNames(text) {
-	var names = [];
-	var re = /\[([A-Za-z0-9_]+)\]/g;
-	var m;
-	while ((m = re.exec(text)) !== null) {
-		names.push(m[1]);
-	}
-	return names;
-}
-
 var __tmcOrder = {};
 for (var __i = 0; __i < __tmcInfo.blocks.length; __i++) {
 	var __b = __tmcInfo.blocks[__i];
-	__tmcOrder[__b.opcode] = __tmcArgNames(__b.text || '');
+	// 实参顺序只认构建期生成的 argOrder（按中文文案算），与界面语言无关。
+	// 无参数的块没有这个字段，下面的包装器用 `|| []` 兜住。
+	__tmcOrder[__b.opcode] = __b.argOrder;
 }
 
 var __tmcBridge = null;
@@ -590,14 +582,62 @@ function __tmcStartHat(opcode, matchValue) {
 	return __tmcVm.runtime.startHats(opcode, matchValue || null);
 }
 
-/** 带单个匹配字段的触发：{@code fieldName} 为空表示不带匹配条件。 */
+/**
+ * 带单个匹配字段的触发：{@code fieldName} 为空表示不带匹配条件。
+ *
+ * <p><b>带参数时为什么不用 {@code runtime.startHats}</b>：实测（{@code vmScreenHat}）
+ * 同一工程里无参数的 {@code whenDamaged} 能起线程，带 {@code SCREEN} 字段的
+ * {@code whenScreenOpen} 起 0 个——压缩版 VM 对「带参数的扩展帽子」的字段匹配不可用，
+ * 且失败时没有任何异常，表现就是「打开了界面但脚本没反应」。
+ * 这里照 {@code __tmcStartHatFiltered} 的既有做法自建：遍历各目标的顶层块，
+ * 只比字段/输入里的字面量，并跳过已在运行的同一顶帽子。</p>
+ *
+ * <p>{@code fieldName} 为空时仍走 {@code startHats}：那是「当受伤 / 当死亡」这类
+ * 无参数帽子，实测那条路是通的。</p>
+ */
 function __tmcStartHatField(opcode, fieldName, value) {
-	var match = null;
-	if (fieldName) {
-		match = {};
-		match[fieldName] = value;
+	if (!fieldName) {
+		return __tmcVm.runtime.startHats(opcode, null);
 	}
-	return __tmcVm.runtime.startHats(opcode, match);
+	var runtime = __tmcVm.runtime;
+	var want = String(value);
+	// 返回**数组**而不是数字：RhinoVm.threadCountOf 读的是结果的 .length，
+	// 返回数字会被当成「起了 0 个」。这是本轮踩到的坑，别再改回计数。
+	var started = [];
+	for (var t = 0; t < runtime.targets.length; t++) {
+		var target = runtime.targets[t];
+		var blocks = target.blocks;
+		if (!blocks || !blocks._blocks) {
+			continue;
+		}
+		var all = blocks._blocks;
+		for (var id in all) {
+			var block = all[id];
+			if (!block || block.opcode !== opcode || !block.topLevel) {
+				continue;
+			}
+			var actual = __tmcReadInput(blocks, block, fieldName);
+			// null 表示槽里接了变量或表达式，静态读不出：按「不匹配」处理，不猜
+			if (actual === null || String(actual) !== want) {
+				continue;
+			}
+			var busy = false;
+			for (var i = 0; i < runtime.threads.length; i++) {
+				var thread = runtime.threads[i];
+				if (thread.target === target && thread.topBlock === id && thread.status !== 4) {
+					busy = true;
+					break;
+				}
+			}
+			if (busy) {
+				continue;
+			}
+			var pushed = runtime._pushThread(id, target);
+			// 这个构建里 _pushThread 可能不返回线程（被包了一层），入队结果仍然算数
+			started.push(pushed || true);
+		}
+	}
+	return started;
 }
 
 /** 取字段文本：兼容 {name,value,id} 对象与 [value, id] 数组两种形态。 */
@@ -948,6 +988,23 @@ function __tmcArgNamesDump() {
 		list.push(b.opcode + '=' + (__tmcOrder[b.opcode] || []).join(','));
 	}
 	return list.join(';');
+}
+
+/**
+ * 本扩展声明的全部 opcode（逗号分隔），供宿主做一致性自检。
+ *
+ * <p>宿主拿它和 {@code Sb3Mapping} 里的 opcode 集合比对：
+ * 少的是「扩展没重新加载」，多的是「模组版本比扩展旧」。
+ * 两种都会让积木静默失效，所以启动时就要说清楚。</p>
+ */
+function __tmcExtensionOpcodes() {
+	var names = [];
+	for (var i = 0; i < __tmcInfo.blocks.length; i++) {
+		if (__tmcInfo.blocks[i].opcode) {
+			names.push(__tmcInfo.blocks[i].opcode);
+		}
+	}
+	return names.join(',');
 }
 
 /**

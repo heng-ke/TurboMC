@@ -40,6 +40,10 @@ jobs:
         run: node tools/build-mapping-report.js --check
       - name: smoke · 顺序执行
         run: ./gradlew vmSmoke
+      # 合并块（一块 + 下拉）走一遍真实的 sb3 → VM → 桥 → Java 链路；
+      # 夹具只用 slotField，因为它不读世界状态，纯 JVM 里能拿到确定值
+      - name: smoke · 合并积木
+        run: ./gradlew vmSmoke -PvmProject=merged-project.json
       - name: smoke · 事件帽子
         run: ./gradlew vmSmoke -PvmMode=hat -PvmProject=hat-project.json
       - name: smoke · 阻塞动作

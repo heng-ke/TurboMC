@@ -66,14 +66,14 @@ src/client/java/xyz/turbomc/client/
 ├── config/
 │   ├── TurboMCConfig.java      配置数据与持久化
 │   ├── TurboMCConfigScreen.java 模组菜单（需 Cloth Config）
-│   ├── PathEffort.java         「走向」的 A* 搜索强度档位（轻量 / 标准 / 重量）
-│   └── HudCorner.java           HUD 旧版停靠角落（仅用于旧配置回退）
+│   └── PathEffort.java         「走向」的 A* 搜索强度档位（轻量 / 标准 / 重量）
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
     ├── action/                  动作层（Java 侧真正操作游戏的地方）
     │   ├── GameActions.java     移动、挖掘、放置、聊天、命令、容器……
     │   ├── ContainerActions.java 容器：开界面、点槽位、搬东西、读槽位内容
-    │   ├── WorldQueries.java    世界查询（方块、实体、时间……）
+    │   ├── WorldQueries.java    世界查询（方块、实体、时间……）与快照的取值层
+    │   ├── Snapshots.java       快照的 JSON 拼装（只收原语，纯 JVM 单测）
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
     │   ├── NativeRegistry.java  opcode → 动作的注册表
@@ -92,8 +92,9 @@ src/client/java/xyz/turbomc/client/
     │       └── TurnActions.java    注册两个平滑积木
     ├── runtime/                 宿主上下文
     │   ├── ScriptContext.java   每 tick 重建的宿主环境（含等待请求通道）
-    │   ├── TriggerDispatcher.java 按键 / 受伤 / 死亡事件源
-    │   ├── ChatState.java       最近一条聊天原文（供「最近的聊天」积木读）
+    │   ├── TriggerDispatcher.java 按键 / 受伤 / 死亡 / 界面打开 事件源
+    │   ├── ChatState.java       最近 32 条聊天的环形缓冲（网络线程写、脚本线程读）
+    │   ├── ExtensionHealth.java 扩展与模组的 opcode 集合自检（不一致时 HUD 红字）
     │   └── Values / ScratchCast  值转换（scratch-vm 已自带运算与比较，Java 不重复实现）
     ├── ai/                      大模型对话
     │   ├── AiService.java       HTTP（HttpClient 异步）、会话表、历史裁剪、并发与取消
@@ -135,7 +136,7 @@ src/client/java/xyz/turbomc/client/
 
 ```
 turbowarp/src/
-├── blocks.data.js             96 块积木、12 个菜单、15 个分组标题、每块的占位方法体
+├── blocks.data.js             97 块积木、16 个菜单、15 个分组标题、每块的占位方法体
 └── items.data.js              1505 条物品（注册名|中文名|英文名）
 
 tools/
@@ -205,23 +206,91 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 `data_changevariableby` 和 `data_setvariableto` 都映射到 `data.set`，结果
 「将 i 增加 1」在查看器里显示成「将 i 设为 1」。这类错误不报错，只是语义悄悄偏移。
 
-### 6.1 扩展积木的参数名来自显示文本的占位符
+### 6.1 扩展积木的参数顺序由 `argOrder` 固定，不跟界面语言走
 
-积木方法体转发到 Java 时，实参按**位置**取（Java 侧读 `args.<名字>`），而位置
-来自积木显示文本里的 `[NAME]` 占位符——`vm-bootstrap.js` 的 `__tmcArgNames`
-用正则提取。这是唯一与 `arguments` 一一对应且顺序可靠的来源（对象 key 顺序在
-ES5 里不保证）。
+积木方法体转发到 Java 时，实参按**位置**取（Java 侧读 `args.<名字>`）。
+这份顺序来自产物的 `argOrder` 字段，由 `build-extension` 从**中文文案**的
+`[NAME]` 占位符生成。运行时只认这个字段——若改成从 `block.text` 现场提取，
+顺序会跟着界面语言走（英文文案的占位符次序不同），那正是这条规则修掉的 bug。
 
-代价是：**改写显示文案时若动了占位符的拼写或顺序，实参会静默错位**，不报错，
-只是某个积木的参数语义悄悄偏移。
+**为什么不能直接提取 `block.text`**：运行时的 `text` 是 `T(en, zh)`，选哪份取决于
+界面语言。JSON 那批积木的中英顺序本来就不一样（`set [item] in [json] to [value]`
+对 `把 [json] 中 [item] 设为 [value]`），直接提取会让英文环境下的实参整体错位，
+而 Java 侧始终按中文顺序读——这类错位不报错，只是取值全错。
 
-`RhinoVm.argsSelfTest()` 交叉校验两边数量：扩展侧的占位符数（JS 侧经
-`__tmcArgNamesDump` 暴露）与查看器侧登记的参数数（`BlockRegistry`）必须相等。
-数量对不上，参数就一定错位。这条由 `./gradlew vmSmoke` 守住。
+代价与守则：
+
+- **改中文文案的占位符顺序 = 改协议**，Java 侧读 `args[i]` 的地方要跟着改；
+- 英文文案的顺序可以不同，但**占位符名字集合必须与中文一致**（少一个就等于该参数在英文界面填不了）；
+- `RhinoVm.argsSelfTest()` 只比对**数量**（扩展占位符数 vs `BlockRegistry` 参数数），
+  名字与顺序由 `tools/build-mapping-report.js` 在构建期比对：中文文案 ↔ `arguments` ↔
+  `Blocks.java` 的模板占位符与 `BlockParam` 名，四项必须逐字一致。
 
 > 它已经抓到过一次真实漂移：查看器给 `action.break_wait` 登记了 `TICKS` 参数，
 > 而扩展里的 `breakWait` 早已无参数（上限由宿主侧固定）。运行路径一直是对的，
 > 错的是查看器多显示了一个不存在的参数。
+>
+> 加校验时又抓出一次：16 块 JSON 积木中英占位符顺序不同，英文环境下参数全错位。
+
+#### 6.1.1 菜单参数在 sb3 里是「输入 + 影子菜单块」，不是字段
+
+扩展积木的菜单参数（含 `acceptReporters: false` 的下拉）在工程文件里必须写成
+`inputs: { NAME: [1, "<影子块 id>"] }`，影子块的 `opcode` 就是菜单名、字段名也是菜单名：
+
+```json
+"inputs": {"SCREEN": [1, "s1"]},
+"s1": {"opcode": "screenKind", "fields": {"screenKind": ["container", null]}, "shadow": true}
+```
+
+**写成 `fields: {SCREEN: ["container", null]}` 时，载入阶段整块会被静默丢弃**——
+不报错、不留日志，现象是「积木在工程里，但帽子永不触发」。手工构造夹具或生成 sb3 时尤其要小心；
+TurboWarp 自己导出的工程天然是正确形态。
+
+同一条也解释了为什么 `vmScreenHat` 用自己的遍历而不是 `runtime.startHats`：
+压缩版 VM 对「带参数的扩展帽子」的字段匹配不可用（同一工程里无参数的 `whenDamaged`
+能起线程，带 `SCREEN` 的起 0 个）。此外 `RhinoVm.threadCountOf` 读的是结果的 `.length`，
+JS 侧必须返回**数组**而不是计数，否则永远显示 0。
+
+### 6.2 合并积木：旧 opcode 已删除，旧工程不再兼容
+
+把「同一对象的多个字段」合成一块下拉（坐标三轴、最近实体的距离/坐标/名称），
+面板从 101 块降到 86 块。**这是有代价的**：sb3 里存的是 opcode，删掉旧 opcode
+就等于删掉旧工程里那块积木。
+
+2026-11-19 的决定是硬删 15 块：`posX/posY/posZ`、`aimX/aimY/aimZ`、
+`nearestEntity` 与它的 `X/Y/Z/name`、`heldItem/heldDurability`、`slotItem/slotAmount`。
+
+**失效形态比报错更隐蔽**——实测（`vmSmoke -PvmProject=<旧工程的 project.json>`）：
+未知 opcode 被静默跳过，工程照常载入、脚本照常往下跑、`未映射` 计数仍为 0，
+只是那一步没有结果。玩家看到的是「这块积木好像没生效」，而不是一条错误。
+
+将来若要兼容旧工程，正确做法是**载入期迁移**：在 `__tmcLoadProject` 解析 JSON 后、
+交给 VM 之前，把旧 opcode 改写为新 opcode 并补默认字段（`posX` → `pos` + `AXIS:"x"`）。
+不要走「把 15 条登记加回来」这条路——那会让面板外永久保留一份平行实现。
+
+其余规则不变：
+
+- 新增积木必须同时改三处：`blocks.data.js` 声明、`Sb3Mapping` 映射、`Blocks.java` 登记。
+  名字与顺序的一致性由 `tools/build-mapping-report.js` 在构建期校验（§6.1）。
+- 下拉的 `value` 必须是 ASCII 且与语言无关（工程里存的是 value），显示名走
+  `ParamLabels` 的 `value.turbomc.field.*`。
+
+当前是 15 块合成 5 块：`pos` / `aimPos` / `nearestEntityField` / `heldItemField` / `slotField`。
+
+### 6.3 扩展产物与宿主对不上时，必须在 HUD 上说
+
+两个方向的症状都很像「模组坏了」，而且都不报错：
+
+- **扩展旧**（改了模组没重载扩展）：新积木在面板里根本不存在，用户以为功能没做；
+- **模组旧**（换了扩展没换 jar）：面板里有积木，点下去未映射，静默返回 `null`。
+
+`RhinoVm.init()` 把扩展 `getInfo().blocks` 的 opcode 清单交给
+`ScriptBridge.checkExtensionCoverage`，与 `Sb3Mapping.extensionOpcodes()` 双向比对；
+结论存进 `ExtensionHealth`，HUD 常驻一行红字，明细（缺哪些、多哪些）进日志。
+`vmSmoke` 断言这句话为空，防止产物与映射表漂移着进构建。
+
+> 为什么不用「版本号比对」：版本号一致不等于积木一致（改文案、删积木都不改版本），
+> 而 opcode 集合是真正决定「积木能不能用」的那份数据。
 
 ### 7. 脚本按下的键必须在引擎停止时统一释放
 
@@ -397,9 +466,13 @@ scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订
 `<玩家名> ` 前缀——这是刻意的：多人服里脚本要能区分是谁在说话。副作用是「开头是 X」
 这类判断永远不成立，只能用「包含」，文档里已写明。
 
-**只保留最后一条**：脚本正在
-等待（寻路、AI 请求）时连来三条，前两条会被覆盖——这是这个名字承诺的语义，要完整队列
-是另一件事，别在这里偷偷扩。
+**保留最近 32 条（环形缓冲）**：`ChatState` 已从「只存最后一条」扩为固定容量的环形缓冲
+（{@code ChatState.CAPACITY = 32}）。脚本正在等待（寻路、AI 请求）时连来几条，前几条不会被
+覆盖；超过 32 条才丢弃最旧的，且容量**不随参数放大**——无界队列会在长时间挂机时吃光内存。
+读写分别在网络线程与脚本线程，所有访问都在锁内，读出去的是一份拷贝。
+
+两条读出口：「最近的聊天」（`query.last_chat`）只给最新一句；「最近 [N] 条聊天」
+（`query.chat_history`）给**旧的在前**的字符串数组，可直接拼成对话上下文。
 
 #### 双通道：玩家聊天 ≠ 服务器系统消息
 
@@ -604,7 +677,7 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 `assets/turbomc/vm/turbomc-extension.es5.js`（运行时副本）都由
 `node tools/build-extension.js` 渲染，数据源是：
 
-- `turbowarp/src/blocks.data.js` —— 96 块积木、12 个菜单、15 个分组标题、每块的占位方法体；
+- `turbowarp/src/blocks.data.js` —— 97 块积木、16 个菜单、15 个分组标题、每块的占位方法体；
 - `turbowarp/src/items.data.js` —— 1505 条物品（`注册名|中文名|英文名`）。
 
 **直接改产物会在下次生成时被覆盖**，CI 用 `--check` 拦「产物过期」，`verify-extension.js` 继续守
@@ -625,6 +698,106 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 `Sb3Mapping.java` 与 `blocks.data.js` 生成，不再手工维护。生成时还会核对两边的 opcode 集合
 ——「数据源有、映射表缺」或反之都会直接报错，因为那正是「面板里有积木、游戏里没反应」的成因。
 上一版手工维护的表已经漂移（JSON 组内顺序、`sensing` 组顺序都与面板/源码不符），生成后自动一致。
+
+### 25. 配置只在加载后补齐缺失段，不做逐字段迁移
+
+`TurboMCConfig` 的 `hudCorner` 字段已删（HUD 位置只用 `hudOffsetX` / `hudOffsetY` 两个百分比，
+`HudCorner` 枚举一并移除）。旧 json 里的 `hudCorner` 会被 Gson 忽略，下次保存时自然消失。
+
+Gson 用 Unsafe 建实例、**不执行字段初始化器**，所以 json 缺 `ai` / `pathing` / `blockedKeys`
+时这几个字段是 `null`。处理方式收敛在 `normalizeSections()`：加载后补一次，
+而不是让二十多个 getter 各写一遍 null 判断。
+
+段内字段仍用包装类型——缺字段与「配成 0」必须能区分（`accuracy = 0`、`temperature = 0`
+都是合法值，用原始类型会把两者混成一件事）。
+
+### 26. 快照类积木是单向只读出口
+
+> 状态：**批次 1–3 已上线并实机验证**（2026-11-19）。九块快照全部通过验收：玩家 / 附近实体列表 /
+> 方块 / 背包 / 界面 / 世界 / 在线玩家 / 区域扫描 / 聊天历史，另有「当打开 [界面]」帽子。
+> 验收中发现并修正三处：玩家/创造背包 `getType()` 抛异常、NBT 混入重复键、1.21.11 的 NBT 键名为
+> snake_case。剩余事件类积木见 `BACKLOG.md` SNAP-04。
+
+「快照」指把游戏状态读成 JSON 文本的一组积木（玩家 / 附近实体列表 / 方块 / 背包 / 界面 / 世界），
+用来补上 29 块 JSON 积木缺的输入源——那批积木是纯计算，游戏数据此前只能一块一个标量地搬。
+
+**方向固定为只读，五条约束：**
+
+1. **只出不进**。快照的返回值是普通字符串，与 JSON 积木的输出同质；脚本对它做 `json.set_path`
+   只改字符串本身，不产生任何回写。改变世界仍只能用既有动作积木。
+2. **不提供「应用快照」**。将来若要写回，必须是独立的 `action.*` 块并单独评审——不允许某块积木
+   「把 JSON 结果悄悄套用到玩家 / 实体 / 背包」。否则 JSON 会变成隐式状态源，
+   而它今天的价值正是「纯值、可单测、可复制」。
+3. **不用 `json.*` 前缀**。快照依赖 `MinecraftClient`，进不了纯 JVM 单测；`json.*` 的前提是
+   「不碰游戏状态、`./gradlew test` 可覆盖」（见 `JsonActions` 类注释）。opcode 归 `world.*`。
+4. **拼装逻辑要能脱离客户端测**。取值仍在 `WorldQueries` 里读 `MinecraftClient`，
+   但「原语 → JSON 文本」抽成只收 primitives 的纯函数（`Snapshots`），让字段名、顺序、数值格式有单测
+   （同 `EntityFilter` 把解析与判定拆开的手法）。
+5. **代价**：读写要在脚本里显式展开成两步；换来的是没有隐式副作用与「快照是否还持有对象引用」
+   的生命周期问题。这是取舍，不是遗漏。
+
+已实现的九个 opcode：`world.player_json`、`world.block_json`（x / y / z）、
+`world.entities_json`（类型 / 半径 / 上限）、`world.inventory_json`、`world.screen_json`、
+`world.world_json`、`world.players_json`、`world.scan_json`（两角 + 上限）、
+`query.chat_history`（条数）。三条形状约定：
+
+- **固定字段扁平**（`x` / `motion_x` / `health`），只有随游戏变化的开放结构才做子对象
+  （方块状态的 `state`、容器内容的 `block_entity`）。理由是可组合：`json.array_map_field`
+  只能取顶层键，嵌套的 `pos.x` 在数组上没法批量映射。
+- **列表一律返回裸数组**，不包 `{count, list}`：包一层就接不上 `json.length` /
+  `json.array_map_field` / 把列表设为。真实总数由旁边的计数积木或 `slots` 字段给。
+- **缺数据给空容器不给空串**：无玩家/无世界时返回 `{}` 或 `[]`，
+  空串会让下游 JSON 积木直接解析失败。
+
+**键名的可见性由三处守卫**：键只存在于代码里，用户在编辑器看不见，所以
+`Snapshots` 里为每种快照声明了键清单常量（`PLAYER_KEYS` 等），并配三处对齐：
+
+1. **写入顺序**——`SnapshotJsonTest` 断言输出 JSON 的键顺序等于清单；
+2. **编辑器骨架**——`SnapshotKeysDocTest` 解析 `blocks.data.js` 的 stub，断言键集合一致
+   （浏览器里运行一次就能看到真实键名）；
+3. **文档表格**——同一测试解析 `turbowarp/README.md` 的「键：」行，逐项比对。
+
+另有一块 `world.snapshot_keys`（「[快照] 的字段」）在运行时直接返回清单，
+作者接「说」即可看全，不必翻文档。改键时上述三处会一起失败，这是刻意的。
+
+**背包与界面是两块，编号体系不同，不能混用**：
+
+- `world.inventory_json` 固定用 inventory 索引（0–35 主背包、36–39 盔甲、40 副手），
+  只列非空槽位。不能用 `currentScreenHandler` 取：玩家格在界面里的编号会随打开的容器整体后移
+  （大箱子里是 27–62），拿它当背包编号会随场景漂移。
+- `world.screen_json` 固定用 `ScreenHandler` 槽位号，与「点击槽位」同源，可直接拿去点；
+  `type` 取菜单注册名，**玩家背包固定给 `minecraft:player`**——`PlayerScreenHandler` 的类型是
+  `null`，`getType()` 会抛 `UnsupportedOperationException`（原版设计，不是异常状态），实机踩到过；
+  每项带 `player_slot`，用来区分自己的背包与容器。没有界面时给 `{}`——
+  此时 `currentScreenHandler` 仍指向玩家自己的 46 格合成界面，照搬会让脚本以为有东西可点。
+
+**世界快照只给八个稳定字段**：`time` / `day` / `moon_phase` / `raining` / `thundering` /
+`dimension` / `biome` / `light`。难度、服务器品牌在客户端没有可靠来源（品牌在 1.21.11 的
+客户端处理器上不暴露，难度只有单人模式能从服务端读），TPS 只能靠帧间隔估算——
+三者都不给，避免脚本依赖看起来像真值的假数据。
+
+**区域扫描只给非空气方块，且有两道闸**：体积上限 {@code SCAN_VOLUME_LIMIT = 8192} 格
+（{@code getBlockState} 在主线程，超出部分不扫）、条数上限由 {@code LIMIT} 参数给
+（默认 4096，钳 1–16384）。任一触发都置 {@code truncated = true}——它表示「结果不全」，
+不是「扫完了没有方块」。遍历顺序 y → x → z，截断先丢高层，所以竖向建筑应分段扫。
+同一 tick 内重复调用只扫一次（缓存键含范围与上限）。
+
+**在线玩家快照只有四项**：`uuid` / `name` / `latency` / `gamemode`。其他玩家的坐标、血量、
+背包由服务端下发，客户端拿不到——要判断「附近有谁」，用实体列表（`TYPE = 玩家`），
+不要指望这份名单。顺序就是 tab 列表顺序，不做重排。
+
+**聊天历史是环形缓冲的读出口**，不是新的存储：容量固定 32 条（见 §19），积木只决定取几条，
+`COUNT` 超过 32 会被钳到 32，不能靠参数绕过容量。
+
+方块的 `block_entity` 只取**标量与结构化内容**：箱子一类走 `items`（最多 64 条，
+`items_total` 给出真实槽位数），告示牌走 `text_front` / `text_back`，
+其余标量 NBT 放 `nbt`（上限 32 键，剔除与顶层重复的 `x`/`y`/`z`/`id`）。
+
+**熔炉进度拿不到**（实机验证，2026-11-19）：1.21.11 的 NBT 键名已改为 snake_case
+（`cooking_time_spent` / `cooking_total_time` / `lit_time_remaining` / `lit_total_time`），
+但客户端方块实体的这四个值**恒为 0**，即使 `state.lit = true`——方块实体更新不会同步进度。
+要精确进度只能读打开界面后的 `ScreenHandler` 属性，本版未提供，因此不要在脚本里做
+「等到烧完」这类判断，改为「等待固定时长后取输出槽」。
 
 ## 六、HUD
 HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定，三处界面共用

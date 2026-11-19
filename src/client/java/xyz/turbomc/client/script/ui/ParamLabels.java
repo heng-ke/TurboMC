@@ -135,6 +135,12 @@ public final class ParamLabels {
 			case "MENU" -> "value.turbomc.menu." + normalize(value);
 			case "PRESSED" -> "value.turbomc.onoff." + normalize(value);
 			case "BUTTON" -> "value.turbomc.mouse." + normalize(value);
+			// 「当打开 [界面]」的菜单
+			case "SCREEN" -> "value.turbomc.screen." + normalize(value);
+			// 「[快照] 的字段」的菜单
+			case "KIND" -> "value.turbomc.kind." + normalize(value);
+			// 合并块的下拉：AXIS 与 FIELD 共用一张表（x/y/z 两种菜单都有，且显示相同）
+			case "AXIS", "FIELD" -> "value.turbomc.field." + normalize(value);
 			default -> null;
 		};
 	}

@@ -1,6 +1,10 @@
 package xyz.turbomc.client.script.runtime;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.ScriptEngine;
 import xyz.turbomc.client.script.action.GameActions;
@@ -21,6 +25,8 @@ import java.util.Map;
  */
 public final class TriggerDispatcher {
 	private final Map<String, Boolean> keyStates = new HashMap<>();
+	/** 上一 tick 的界面实例，用于「打开界面」的边沿判定。 */
+	private Screen lastScreen;
 	private float lastHealth = -1f;
 	private boolean wasDead;
 
@@ -41,6 +47,8 @@ public final class TriggerDispatcher {
 		// 界面里按下的键照样更新边沿状态，否则关掉界面时仍按着的 W 会被当成新按下，
 		// 重复触发一次「当按下 W」。引擎没在跑时同理：只记账，不派发。
 		dispatchKeys(client, ScriptEngine.get().active() && client.currentScreen == null);
+		// 界面打开是独立事件：它恰好发生在按键被拦截的时候，所以不能挂在上面的判断里
+		dispatchScreen(client);
 	}
 
 	/**
@@ -72,6 +80,36 @@ public final class TriggerDispatcher {
 		}
 	}
 
+	/**
+	 * 界面打开边沿：{@code 无界面 → 有界面}，或换成另一个界面实例时触发一次。
+	 *
+	 * <p>只认实例变化，不认「界面类型」：连续开两个箱子是两次打开，应当触发两次；
+	 * 而同一个界面里点来点去不触发。</p>
+	 */
+	private void dispatchScreen(MinecraftClient client) {
+		Screen screen = client.currentScreen;
+		if (screen == lastScreen) {
+			return;
+		}
+		lastScreen = screen;
+		if (screen == null) {
+			return;
+		}
+		ScriptEngine.get().fireScreen(screenKind(screen));
+	}
+
+	/**
+	 * 界面归类。{@code ScreenHandlerProvider} 表示「带容器槽位的界面」，
+	 * 其中玩家自己的背包单独算一类：整理背包与整理箱子是两种脚本。
+	 */
+	private static String screenKind(Screen screen) {
+		if (!(screen instanceof ScreenHandlerProvider<?>)) {
+			return "other";
+		}
+		return screen instanceof InventoryScreen || screen instanceof CreativeInventoryScreen
+				? "inventory" : "container";
+	}
+
 	private void dispatchDamage(MinecraftClient client) {
 		// 死亡那一 tick 血量必然是 0，先报「受伤」会和「死亡」叠在一起；
 		// 死亡语义由 dispatchDeath 单独负责，这里只把基线清掉，复活后重新建立。
@@ -88,6 +126,7 @@ public final class TriggerDispatcher {
 
 	private void reset() {
 		keyStates.clear();
+		lastScreen = null;
 		lastHealth = -1f;
 		wasDead = false;
 	}

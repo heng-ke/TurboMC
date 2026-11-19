@@ -56,6 +56,21 @@ const literal = (value) => {
 
 const oneLine = (text) => String(text).replace(/\s*\n\s*/g, ' ');
 
+/**
+ * 参数顺序以**中文文案**为准，写进产物的 {@code argOrder}。
+ *
+ * <p>为什么不能直接让 vm-bootstrap 从 text 里提：运行时 text 是 {@code T(en, zh)}，
+ * 喊什么语言就按什么语言的占位符顺序传参。JSON 那批积木的中英文顺序本来就不一致
+ * （如 {@code set [item] in [json]} 对 {@code 把 [json] 中 [item] 设为}），
+ * 英文环境下实参会整体错位，而 Java 侧是按中文顺序读的。</p>
+ */
+function argOrder(block) {
+	if (!block.text || !block.text.zh) {
+		return [];
+	}
+	return [...block.text.zh.matchAll(/\[([A-Za-z0-9_]+)\]/g)].map((m) => m[1]);
+}
+
 function emitArgument(arg) {
 	const parts = ['type: Scratch.ArgumentType.' + (ARG_TYPES[arg.type] || 'STRING')];
 	if (arg.defaultValue !== undefined) {
@@ -82,6 +97,10 @@ function emitBlocks(target) {
 		lines.push('\t\t\t\t\t\topcode: ' + q(block.opcode) + ',');
 		lines.push('\t\t\t\t\t\tblockType: Scratch.BlockType.' + block.blockType.toUpperCase() + ',');
 		lines.push('\t\t\t\t\t\ttext: T(' + q(block.text.en) + ', ' + q(block.text.zh) + '),');
+		const order = argOrder(block);
+		if (order.length) {
+			lines.push('\t\t\t\t\t\targOrder: [' + order.map(q).join(', ') + '],');
+		}
 		if (block.arguments && Object.keys(block.arguments).length) {
 			const args = Object.entries(block.arguments)
 				.map(([name, arg]) => '\t\t\t\t\t\t\t' + name + ': ' + emitArgument(arg));

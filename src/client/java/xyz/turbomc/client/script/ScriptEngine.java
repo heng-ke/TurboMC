@@ -382,6 +382,32 @@ public final class ScriptEngine {
 	 * startHats 匹配不上）在日志里看起来一模一样：没有这行是前两步的问题，有这行但
 	 * 起 0 个线程是 VM 匹配的问题。所以正常派发走 debug，只有「起了 0 个线程」才告警。</p>
 	 */
+	/**
+	 * 界面打开触发：按 {@code SCREEN} 字段匹配。
+	 *
+	 * <p>宿主把界面归成三类：{@code inventory}（玩家背包）、{@code container}（箱子/熔炉等
+	 * 带容器的界面）、{@code other}（聊天、暂停、书、告示牌等）。派发时先发具体类别，
+	 * 再发一次 {@code any}——所以「当打开（任意）」的脚本只会被第二发命中一次，
+	 * 不会因为两类都发而重复启动。</p>
+	 *
+	 * <p>为什么要有这块积木：界面打开时按键是被拦截的（见 {@code TriggerDispatcher}），
+	 * 「打开箱子就执行」这类脚本原本只能靠轮询，而它本质上是事件。</p>
+	 */
+	public void fireScreen(String kind) {
+		if (!active() || kind == null || kind.isBlank()) {
+			return;
+		}
+		int started = RhinoVm.get().startHat("turbomc_whenScreenOpen", "SCREEN", kind);
+		if (!"any".equals(kind)) {
+			started += RhinoVm.get().startHat("turbomc_whenScreenOpen", "SCREEN", "any");
+		}
+		if (started == 0) {
+			LOG.debug("[script] 界面「{}」派发帽子但没起线程（工程里没有这块帽子？）", kind);
+		} else {
+			LOG.debug("[script] 界面「{}」派发帽子，起线程 {}", kind, started);
+		}
+	}
+
 	public void fireKey(String key) {
 		if (!active() || key == null || key.isBlank()) {
 			return;

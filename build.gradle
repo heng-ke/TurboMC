@@ -223,6 +223,14 @@ tasks.register('vmKeyHat', JavaExec) {
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
+tasks.register('vmScreenHat', JavaExec) {
+	group = 'verification'
+	description = '验证「当打开 [界面]」帽子按 SCREEN 正确派发'
+	mainClass = 'xyz.turbomc.client.script.vm.ScreenHatSmokeTest'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
 // 深度保护冒烟：超长 next 链必须被截断，而不是栈溢出
 tasks.register('vmDepth', JavaExec) {
 	group = 'verification'
