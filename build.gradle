@@ -232,6 +232,15 @@ tasks.register('vmDepth', JavaExec) {
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
 
+// JSON 积木基准：同一套算法在 Rhino（解释执行）与 Java 两侧的耗时对比
+tasks.register('jsonBench', JavaExec) {
+	group = 'verification'
+	description = 'JSON 积木放在 VM 侧还是 Java 侧：耗时对比，不改生产代码'
+	mainClass = 'xyz.turbomc.client.script.vm.JsonBench'
+	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
+}
+
 // TurboWarp 扩展释放冒烟：创建 → 内容一致不动 → 内容过期覆盖
 tasks.register('exportSmoke', JavaExec) {
 	group = 'verification'

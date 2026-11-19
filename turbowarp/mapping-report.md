@@ -1,38 +1,43 @@
 # 积木与 opcode 对应表
 
-> 由脚本从 `Sb3Mapping.java` 与 `turbomc-extension.js` 直接生成，不是手写。
-> 表格顺序与 TurboWarp 积木面板一致，改完扩展后重跑生成即可。
+> 由 `node tools/build-mapping-report.js` 从 `Sb3Mapping.java` 与 `turbowarp/src/blocks.data.js`
+> 生成，**不要手改**（CI 的 `--check` 会拦下过期版本）。表格顺序与 TurboWarp 积木面板一致。
 
 ## 一、统计
 
 | 项 | 数量 |
 |---|---|
-| 扩展积木 | 67 |
+| 扩展积木 | 96 |
 | 其中事件帽子（宿主触发） | 3 |
-| 需要动作实现 | 64 |
-| 映射表条目 | 134 |
+| 需要动作实现 | 93 |
+| 映射表条目 | 163 |
 | 其中原生积木 | 67 |
 
 ## 二、扩展积木
 
 | # | opcode（带前缀） | 内部类型 | 外形 |
 |---|---|---|---|
+| | **事件** | | |
 | 1 | `turbomc_whenDamaged` | `event.damage` | HAT |
 | 2 | `turbomc_whenDeath` | `event.death` | HAT |
 | 3 | `turbomc_whenChat` | `event.chat` | HAT |
+| | **移动与视角** | | |
 | 4 | `turbomc_moveToward` | `action.move_toward` | COMMAND |
 | 5 | `turbomc_look` | `action.look` | COMMAND |
 | 6 | `turbomc_lookAt` | `action.look_at` | COMMAND |
 | 7 | `turbomc_lookSmooth` | `action.look_smooth` | COMMAND |
 | 8 | `turbomc_lookAtSmooth` | `action.look_at_smooth` | COMMAND |
 | 9 | `turbomc_stop` | `action.stop` | COMMAND |
+| | **输入** | | |
 | 10 | `turbomc_key` | `action.key` | COMMAND |
 | 11 | `turbomc_click` | `action.click` | COMMAND |
 | 12 | `turbomc_tap` | `action.tap` | COMMAND |
 | 13 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
+| | **挖掘** | | |
 | 14 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
 | 15 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
 | 16 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
+| | **容器** | | |
 | 17 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
 | 18 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
 | 19 | `turbomc_slotItem` | `world.slot_item` | REPORTER |
@@ -41,6 +46,7 @@
 | 22 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
 | 23 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
 | 24 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
+| | **玩家状态** | | |
 | 25 | `turbomc_health` | `world.health` | REPORTER |
 | 26 | `turbomc_food` | `world.food` | REPORTER |
 | 27 | `turbomc_xpLevel` | `world.xp_level` | REPORTER |
@@ -54,6 +60,7 @@
 | 35 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
 | 36 | `turbomc_itemCount` | `world.item_count` | REPORTER |
 | 37 | `turbomc_respawn` | `action.respawn` | COMMAND |
+| | **世界查询** | | |
 | 38 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
 | 39 | `turbomc_dimension` | `world.dimension` | REPORTER |
 | 40 | `turbomc_biome` | `world.biome` | REPORTER |
@@ -67,15 +74,18 @@
 | 48 | `turbomc_aimY` | `world.aim_y` | REPORTER |
 | 49 | `turbomc_aimZ` | `world.aim_z` | REPORTER |
 | 50 | `turbomc_ping` | `world.ping` | REPORTER |
+| | **实体查询** | | |
 | 51 | `turbomc_nearestEntity` | `world.nearest_entity` | REPORTER |
 | 52 | `turbomc_nearestEntityX` | `world.nearest_entity_x` | REPORTER |
 | 53 | `turbomc_nearestEntityY` | `world.nearest_entity_y` | REPORTER |
 | 54 | `turbomc_nearestEntityZ` | `world.nearest_entity_z` | REPORTER |
 | 55 | `turbomc_nearestEntityName` | `world.nearest_entity_name` | REPORTER |
 | 56 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
+| | **显示与日志** | | |
 | 57 | `turbomc_drawFrame` | `region.draw_frame` | COMMAND |
 | 58 | `turbomc_clearFrames` | `region.clear_frames` | COMMAND |
 | 59 | `turbomc_log` | `debug.log` | COMMAND |
+| | **聊天与 AI** | | |
 | 60 | `turbomc_chat` | `action.chat` | COMMAND |
 | 61 | `turbomc_command` | `action.command` | COMMAND |
 | 62 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
@@ -84,6 +94,40 @@
 | 65 | `turbomc_aiReply` | `ai.reply` | REPORTER |
 | 66 | `turbomc_aiReset` | `ai.reset` | COMMAND |
 | 67 | `turbomc_aiSystem` | `ai.system` | COMMAND |
+| | **JSON · 校验与新建** | | |
+| 68 | `turbomc_jsonIs` | `json.is` | BOOLEAN |
+| 69 | `turbomc_jsonNew` | `json.new` | REPORTER |
+| 70 | `turbomc_jsonLength` | `json.length` | REPORTER |
+| 71 | `turbomc_jsonHasKey` | `json.has_key` | BOOLEAN |
+| 72 | `turbomc_jsonGetAll` | `json.get_all` | REPORTER |
+| 73 | `turbomc_jsonErrMsg` | `json.err_msg` | REPORTER |
+| 74 | `turbomc_jsonMinify` | `json.minify` | REPORTER |
+| | **JSON · 对象与路径** | | |
+| 75 | `turbomc_jsonGet` | `json.get` | REPORTER |
+| 76 | `turbomc_jsonSet` | `json.set` | REPORTER |
+| 77 | `turbomc_jsonDelete` | `json.delete` | REPORTER |
+| 78 | `turbomc_jsonGetPath` | `json.get_path` | REPORTER |
+| 79 | `turbomc_jsonSetPath` | `json.set_path` | REPORTER |
+| | **JSON · 数组读写** | | |
+| 80 | `turbomc_jsonArrayPush` | `json.array_push` | REPORTER |
+| 81 | `turbomc_jsonArraySet` | `json.array_set` | REPORTER |
+| 82 | `turbomc_jsonArrayInsert` | `json.array_insert` | REPORTER |
+| 83 | `turbomc_jsonArrayDelete` | `json.array_delete` | REPORTER |
+| 84 | `turbomc_jsonArrayRemoveAll` | `json.array_remove_all` | REPORTER |
+| 85 | `turbomc_jsonArrayItemNum` | `json.array_item_num` | REPORTER |
+| 86 | `turbomc_jsonArrayFromTo` | `json.array_fromto` | REPORTER |
+| 87 | `turbomc_jsonArraySetLen` | `json.array_setlen` | REPORTER |
+| | **JSON · 数组变换** | | |
+| 88 | `turbomc_jsonArrayConcat` | `json.array_concat` | REPORTER |
+| 89 | `turbomc_jsonArrayMapField` | `json.array_map_field` | REPORTER |
+| 90 | `turbomc_jsonArrayCreate` | `json.array_create` | REPORTER |
+| 91 | `turbomc_jsonArrayJoin` | `json.array_join` | REPORTER |
+| 92 | `turbomc_jsonArraySort` | `json.array_sort` | REPORTER |
+| 93 | `turbomc_jsonArrayTextFilter` | `json.array_textfilter` | REPORTER |
+| 94 | `turbomc_jsonArrayAnalysis` | `json.array_analysis` | REPORTER |
+| | **JSON · 与列表互通** | | |
+| 95 | `turbomc_jsonVmGetList` | `json.vm_getlist` | REPORTER |
+| 96 | `turbomc_jsonVmSetList` | `json.vm_setlist` | COMMAND |
 
 ## 三、原生积木
 
@@ -147,13 +191,13 @@
 | `control.broadcast_wait` | `event_broadcastandwait` |
 | `input.key_pressed` | `sensing_keypressed` |
 | `input.mouse_down` | `sensing_mousedown` |
-| `sensing.ask` | `sensing_askandwait` |
-| `sensing.answer` | `sensing_answer` |
-| `sensing.username` | `sensing_username` |
 | `sensing.timer` | `sensing_timer` |
 | `sensing.reset_timer` | `sensing_resettimer` |
 | `sensing.current` | `sensing_current` |
 | `sensing.days_since_2000` | `sensing_dayssince2000` |
+| `sensing.username` | `sensing_username` |
+| `sensing.ask` | `sensing_askandwait` |
+| `sensing.answer` | `sensing_answer` |
 | `debug.say` | `looks_say` |
 | `debug.think` | `looks_think` |
 | `debug.say_for` | `looks_sayforsecs` |

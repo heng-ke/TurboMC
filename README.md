@@ -26,8 +26,9 @@
 > 导入对「新文件」与「同名但内容不同」一视同仁，不必先删包再导入。
 > 包名后的 `↑` 表示 imports 里有内容不同的新版本；启用中的包被覆盖后会立刻重启生效。
 
-> 仓库里的 `turbowarp/turbomc-extension.js` 是同一份文件的源，改扩展请改仓库这份，
-> 再重新构建——`config/turbomc/` 下的副本每次启动都会按 jar 内版本覆盖。
+> 扩展的源在 `turbowarp/src/`（`blocks.data.js` 积木与菜单、`items.data.js` 物品表），
+> 两份产物由 `node tools/build-extension.js` 生成；改扩展请改数据源再重新生成并构建——
+> `config/turbomc/` 下的副本每次启动都会按 jar 内版本覆盖。
 
 > 要用「AI 对话」积木，先填好 `config/turbomc.json` 的 `ai` 段（或模组设置 → **AI 对话**）：
 > `baseUrl`、`apiKey`、`model` 三项。没配时积木不报错，只是永远返回空串。

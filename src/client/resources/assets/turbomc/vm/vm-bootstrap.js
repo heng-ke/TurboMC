@@ -398,9 +398,15 @@ function __tmcMonitorHooked() {
  * 只遍历 {@code target.lists} 会永远拿到空——那是旧数据模型的位置，
  * 表现为「HUD 上的列表一直是空的」，而列表里其实早有数据。</p>
  */
-function __tmcGetList(name) {
+/**
+ * 按名字找列表变量。
+ *
+ * <p>现代数据模型把列表放在 {@code target.variables} 里、用 {@code type === 'list'} 区分；
+ * 旧模型单独挂在 {@code target.lists} 上。两处都看（ARCHITECTURE §17）。</p>
+ */
+function __tmcFindList(name) {
 	if (!__tmcVm) {
-		return '[]';
+		return null;
 	}
 	var targets = __tmcVm.runtime.targets;
 	for (var t = 0; t < targets.length; t++) {
@@ -409,19 +415,48 @@ function __tmcGetList(name) {
 		for (var id in vars) {
 			var item = vars[id];
 			if (item && item.name === name && item.type === 'list') {
-				return JSON.stringify(item.value || []);
+				return item;
 			}
 		}
-		// 兼容旧数据模型：列表单独挂在 lists 上
 		var lists = target.lists || {};
 		for (var listId in lists) {
 			var legacy = lists[listId];
 			if (legacy && legacy.name === name) {
-				return JSON.stringify(legacy.value || []);
+				return legacy;
 			}
 		}
 	}
-	return '[]';
+	return null;
+}
+
+function __tmcGetList(name) {
+	var found = __tmcFindList(name);
+	return found ? JSON.stringify(found.value || []) : '[]';
+}
+
+/** JSON 积木用：列表不存在返回 null，调用方据此给空串（区别于「存在但为空」）。 */
+function __tmcReadList(name) {
+	var found = __tmcFindList(name);
+	return found ? JSON.stringify(found.value || []) : null;
+}
+
+/** 用 JSON 数组覆盖列表内容；返回是否成功。 */
+function __tmcSetList(name, json) {
+	var found = __tmcFindList(name);
+	if (!found) {
+		return false;
+	}
+	var value;
+	try {
+		value = JSON.parse(json);
+	} catch (e) {
+		return false;
+	}
+	if (!Array.isArray(value)) {
+		return false;
+	}
+	found.value = value;
+	return true;
 }
 
 /** 鼠标钩子是否已安装（冒烟测试用）。 */
@@ -483,7 +518,57 @@ function __tmcRegisterExtension() {
 	manager._registerExtensionInfo(serviceName, __tmcInfo);
 }
 
+/**
+ * 给「工程声明了、但宿主没实现」的扩展登记一个占位实例。
+ *
+ * <p>不加这一步，scratch-vm 的 {@code installTargets} 会认为该扩展没加载，
+ * 转而用 {@code new Worker("./extension-worker.js")} 去拉 {@code extensionURLs} 里的地址。
+ * Rhino 没有 Worker，那个 Promise 必然被拒，{@code loadProject} 整体失败——玩家看到的是
+ * 「✕ 工程载入失败」，而不是「某个积木不生效」。这是最容易让人以为模组坏了的一种失败。</p>
+ *
+ * <p>占位实例只做一件事：让 {@code isExtensionLoaded} 为真，从而跳过 Worker 路径。
+ * 该扩展的积木没有原始实现，走到时返回空值，其余积木照常运行。</p>
+ */
+function __tmcStubInfo(id) {
+	return {id: id, name: id, blocks: []};
+}
+
+function __tmcRegisterUnknownExtensions(json) {
+	var ids = json && json.extensions;
+	if (!ids || !ids.length) {
+		return;
+	}
+	var manager = __tmcVm.extensionManager;
+	for (var i = 0; i < ids.length; i++) {
+		var id = ids[i];
+		if (!id || manager.isExtensionLoaded(id)) {
+			continue;
+		}
+		var info = __tmcStubInfo(id);
+		var serviceName = manager._registerInternalExtension({
+			getInfo: function () {
+				return info;
+			}
+		});
+		manager._loadedExtensions.set(id, serviceName);
+		manager._registerExtensionInfo(serviceName, info);
+		print('[vm] 未支持的扩展「' + id + '」已按占位登记：其积木返回空值，其余脚本照常运行');
+	}
+}
+
 function __tmcLoadProject(json) {
+	// 宿主传进来的是 project.json 的**文本**（RhinoVm.loadProject 的入参），
+	// 直接读 .extensions 会永远是 undefined。这里解析一次只为拿到扩展声明，
+	// 交给 VM 的仍是原始入参——不改变载入路径的任何语义。
+	var project = json;
+	if (typeof json === 'string') {
+		try {
+			project = JSON.parse(json);
+		} catch (e) {
+			project = null;
+		}
+	}
+	__tmcRegisterUnknownExtensions(project);
 	return __tmcVm.loadProject(json);
 }
 

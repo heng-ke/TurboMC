@@ -59,6 +59,48 @@ public final class ScratchCast {
 	}
 
 	/**
+	 * 对应上游 {@code Cast.compare}：两边都能当数字时比数值，否则按<b>不分大小写</b>的字典序。
+	 *
+	 * <p>两个细节照搬：</p>
+	 * <ol>
+	 *   <li>{@code " "} 这类纯空白串 {@code Number()} 得 0，但上游会把它改成 NaN，
+	 *       于是「1 和空格」走字符串比较而不是数值比较。</li>
+	 *   <li>同号无穷相减会得 NaN，上游单独判成相等，这里必须同样处理，
+	 *       否则排序结果不稳定（比较器不满足自反性）。</li>
+	 * </ol>
+	 */
+	public static int compare(Object left, Object right) {
+		double a = rawNumber(left);
+		double b = rawNumber(right);
+		if (a == 0d && isBlankText(left)) {
+			a = Double.NaN;
+		} else if (b == 0d && isBlankText(right)) {
+			b = Double.NaN;
+		}
+		if (Double.isNaN(a) || Double.isNaN(b)) {
+			int compared = toString(left).toLowerCase(java.util.Locale.ROOT)
+					.compareTo(toString(right).toLowerCase(java.util.Locale.ROOT));
+			return Integer.signum(compared);
+		}
+		if ((a == Double.POSITIVE_INFINITY && b == Double.POSITIVE_INFINITY)
+				|| (a == Double.NEGATIVE_INFINITY && b == Double.NEGATIVE_INFINITY)) {
+			return 0;
+		}
+		// 用相减而不是 Double.compare：后者把 -0.0 排在 0.0 前面，JS 认为两者相等
+		double difference = a - b;
+		return difference < 0d ? -1 : (difference > 0d ? 1 : 0);
+	}
+
+	/** 上游的 {@code isWhiteSpace}：数字不算，字符串空或全空白算。 */
+	private static boolean isBlankText(Object value) {
+		if (value instanceof Number) {
+			return false;
+		}
+		String text = value == null ? "" : value.toString();
+		return text.isBlank();
+	}
+
+	/**
 	 * 数值转换：NaN 折成 0（Scratch 里 `0 + NaN` 等于 0）。
 	 */
 	public static double toNumber(Object value) {

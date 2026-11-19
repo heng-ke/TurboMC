@@ -26,10 +26,18 @@ jobs:
       # VM 后端的冒烟：不启动客户端，在纯 JVM 里验证 Rhino + scratch-vm 链路。
       # 夹具在 src/test/resources/turbomc-vm/，进版本控制，CI 上才存在。
       # 分开成独立步骤：失败时能直接看出是哪一环坏了，不必翻整段日志。
+
+      # 扩展的两份产物由 tools/build-extension.js 生成，源在 turbowarp/src/。
+      # 这一步守「改了数据源忘了重新生成」与「直接手改产物」两种漂移。
+      - name: 扩展产物新鲜度
+        run: node tools/build-extension.js --check
       # 扩展的编辑器契约：getInfo() 必须可结构化克隆（Worker postMessage）。
       # 菜单 items 写成函数会让 TurboWarp 抛 DataCloneError，写成方法名字符串会抛 reading 'call'。
       - name: 扩展自检
         run: node turbowarp/verify-extension.js
+      # 映射表同样由代码生成（Sb3Mapping + blocks.data.js），守「文档描述不存在的积木」。
+      - name: 映射表新鲜度
+        run: node tools/build-mapping-report.js --check
       - name: smoke · 顺序执行
         run: ./gradlew vmSmoke
       - name: smoke · 事件帽子

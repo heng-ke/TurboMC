@@ -148,6 +148,9 @@ public final class RhinoVm {
 			// WORK_TIME 计算为 0，整帧静默空转且不报错（阶段 0 踩过的坑）。
 			call(cx, "__tmcSetBudget", new Object[]{budgetNanos / 1_000_000d});
 			ready = true;
+			// 列表读写两块积木的实现在 vm 包（需要 VM 内部状态），注册点放这里，
+			// 保证「action → vm」不会多出一条新依赖边。重复注册是幂等的。
+			VmListActions.registerAll();
 		} catch (RuntimeException e) {
 			LOG.error("[vm] 初始化失败", e);
 			throw e;
@@ -274,6 +277,24 @@ public final class RhinoVm {
 	public String variableDump() {
 		Object value = callQuietly("__tmcDumpVars", new Object[0]);
 		return value == null ? "" : value.toString();
+	}
+
+	/**
+	 * 读 Scratch 列表为 JSON 数组文本；列表不存在返回 {@code null}。
+	 *
+	 * <p>与 {@link #getVariable} 同一层：都是宿主读 VM 内部状态的出口，
+	 * 供「JSON」那两块列表积木使用。{@code null} 与 {@code "[]"} 的差别是「找不到」与
+	 * 「找到但为空」，积木据此区分空串与空数组。</p>
+	 */
+	public String readList(String name) {
+		Object value = callQuietly("__tmcReadList", new Object[]{name});
+		return value == null ? null : value.toString();
+	}
+
+	/** 用 JSON 数组覆盖 Scratch 列表；返回是否成功（列表不存在或不是数组时为假）。 */
+	public boolean writeList(String name, String json) {
+		Object value = callQuietly("__tmcSetList", new Object[]{name, json});
+		return Boolean.TRUE.equals(value);
 	}
 
 	/**

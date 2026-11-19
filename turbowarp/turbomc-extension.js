@@ -1,14 +1,12 @@
 (function (Scratch) {
 	'use strict';
 
-	/**
-	 * turbomc 的 TurboWarp 扩展（中英双语）。
+	/*
+	 * 本文件由 tools/build-extension.js 生成，不要手改。
+	 * 要改积木或菜单，请改 turbowarp/src/blocks.data.js（物品表在 items.data.js），然后重新生成。
 	 *
-	 * 作用：在 TurboWarp 积木面板里提供 Minecraft 专用积木，导出 .sb3 后由模组解析执行。
-	 * 浏览器里没有 Minecraft，所有动作都是空实现，只打控制台日志。
-	 *
-	 * 注意：opcode 在 project.json 中呈现为 turbomc_<opcode>，模组按该规则映射，改名会导致导入失败。
-	 * 菜单项的 value 必须是英文（写入 sb3），显示文本才做本地化。
+	 * 编辑器副本：给 TurboWarp 用。浏览器里没有 Java，所有积木都是占位实现，
+	 * 真正的执行发生在游戏内——由 vm-bootstrap 把每个 opcode 换成对宿主的调用。
 	 */
 
 	let lang = 'en';
@@ -1531,61 +1529,50 @@ const ITEM_TABLE = [
 ];
 
 	/**
- * 物品菜单项（惰性构建，构建一次后缓存）。
- *
- * 必须写成**函数**而不是方法名字符串：字符串形式会让 VM 去「扩展服务对象」上按名取方法，
- * 而那个对象只有内建扩展才带实例方法——TurboWarp 里以 URL 加载的扩展会直接抛
- * `Cannot read properties of undefined (reading 'call')`。函数形式 VM 原样放行，
- * 编辑器展开下拉时才调用本函数。
- */
-function itemMenuItems() {
-	if (!itemMenuItems.cache) {
-		itemMenuItems.cache = ITEM_TABLE.map((row) => {
-			const parts = row.split('|');
-			return {text: T(parts[2], parts[1]), value: 'minecraft:' + parts[0]};
-		});
+	 * 物品菜单项（惰性构建，构建一次后缓存）。
+	 *
+	 * 必须返回**数组**：编辑器侧 getInfo() 要经 postMessage 结构化克隆，函数不能克隆。
+	 */
+	function itemMenuItems() {
+		if (!itemMenuItems.cache) {
+			itemMenuItems.cache = ITEM_TABLE.map((row) => {
+				const parts = row.split('|');
+				return {text: T(parts[2], parts[1]), value: 'minecraft:' + parts[0]};
+			});
+		}
+		return itemMenuItems.cache;
 	}
-	return itemMenuItems.cache;
-}
 
-class TurboMC {
+	class TurboMC {
 		getInfo() {
 			return {
 				// 扩展 id 决定 opcode 前缀：注册为 turbomc，积木在 project.json 里就是
 				// turbomc_<opcode>。改这里等于让所有已导出的工程失效。
 				id: 'turbomc',
-				name: 'TurboMC',
+				name: T('TurboMC', 'TurboMC'),
 				color1: '#6F45B0',
-				color2: '#5A3894',
 				blocks: [
-					// 分类标题：LABEL 只在 TurboWarp 编辑器里渲染成加粗标题，
-					// 没有 opcode、不进 sb3、不参与执行。数组顺序即面板顺序。
-					// 运行时副本（assets/turbomc/vm/turbomc-extension.es5.js）刻意不带 LABEL——
-					// 内嵌的 vm.es5.js 不支持 label，带上会在注册阶段出问题。
 					{blockType: Scratch.BlockType.LABEL, text: T('Events', '事件')},
 					{
 						opcode: 'whenDamaged',
 						blockType: Scratch.BlockType.HAT,
-						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
-						isEdgeActivated: false,
-						text: T('when damaged', '当受伤时')
+						text: T('when damaged', '当受伤时'),
+						isEdgeActivated: false
 					},
 					{
 						opcode: 'whenDeath',
 						blockType: Scratch.BlockType.HAT,
-						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
-						isEdgeActivated: false,
-						text: T('when player dies', '当玩家死亡')
+						text: T('when player dies', '当玩家死亡'),
+						isEdgeActivated: false
 					},
 					{
 						opcode: 'whenChat',
 						blockType: Scratch.BlockType.HAT,
-						// 由宿主事件显式触发，不能让 VM 每帧自动拉起
-						isEdgeActivated: false,
 						text: T('when chat contains [MATCH]', '当聊天包含 [MATCH]'),
 						arguments: {
 							MATCH: {type: Scratch.ArgumentType.STRING, defaultValue: ''}
-					}
+						},
+						isEdgeActivated: false
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Movement & view', '移动与视角')},
 					{
@@ -1596,7 +1583,7 @@ class TurboMC {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'look',
@@ -1605,7 +1592,7 @@ class TurboMC {
 						arguments: {
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'lookAt',
@@ -1615,17 +1602,16 @@ class TurboMC {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'lookSmooth',
 						blockType: Scratch.BlockType.COMMAND,
-						// 阻塞到转到位：转多少由宿主的比例收敛决定，不是瞬移
 						text: T('turn smoothly to yaw:[YAW] pitch:[PITCH]', '平滑转到视角 水平:[YAW] 俯仰:[PITCH]'),
 						arguments: {
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'lookAtSmooth',
@@ -1635,7 +1621,7 @@ class TurboMC {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'stop',
@@ -1649,24 +1635,16 @@ class TurboMC {
 						text: T('key [KEY] [STATE]', '按键 [KEY] [STATE]'),
 						arguments: {
 							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
-							STATE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'down',
-								menu: 'keyState'
-					}
-					}
+							STATE: {type: Scratch.ArgumentType.STRING, defaultValue: 'down', menu: 'keyState'}
+						}
 					},
 					{
 						opcode: 'click',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('click [BUTTON]', '点击 [BUTTON]'),
 						arguments: {
-							BUTTON: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'left',
-								menu: 'mouseButton'
-					}
-					}
+							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'mouseButton'}
+						}
 					},
 					{
 						opcode: 'tap',
@@ -1675,19 +1653,15 @@ class TurboMC {
 						arguments: {
 							KEY: {type: Scratch.ArgumentType.STRING, defaultValue: 'w', menu: 'keyName'},
 							HOLD: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
-					}
+						}
 					},
 					{
 						opcode: 'mouseDown',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('mouse [BUTTON] pressed?', '按下鼠标 [BUTTON]?'),
 						arguments: {
-							BUTTON: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'left',
-								menu: 'mouseButton'
-					}
-					}
+							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'mouseButton'}
+						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Mining', '挖掘')},
 					{
@@ -1714,12 +1688,12 @@ class TurboMC {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'containerSlots',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('container slots', '界面槽位数'),
+						text: T('container slots', '界面槽位数')
 					},
 					{
 						opcode: 'slotItem',
@@ -1727,7 +1701,7 @@ class TurboMC {
 						text: T('item in slot [INDEX]', '槽位 [INDEX] 的物品'),
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'slotAmount',
@@ -1735,19 +1709,15 @@ class TurboMC {
 						text: T('amount in slot [INDEX]', '槽位 [INDEX] 的数量'),
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'firstSlotOf',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('first slot with [ITEM]', '第一个装着 [ITEM] 的槽位'),
 						arguments: {
-							ITEM: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:iron_ore',
-								menu: 'itemId'
-							}
-					}
+							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:iron_ore', menu: 'itemId'}
+						}
 					},
 					{
 						opcode: 'clickSlot',
@@ -1755,8 +1725,8 @@ class TurboMC {
 						text: T('click slot [INDEX] with [BUTTON]', '点击槽位 [INDEX] 用 [BUTTON]'),
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
-							BUTTON: {type: Scratch.ArgumentType.STRING, menu: 'slotButton', defaultValue: 'left'}
-					}
+							BUTTON: {type: Scratch.ArgumentType.STRING, defaultValue: 'left', menu: 'slotButton'}
+						}
 					},
 					{
 						opcode: 'quickMoveSlot',
@@ -1764,7 +1734,7 @@ class TurboMC {
 						text: T('quick move slot [INDEX]', '快速移动槽位 [INDEX]'),
 						arguments: {
 							INDEX: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'closeContainer',
@@ -1832,12 +1802,8 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
 						arguments: {
-							ITEM: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:stone',
-								menu: 'itemId'
-							}
-					}
+							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'}
+						}
 					},
 					{
 						opcode: 'respawn',
@@ -1888,7 +1854,7 @@ class TurboMC {
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-					}
+						}
 					},
 					{
 						opcode: 'frontBlock',
@@ -1921,11 +1887,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('distance to nearest [TYPE]', '最近 [TYPE] 的距离'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
 						}
 					},
 					{
@@ -1933,11 +1895,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('nearest [TYPE] x', '最近 [TYPE] 的 X'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
 						}
 					},
 					{
@@ -1945,11 +1903,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('nearest [TYPE] y', '最近 [TYPE] 的 Y'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
 						}
 					},
 					{
@@ -1957,11 +1911,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('nearest [TYPE] z', '最近 [TYPE] 的 Z'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
 						}
 					},
 					{
@@ -1969,11 +1919,7 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('nearest [TYPE] name', '最近 [TYPE] 的名称'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
 						}
 					},
 					{
@@ -1981,21 +1927,14 @@ class TurboMC {
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('count of [TYPE] nearby', '附近 [TYPE] 数量'),
 						arguments: {
-							TYPE: {
-								type: Scratch.ArgumentType.STRING,
-								defaultValue: 'minecraft:zombie',
-								menu: 'entityType'
-							}
-					}
+							TYPE: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:zombie', menu: 'entityType'}
+						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Display', '显示与日志')},
-					// 只画不记：坐标由用户在脚本里自己算，积木不保存"选区"概念，
-					// 因此也没有"当前选区"可查。同屏最多保留 128 个框，超出挤掉最旧的。
 					{
 						opcode: 'drawFrame',
 						blockType: Scratch.BlockType.COMMAND,
-						text: T('draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]',
-							'从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'),
+						text: T('draw frame x:[X1] y:[Y1] z:[Z1] to x:[X2] y:[Y2] z:[Z2] color:[COLOR]', '从 x:[X1] y:[Y1] z:[Z1] 到 x:[X2] y:[Y2] z:[Z2] 画框 颜色:[COLOR]'),
 						arguments: {
 							X1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y1: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
@@ -2017,7 +1956,7 @@ class TurboMC {
 						text: T('log [TEXT]', '输出日志 [TEXT]'),
 						arguments: {
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
-					}
+						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Chat & AI', '聊天与 AI')},
 					{
@@ -2026,7 +1965,7 @@ class TurboMC {
 						text: T('say [TEXT] in chat', '在聊天栏说 [TEXT]'),
 						arguments: {
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
-					}
+						}
 					},
 					{
 						opcode: 'command',
@@ -2034,17 +1973,13 @@ class TurboMC {
 						text: T('run command [COMMAND]', '执行命令 [COMMAND]'),
 						arguments: {
 							COMMAND: {type: Scratch.ArgumentType.STRING, defaultValue: 'time set day'}
-					}
+						}
 					},
-					// 输入必须来自「最近的聊天」：whenChat 帽子只过滤关键词，文本不进脚本
 					{
 						opcode: 'lastChat',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('last chat message', '最近的聊天')
 					},
-					// 触发本次脚本的那条聊天。与「最近的聊天」的差别只有一处：
-					// 后者是「全局最新」，被后到的消息覆盖；前者跟着线程走，永不串台。
-					// 不是聊天触发的线程（绿旗、广播、按键）拿到空串。
 					{
 						opcode: 'triggerChat',
 						blockType: Scratch.BlockType.REPORTER,
@@ -2057,7 +1992,7 @@ class TurboMC {
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'hello'}
-					}
+						}
 					},
 					{
 						opcode: 'aiReply',
@@ -2065,7 +2000,7 @@ class TurboMC {
 						text: T('last reply of session [SESSION]', '会话 [SESSION] 的最后回复'),
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-					}
+						}
 					},
 					{
 						opcode: 'aiReset',
@@ -2073,7 +2008,7 @@ class TurboMC {
 						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-					}
+						}
 					},
 					{
 						opcode: 'aiSystem',
@@ -2082,23 +2017,312 @@ class TurboMC {
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
+						}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('JSON · Check & create', 'JSON · 校验与新建')},
+					{
+						opcode: 'jsonIs',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('is [json] [check]?', '[json] 是 [check] 吗?'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
+							check: {type: Scratch.ArgumentType.STRING, defaultValue: 'valid', menu: 'jsonCheck'}
+						}
+					},
+					{
+						opcode: 'jsonNew',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('new [json]', '新建 [json]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: 'Object', menu: 'jsonKind'}
+						}
+					},
+					{
+						opcode: 'jsonLength',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('length of [json]', '[json] 的长度'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'}
+						}
+					},
+					{
+						opcode: 'jsonHasKey',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('[json] contains key [key]?', '[json] 包含键 [key] 吗?'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
+							key: {type: Scratch.ArgumentType.STRING, defaultValue: 'key2'}
+						}
+					},
+					{
+						opcode: 'jsonGetAll',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('all [Stype] of [json]', '[json] 的全部 [Stype]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'},
+							Stype: {type: Scratch.ArgumentType.STRING, menu: 'jsonAll'}
+						}
+					},
+					{
+						opcode: 'jsonErrMsg',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('parse error from [json]', '[json] 的解析错误'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value",}'}
+						}
+					},
+					{
+						opcode: 'jsonMinify',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('minify [json]', '压缩 [json]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: ' {"key" : "value" } '}
+						}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('JSON · Objects & paths', 'JSON · 对象与路径')},
+					{
+						opcode: 'jsonGet',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('value of [item] in [json]', '[json] 中 [item] 的值'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key'}
+						}
+					},
+					{
+						opcode: 'jsonSet',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('set [item] in [json] to [value]', '把 [json] 中 [item] 设为 [value]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value"}'},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key'},
+							value: {type: Scratch.ArgumentType.STRING, defaultValue: 'new value'}
+						}
+					},
+					{
+						opcode: 'jsonDelete',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('delete [item] in [json]', '删除 [json] 中的 [item]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":"value","key2":"value2"}'},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'key2'}
+						}
+					},
+					{
+						opcode: 'jsonGetPath',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('value by path [path] in [json]', '[json] 中路径 [path] 的值'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":{"inner":[true,false]}}'},
+							path: {type: Scratch.ArgumentType.STRING, defaultValue: '["key","inner",1]'}
+						}
+					},
+					{
+						opcode: 'jsonSetPath',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('set value by path [path] in [json] to [data]', '把 [json] 中路径 [path] 的值设为 [data]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '{"key":{"inner":[true,false]}}'},
+							path: {type: Scratch.ArgumentType.STRING, defaultValue: '["key","inner",1]'},
+							data: {type: Scratch.ArgumentType.STRING, defaultValue: 'value'}
+						}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('JSON · Array access', 'JSON · 数组读写')},
+					{
+						opcode: 'jsonArrayPush',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('add [item] to array [json]', '向数组 [json] 添加 [item]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch"]'},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'TurboWarp'}
+						}
+					},
+					{
+						opcode: 'jsonArraySet',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('replace item [pos] of [json] with [item]', '把数组 [json] 的第 [pos] 项换成 [item]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
+							pos: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'fav'}
+						}
+					},
+					{
+						opcode: 'jsonArrayInsert',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('insert [item] at [pos] of array [json]', '在数组 [json] 的第 [pos] 项插入 [item]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
+							pos: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'pear'}
+						}
+					},
+					{
+						opcode: 'jsonArrayDelete',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('delete item [item] of array [json]', '删除数组 [json] 的第 [item] 项'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
+							item: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2}
+						}
+					},
+					{
+						opcode: 'jsonArrayRemoveAll',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('delete all [item] in array [json]', '删除数组 [json] 中所有 [item]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","a","TurboWarp","a"]'},
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'a'}
+						}
+					},
+					{
+						opcode: 'jsonArrayItemNum',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('item # of [item] in array [json]', '[item] 在数组 [json] 中的项号'),
+						arguments: {
+							item: {type: Scratch.ArgumentType.STRING, defaultValue: 'scratch'},
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","TurboWarp"]'}
+						}
+					},
+					{
+						opcode: 'jsonArrayFromTo',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('items [item] to [item2] of array [json]', '数组 [json] 的第 [item] 到第 [item2] 项'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '[1,2,3,4]'},
+							item: {type: Scratch.ArgumentType.NUMBER, defaultValue: 2},
+							item2: {type: Scratch.ArgumentType.NUMBER, defaultValue: 3}
+						}
+					},
+					{
+						opcode: 'jsonArraySetLen',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('set length of array [json] to [len]', '把数组 [json] 的长度设为 [len]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch","TurboWarp"]'},
+							len: {type: Scratch.ArgumentType.NUMBER, defaultValue: 1}
+						}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('JSON · Array transform', 'JSON · 数组变换')},
+					{
+						opcode: 'jsonArrayConcat',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('concatenate array [json] [json2]', '拼接数组 [json] 和 [json2]'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["scratch"]'},
+							json2: {type: Scratch.ArgumentType.STRING, defaultValue: '["TurboWarp"]'}
+						}
+					},
+					{
+						opcode: 'jsonArrayMapField',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('get all values with key [key] in array [json]', '数组 [json] 中所有对象的 [key] 值'),
+						arguments: {
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '[{"id":12},{"id":24}]'},
+							key: {type: Scratch.ArgumentType.STRING, defaultValue: 'id'}
+						}
+					},
+					{
+						opcode: 'jsonArrayCreate',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('create array by [text] with delimiter [d]', '按分隔符 [d] 把文本 [text] 拆成数组'),
+						arguments: {
+							d: {type: Scratch.ArgumentType.STRING, defaultValue: ','},
+							text: {type: Scratch.ArgumentType.STRING, defaultValue: 'a,b,c'}
+						}
+					},
+					{
+						opcode: 'jsonArrayJoin',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('join string by array [json] with delimiter [d]', '用分隔符 [d] 把数组 [json] 拼成文本'),
+						arguments: {
+							d: {type: Scratch.ArgumentType.STRING, defaultValue: ','},
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["a","b","c"]'}
+						}
+					},
+					{
+						opcode: 'jsonArraySort',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('sort array [list] in [order] order', '数组 [list] 按 [order] 排序'),
+						arguments: {
+							list: {type: Scratch.ArgumentType.STRING, defaultValue: '[5.23,214,522,61,1,0]'},
+							order: {type: Scratch.ArgumentType.STRING, menu: 'jsonSort'}
+						}
+					},
+					{
+						opcode: 'jsonArrayTextFilter',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('filter array [list] if text [options] [text] and return [type]', '筛选数组 [list]：文本 [options] [text]，返回 [type]'),
+						arguments: {
+							list: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana","orange"]'},
+							options: {type: Scratch.ArgumentType.STRING, menu: 'jsonFilter'},
+							text: {type: Scratch.ArgumentType.STRING, defaultValue: 'e'},
+							type: {type: Scratch.ArgumentType.STRING, menu: 'jsonKind'}
+						}
+					},
+					{
+						opcode: 'jsonArrayAnalysis',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('[analysis] of array [list]', '数组 [list] 的 [analysis]'),
+						arguments: {
+							list: {type: Scratch.ArgumentType.STRING, defaultValue: '[17,1,2017,0,120,14]'},
+							analysis: {type: Scratch.ArgumentType.STRING, menu: 'jsonAnalysis'}
+						}
+					},
+					{blockType: Scratch.BlockType.LABEL, text: T('JSON · List bridge', 'JSON · 与列表互通')},
+					{
+						opcode: 'jsonVmGetList',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('get list [list] as array', '把列表 [list] 读成数组'),
+						arguments: {
+							list: {type: Scratch.ArgumentType.STRING, defaultValue: 'mylist'}
+						}
+					},
+					{
+						opcode: 'jsonVmSetList',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('set list [list] to [json]', '把列表 [list] 设为 [json]'),
+						arguments: {
+							list: {type: Scratch.ArgumentType.STRING, defaultValue: 'mylist'},
+							json: {type: Scratch.ArgumentType.STRING, defaultValue: '["apple","banana"]'}
+						}
 					}
-					},
-],
+				],
 				menus: {
-					// 物品菜单：1.21.11 全部 1505 个物品（assets/minecraft/items 即物品注册表），
-					// 中文名优先取 item.minecraft.*，方块类物品取 block.minecraft.*。
-					// items 在这里**调用成数组**：TurboWarp 在 Worker 里跑扩展，扩展信息要经
-					// postMessage 做结构化克隆，函数无法克隆（DataCloneError）。字符串方法名
-					// 那个形式只对 VM 内建扩展有效（服务对象上没有实例方法）。所以编辑器副本
-					// 必须给出实体数组，运行时副本（assets 下的 es5）则留函数引用，见那份文件的注释。
-					itemId: {
-						acceptReporters: true,
-						items: itemMenuItems()
-					},
-					entityType: {
-						acceptReporters: true,
-						items: [
+					jsonKind: {acceptReporters: true, items: [
+							{text: T('object', '对象'), value: 'Object'},
+							{text: T('array', '数组'), value: 'Array'}
+					]},
+					jsonCheck: {acceptReporters: true, items: [
+							{text: T('valid JSON', '合法 JSON'), value: 'valid'},
+							{text: T('object', '对象'), value: 'Object'},
+							{text: T('array', '数组'), value: 'Array'}
+					]},
+					jsonAll: {acceptReporters: false, items: [
+							{text: T('keys', '键'), value: 'keys'},
+							{text: T('values', '值'), value: 'values'},
+							{text: T('key-value pairs', '键值对'), value: 'datas'}
+					]},
+					jsonSort: {acceptReporters: true, items: [
+							{text: T('ascending', '升序'), value: 'ascending'},
+							{text: T('descending', '降序'), value: 'descending'}
+					]},
+					jsonFilter: {acceptReporters: false, items: [
+							{text: T('includes', '包含'), value: 'includes'},
+							{text: T('starts with', '开头是'), value: 'starts with'},
+							{text: T('ends with', '结尾是'), value: 'ends with'}
+					]},
+					jsonAnalysis: {acceptReporters: true, items: [
+							{text: T('minimum', '最小值'), value: 'minimum'},
+							{text: T('maximum', '最大值'), value: 'maximum'},
+							{text: T('sum', '总和'), value: 'sum'},
+							{text: T('average', '平均值'), value: 'average'},
+							{text: T('median', '中位数'), value: 'median'},
+							{text: T('mode', '众数'), value: 'mode'},
+							{text: T('variance', '方差'), value: 'variance'}
+					]},
+					itemId: {acceptReporters: true, items: itemMenuItems()},
+					entityType: {acceptReporters: true, items: [
 							{text: T('any entity', '任意实体'), value: 'any'},
 							{text: T('hostile mob', '敌对生物'), value: 'hostile'},
 							{text: T('player', '玩家'), value: 'player'},
@@ -2258,214 +2482,174 @@ class TurboMC {
 							{text: T('Trident', '三叉戟'), value: 'minecraft:trident'},
 							{text: T('Wind Charge', '风弹'), value: 'minecraft:wind_charge'},
 							{text: T('Wither Skull', '凋灵之首'), value: 'minecraft:wither_skull'}
-						]
-					},
-					// 实体类型菜单：1.21.11 的全部 157 个实体（由游戏 lang 与 EntityType 常量交叉生成）。
-					// TurboWarp 的下拉支持搜索，因此全量铺开，用户不必记 id。
-					keyName: {
-						acceptReporters: true,
-						items: [
-						{text: 'a', value: 'a'},
-						{text: 'b', value: 'b'},
-						{text: 'c', value: 'c'},
-						{text: 'd', value: 'd'},
-						{text: 'e', value: 'e'},
-						{text: 'f', value: 'f'},
-						{text: 'g', value: 'g'},
-						{text: 'h', value: 'h'},
-						{text: 'i', value: 'i'},
-						{text: 'j', value: 'j'},
-						{text: 'k', value: 'k'},
-						{text: 'l', value: 'l'},
-						{text: 'm', value: 'm'},
-						{text: 'n', value: 'n'},
-						{text: 'o', value: 'o'},
-						{text: 'p', value: 'p'},
-						{text: 'q', value: 'q'},
-						{text: 'r', value: 'r'},
-						{text: 's', value: 's'},
-						{text: 't', value: 't'},
-						{text: 'u', value: 'u'},
-						{text: 'v', value: 'v'},
-						{text: 'w', value: 'w'},
-						{text: 'x', value: 'x'},
-						{text: 'y', value: 'y'},
-						{text: 'z', value: 'z'},
-						{text: '0', value: '0'},
-						{text: '1', value: '1'},
-						{text: '2', value: '2'},
-						{text: '3', value: '3'},
-						{text: '4', value: '4'},
-						{text: '5', value: '5'},
-						{text: '6', value: '6'},
-						{text: '7', value: '7'},
-						{text: '8', value: '8'},
-						{text: '9', value: '9'},
-						{text: 'F1', value: 'f1'},
-						{text: 'F2', value: 'f2'},
-						{text: 'F3', value: 'f3'},
-						{text: 'F4', value: 'f4'},
-						{text: 'F5', value: 'f5'},
-						{text: 'F6', value: 'f6'},
-						{text: 'F7', value: 'f7'},
-						{text: 'F8', value: 'f8'},
-						{text: 'F9', value: 'f9'},
-						{text: 'F10', value: 'f10'},
-						{text: 'F11', value: 'f11'},
-						{text: 'F12', value: 'f12'},
-						{text: T('Up Arrow', '上'), value: 'up'},
-						{text: T('Down Arrow', '下'), value: 'down'},
-						{text: T('Left Arrow', '左'), value: 'left'},
-						{text: T('Right Arrow', '右'), value: 'right'},
-						{text: T('Left Shift', '左 Shift'), value: 'left.shift'},
-						{text: T('Right Shift', '右 Shift'), value: 'right.shift'},
-						{text: T('Left Control', '左 Ctrl'), value: 'left.control'},
-						{text: T('Right Control', '右 Ctrl'), value: 'right.control'},
-						{text: T('Left Alt', '左 Alt'), value: 'left.alt'},
-						{text: T('Right Alt', '右 Alt'), value: 'right.alt'},
-						{text: T('Left Win', '左 Win'), value: 'left.win'},
-						{text: T('Right Win', '右 Win'), value: 'right.win'},
-						{text: T('Space', '空格'), value: 'space'},
-						{text: T('Enter', '回车'), value: 'enter'},
-						{text: 'Tab', value: 'tab'},
-						{text: T('Backspace', '退格'), value: 'backspace'},
-						{text: T('Escape', 'Esc'), value: 'escape'},
-						{text: '\'', value: 'apostrophe'},
-						{text: '\\', value: 'backslash'},
-						{text: T(',', '逗号'), value: 'comma'},
-						{text: T('=', '等号'), value: 'equal'},
-						{text: '`', value: 'grave.accent'},
-						{text: '[', value: 'left.bracket'},
-						{text: ']', value: 'right.bracket'},
-						{text: T('-', '减号'), value: 'minus'},
-						{text: T('.', '句点'), value: 'period'},
-						{text: T(';', '分号'), value: 'semicolon'},
-						{text: T('/', '斜杠'), value: 'slash'},
-						{text: T('Left Button', '鼠标左键'), value: 'mouse.left'},
-						{text: T('Right Button', '鼠标右键'), value: 'mouse.right'},
-						{text: T('Middle Button', '鼠标中键'), value: 'mouse.middle'},
-						{text: T('Keypad 0', '小键盘 0'), value: 'keypad.0'},
-						{text: T('Keypad 1', '小键盘 1'), value: 'keypad.1'},
-						{text: T('Keypad 2', '小键盘 2'), value: 'keypad.2'},
-						{text: T('Keypad 3', '小键盘 3'), value: 'keypad.3'},
-						{text: T('Keypad 4', '小键盘 4'), value: 'keypad.4'},
-						{text: T('Keypad 5', '小键盘 5'), value: 'keypad.5'},
-						{text: T('Keypad 6', '小键盘 6'), value: 'keypad.6'},
-						{text: T('Keypad 7', '小键盘 7'), value: 'keypad.7'},
-						{text: T('Keypad 8', '小键盘 8'), value: 'keypad.8'},
-						{text: T('Keypad 9', '小键盘 9'), value: 'keypad.9'},
-						{text: T('Keypad +', '小键盘 +'), value: 'keypad.add'},
-						{text: T('Keypad Decimal', '小键盘 .'), value: 'keypad.decimal'},
-						{text: T('Keypad /', '小键盘 /'), value: 'keypad.divide'},
-						{text: T('Keypad Enter', '小键盘回车'), value: 'keypad.enter'},
-						{text: T('Keypad =', '小键盘 ='), value: 'keypad.equal'},
-						{text: T('Keypad *', '小键盘 *'), value: 'keypad.multiply'},
-						{text: T('Keypad -', '小键盘 -'), value: 'keypad.subtract'},
-						{text: T('Caps Lock', 'CapsLock'), value: 'caps.lock'},
-						{text: 'Delete', value: 'delete'},
-						{text: 'End', value: 'end'},
-						{text: 'Home', value: 'home'},
-						{text: 'Insert', value: 'insert'},
-						{text: T('Menu', '菜单键'), value: 'menu'},
-						{text: T('Num Lock', 'NumLock'), value: 'num.lock'},
-						{text: T('Page Down', 'PageDown'), value: 'page.down'},
-						{text: T('Page Up', 'PageUp'), value: 'page.up'},
-						{text: 'Pause', value: 'pause'},
-						{text: T('Print Screen', 'PrintScreen'), value: 'print.screen'},
-						{text: T('Scroll Lock', 'ScrollLock'), value: 'scroll.lock'},
-						{text: 'World 1', value: 'world.1'},
-						{text: 'World 2', value: 'world.2'},
-						{text: 'F13', value: 'f13'},
-						{text: 'F14', value: 'f14'},
-						{text: 'F15', value: 'f15'},
-						{text: 'F16', value: 'f16'},
-						{text: 'F17', value: 'f17'},
-						{text: 'F18', value: 'f18'},
-						{text: 'F19', value: 'f19'},
-						{text: 'F20', value: 'f20'},
-						{text: 'F21', value: 'f21'},
-						{text: 'F22', value: 'f22'},
-						{text: 'F23', value: 'f23'},
-						{text: 'F24', value: 'f24'},
-						{text: 'F25', value: 'f25'},
-						]
-					},
-					mouseButton: {
-						acceptReporters: true,
-						items: [
+					]},
+					keyName: {acceptReporters: true, items: [
+							{text: T('a', 'a'), value: 'a'},
+							{text: T('b', 'b'), value: 'b'},
+							{text: T('c', 'c'), value: 'c'},
+							{text: T('d', 'd'), value: 'd'},
+							{text: T('e', 'e'), value: 'e'},
+							{text: T('f', 'f'), value: 'f'},
+							{text: T('g', 'g'), value: 'g'},
+							{text: T('h', 'h'), value: 'h'},
+							{text: T('i', 'i'), value: 'i'},
+							{text: T('j', 'j'), value: 'j'},
+							{text: T('k', 'k'), value: 'k'},
+							{text: T('l', 'l'), value: 'l'},
+							{text: T('m', 'm'), value: 'm'},
+							{text: T('n', 'n'), value: 'n'},
+							{text: T('o', 'o'), value: 'o'},
+							{text: T('p', 'p'), value: 'p'},
+							{text: T('q', 'q'), value: 'q'},
+							{text: T('r', 'r'), value: 'r'},
+							{text: T('s', 's'), value: 's'},
+							{text: T('t', 't'), value: 't'},
+							{text: T('u', 'u'), value: 'u'},
+							{text: T('v', 'v'), value: 'v'},
+							{text: T('w', 'w'), value: 'w'},
+							{text: T('x', 'x'), value: 'x'},
+							{text: T('y', 'y'), value: 'y'},
+							{text: T('z', 'z'), value: 'z'},
+							{text: T('0', '0'), value: '0'},
+							{text: T('1', '1'), value: '1'},
+							{text: T('2', '2'), value: '2'},
+							{text: T('3', '3'), value: '3'},
+							{text: T('4', '4'), value: '4'},
+							{text: T('5', '5'), value: '5'},
+							{text: T('6', '6'), value: '6'},
+							{text: T('7', '7'), value: '7'},
+							{text: T('8', '8'), value: '8'},
+							{text: T('9', '9'), value: '9'},
+							{text: T('F1', 'F1'), value: 'f1'},
+							{text: T('F2', 'F2'), value: 'f2'},
+							{text: T('F3', 'F3'), value: 'f3'},
+							{text: T('F4', 'F4'), value: 'f4'},
+							{text: T('F5', 'F5'), value: 'f5'},
+							{text: T('F6', 'F6'), value: 'f6'},
+							{text: T('F7', 'F7'), value: 'f7'},
+							{text: T('F8', 'F8'), value: 'f8'},
+							{text: T('F9', 'F9'), value: 'f9'},
+							{text: T('F10', 'F10'), value: 'f10'},
+							{text: T('F11', 'F11'), value: 'f11'},
+							{text: T('F12', 'F12'), value: 'f12'},
+							{text: T('Up Arrow', '上'), value: 'up'},
+							{text: T('Down Arrow', '下'), value: 'down'},
+							{text: T('Left Arrow', '左'), value: 'left'},
+							{text: T('Right Arrow', '右'), value: 'right'},
+							{text: T('Left Shift', '左 Shift'), value: 'left.shift'},
+							{text: T('Right Shift', '右 Shift'), value: 'right.shift'},
+							{text: T('Left Control', '左 Ctrl'), value: 'left.control'},
+							{text: T('Right Control', '右 Ctrl'), value: 'right.control'},
+							{text: T('Left Alt', '左 Alt'), value: 'left.alt'},
+							{text: T('Right Alt', '右 Alt'), value: 'right.alt'},
+							{text: T('Left Win', '左 Win'), value: 'left.win'},
+							{text: T('Right Win', '右 Win'), value: 'right.win'},
+							{text: T('Space', '空格'), value: 'space'},
+							{text: T('Enter', '回车'), value: 'enter'},
+							{text: T('Tab', 'Tab'), value: 'tab'},
+							{text: T('Backspace', '退格'), value: 'backspace'},
+							{text: T('Escape', 'Esc'), value: 'escape'},
+							{text: T('\'', '\''), value: 'apostrophe'},
+							{text: T('\\', '\\'), value: 'backslash'},
+							{text: T(',', '逗号'), value: 'comma'},
+							{text: T('=', '等号'), value: 'equal'},
+							{text: T('`', '`'), value: 'grave.accent'},
+							{text: T('[', '['), value: 'left.bracket'},
+							{text: T(']', ']'), value: 'right.bracket'},
+							{text: T('-', '减号'), value: 'minus'},
+							{text: T('.', '句点'), value: 'period'},
+							{text: T(';', '分号'), value: 'semicolon'},
+							{text: T('/', '斜杠'), value: 'slash'},
+							{text: T('Left Button', '鼠标左键'), value: 'mouse.left'},
+							{text: T('Right Button', '鼠标右键'), value: 'mouse.right'},
+							{text: T('Middle Button', '鼠标中键'), value: 'mouse.middle'},
+							{text: T('Keypad 0', '小键盘 0'), value: 'keypad.0'},
+							{text: T('Keypad 1', '小键盘 1'), value: 'keypad.1'},
+							{text: T('Keypad 2', '小键盘 2'), value: 'keypad.2'},
+							{text: T('Keypad 3', '小键盘 3'), value: 'keypad.3'},
+							{text: T('Keypad 4', '小键盘 4'), value: 'keypad.4'},
+							{text: T('Keypad 5', '小键盘 5'), value: 'keypad.5'},
+							{text: T('Keypad 6', '小键盘 6'), value: 'keypad.6'},
+							{text: T('Keypad 7', '小键盘 7'), value: 'keypad.7'},
+							{text: T('Keypad 8', '小键盘 8'), value: 'keypad.8'},
+							{text: T('Keypad 9', '小键盘 9'), value: 'keypad.9'},
+							{text: T('Keypad +', '小键盘 +'), value: 'keypad.add'},
+							{text: T('Keypad Decimal', '小键盘 .'), value: 'keypad.decimal'},
+							{text: T('Keypad /', '小键盘 /'), value: 'keypad.divide'},
+							{text: T('Keypad Enter', '小键盘回车'), value: 'keypad.enter'},
+							{text: T('Keypad =', '小键盘 ='), value: 'keypad.equal'},
+							{text: T('Keypad *', '小键盘 *'), value: 'keypad.multiply'},
+							{text: T('Keypad -', '小键盘 -'), value: 'keypad.subtract'},
+							{text: T('Caps Lock', 'CapsLock'), value: 'caps.lock'},
+							{text: T('Delete', 'Delete'), value: 'delete'},
+							{text: T('End', 'End'), value: 'end'},
+							{text: T('Home', 'Home'), value: 'home'},
+							{text: T('Insert', 'Insert'), value: 'insert'},
+							{text: T('Menu', '菜单键'), value: 'menu'},
+							{text: T('Num Lock', 'NumLock'), value: 'num.lock'},
+							{text: T('Page Down', 'PageDown'), value: 'page.down'},
+							{text: T('Page Up', 'PageUp'), value: 'page.up'},
+							{text: T('Pause', 'Pause'), value: 'pause'},
+							{text: T('Print Screen', 'PrintScreen'), value: 'print.screen'},
+							{text: T('Scroll Lock', 'ScrollLock'), value: 'scroll.lock'},
+							{text: T('World 1', 'World 1'), value: 'world.1'},
+							{text: T('World 2', 'World 2'), value: 'world.2'},
+							{text: T('F13', 'F13'), value: 'f13'},
+							{text: T('F14', 'F14'), value: 'f14'},
+							{text: T('F15', 'F15'), value: 'f15'},
+							{text: T('F16', 'F16'), value: 'f16'},
+							{text: T('F17', 'F17'), value: 'f17'},
+							{text: T('F18', 'F18'), value: 'f18'},
+							{text: T('F19', 'F19'), value: 'f19'},
+							{text: T('F20', 'F20'), value: 'f20'},
+							{text: T('F21', 'F21'), value: 'f21'},
+							{text: T('F22', 'F22'), value: 'f22'},
+							{text: T('F23', 'F23'), value: 'f23'},
+							{text: T('F24', 'F24'), value: 'f24'},
+							{text: T('F25', 'F25'), value: 'f25'}
+					]},
+					mouseButton: {acceptReporters: true, items: [
 							{text: T('left', '左键'), value: 'left'},
 							{text: T('right', '右键'), value: 'right'},
 							{text: T('middle', '中键'), value: 'middle'}
-						]
-					},
-					slotButton: {
-						acceptReporters: true,
-						items: [
+					]},
+					slotButton: {acceptReporters: true, items: [
 							{text: T('left', '左键'), value: 'left'},
 							{text: T('right', '右键'), value: 'right'}
-						]
-					},
-					keyState: {
-						acceptReporters: true,
-						items: [
+					]},
+					keyState: {acceptReporters: true, items: [
 							{text: T('down', '按下'), value: 'true'},
 							{text: T('up', '松开'), value: 'false'}
-						]
-					}
+					]}
 				}
 			};
 		}
 
-		// ---- 输入 ----
-		key(args) { this.preview('key ' + args.KEY + ' ' + args.STATE); }
-		click(args) { this.preview('click ' + args.BUTTON); }
-		// 浏览器里读不到物理鼠标，返回假值；游戏内由 vm-bootstrap 转发到宿主
-		mouseDown(args) { return false; }
-		tap(args) { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }
-		stop() { this.preview('stop'); }
-
-		// ---- 移动与视角 ----
+		// ---- 浏览器占位实现：只打印，不做任何事；游戏内会被整体替换 ----
 		moveToward(args) { this.preview('moveToward ' + args.X + ',' + args.Y + ',' + args.Z); }
 		look(args) { this.preview('look ' + args.YAW + ',' + args.PITCH); }
 		lookAt(args) { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }
 		lookSmooth(args) { this.preview('lookSmooth ' + args.YAW + ',' + args.PITCH); }
 		lookAtSmooth(args) { this.preview('lookAtSmooth ' + args.X + ',' + args.Y + ',' + args.Z); }
-
-		// ---- 方块与挖掘 ----
+		stop() { this.preview('stop'); }
+		key(args) { this.preview('key ' + args.KEY + ' ' + args.STATE); }
+		click(args) { this.preview('click ' + args.BUTTON); }
+		tap(args) { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }
+		mouseDown() { return false; }
 		breakWait() { this.preview('breakWait'); }
 		isMining() { return false; }
 		miningProgress() { return 0; }
-
-		// ---- 容器交互 ----
-		openContainerAt(args) { this.preview('openContainerAt'); }
+		openContainerAt() { this.preview('openContainerAt'); }
 		containerSlots() { return 0; }
-		slotItem(args) { return ''; }
-		slotAmount(args) { return 0; }
-		firstSlotOf(args) { return -1; }
-		clickSlot(args) { this.preview('clickSlot'); }
-		quickMoveSlot(args) { this.preview('quickMoveSlot'); }
+		slotItem() { return ''; }
+		slotAmount() { return 0; }
+		firstSlotOf() { return -1; }
+		clickSlot() { this.preview('clickSlot'); }
+		quickMoveSlot() { this.preview('quickMoveSlot'); }
 		closeContainer() { this.preview('closeContainer'); }
-
-		// ---- 交互与通讯 ----
-		chat(args) { this.preview('chat ' + args.TEXT); }
-		command(args) { this.preview('command ' + args.COMMAND); }
-		respawn() { this.preview('respawn'); }
-
-		// ---- AI 对话 ----
-		// 浏览器里没有 Java 侧的桥：返回空串而不是 undefined，
-		// 免得积木在编辑器里被当成「无返回值」而显示成红色
-		lastChat() { this.preview('lastChat'); return ''; }
-		triggerChat() { this.preview('triggerChat'); return ''; }
-		aiAsk(args) { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }
-		aiReply(args) { this.preview('aiReply'); return ''; }
-		aiReset(args) { this.preview('aiReset'); }
-		aiSystem(args) { this.preview('aiSystem'); }
-
-		// ---- 查询 · 玩家 ----
 		health() { return 20; }
 		food() { return 20; }
 		xpLevel() { return 0; }
-		inventoryFull() { return false; }
 		onGround() { this.preview('onGround'); return true; }
 		posX() { return 0; }
 		posY() { return 64; }
@@ -2473,8 +2657,9 @@ class TurboMC {
 		selectedSlot() { return 1; }
 		heldItem() { return 'minecraft:air'; }
 		heldDurability() { return 100; }
-
-		// ---- 查询 · 世界 ----
+		inventoryFull() { return false; }
+		itemCount() { return 0; }
+		respawn() { this.preview('respawn'); }
 		isDay() { return true; }
 		dimension() { return 'minecraft:overworld'; }
 		biome() { return 'minecraft:plains'; }
@@ -2487,29 +2672,53 @@ class TurboMC {
 		aimX() { return 0; }
 		aimY() { return 64; }
 		aimZ() { return 0; }
-
-		// ---- 查询 · 实体 ----
+		ping() { return 0; }
 		nearestEntity() { return -1; }
 		nearestEntityX() { return 0; }
 		nearestEntityY() { return 64; }
 		nearestEntityZ() { return 0; }
 		nearestEntityName() { return ''; }
 		entityCount() { return 0; }
-
-		// ---- 画框 ----
-		// 浏览器里没有世界可画：只打日志。真正绘制在模组侧的 FrameOverlay。
-		drawFrame(args) {
-			this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1
-				+ ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR);
-		}
+		drawFrame(args) { this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1 + ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR); }
 		clearFrames() { this.preview('clearFrames'); }
-
-		// ---- 运算与工具 ----
-		itemCount() { return 0; }
-		ping() { return 0; }
-		log(args) {
-			console.log('[turbomc]', args.TEXT);
-		}
+		log(args) { console.log('[turbomc]', args.TEXT); }
+		chat(args) { this.preview('chat ' + args.TEXT); }
+		command(args) { this.preview('command ' + args.COMMAND); }
+		lastChat() { this.preview('lastChat'); return ''; }
+		triggerChat() { this.preview('triggerChat'); return ''; }
+		aiAsk(args) { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }
+		aiReply() { this.preview('aiReply'); return ''; }
+		aiReset() { this.preview('aiReset'); }
+		aiSystem() { this.preview('aiSystem'); }
+		jsonIs(args) { this.preview('jsonIs ' + args.check); return true; }
+		jsonNew(args) { this.preview('jsonNew ' + args.json); return '{}'; }
+		jsonLength() { this.preview('jsonLength'); return 0; }
+		jsonHasKey(args) { this.preview('jsonHasKey ' + args.key); return true; }
+		jsonGetAll(args) { this.preview('jsonGetAll ' + args.Stype); return '[]'; }
+		jsonErrMsg() { this.preview('jsonErrMsg'); return ''; }
+		jsonMinify(args) { this.preview('jsonMinify'); return args.json; }
+		jsonGet(args) { this.preview('jsonGet ' + args.item); return ''; }
+		jsonSet(args) { this.preview('jsonSet ' + args.item); return args.json; }
+		jsonDelete(args) { this.preview('jsonDelete ' + args.item); return args.json; }
+		jsonGetPath() { this.preview('jsonGetPath'); return ''; }
+		jsonSetPath(args) { this.preview('jsonSetPath'); return args.json; }
+		jsonArrayPush(args) { this.preview('jsonArrayPush'); return args.json; }
+		jsonArraySet(args) { this.preview('jsonArraySet ' + args.pos); return args.json; }
+		jsonArrayInsert(args) { this.preview('jsonArrayInsert ' + args.pos); return args.json; }
+		jsonArrayDelete(args) { this.preview('jsonArrayDelete ' + args.item); return args.json; }
+		jsonArrayRemoveAll(args) { this.preview('jsonArrayRemoveAll'); return args.json; }
+		jsonArrayItemNum() { this.preview('jsonArrayItemNum'); return 0; }
+		jsonArrayFromTo() { this.preview('jsonArrayFromTo'); return '[]'; }
+		jsonArraySetLen(args) { this.preview('jsonArraySetLen ' + args.len); return args.json; }
+		jsonArrayConcat() { this.preview('jsonArrayConcat'); return '[]'; }
+		jsonArrayMapField() { this.preview('jsonArrayMapField'); return '[]'; }
+		jsonArrayCreate() { this.preview('jsonArrayCreate'); return '[]'; }
+		jsonArrayJoin() { this.preview('jsonArrayJoin'); return ''; }
+		jsonArraySort(args) { this.preview('jsonArraySort ' + args.order); return args.list; }
+		jsonArrayTextFilter() { this.preview('jsonArrayTextFilter'); return '[]'; }
+		jsonArrayAnalysis(args) { this.preview('jsonArrayAnalysis ' + args.analysis); return 0; }
+		jsonVmGetList(args) { this.preview('jsonVmGetList ' + args.list); return '[]'; }
+		jsonVmSetList(args) { this.preview('jsonVmSetList ' + args.list); }
 
 		preview(name) {
 			console.log('[turbomc] 预览模式（浏览器内无实际效果）:', name);

@@ -57,5 +57,6 @@ public final class NativeRegistry {
 		ContainerActions.registerAll();
 		WorldQueries.registerAll();
 		AiActions.registerAll();
+		JsonActions.registerAll();
 	}
 }

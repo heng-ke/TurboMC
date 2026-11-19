@@ -66,7 +66,8 @@ src/client/java/xyz/turbomc/client/
 ├── config/
 │   ├── TurboMCConfig.java      配置数据与持久化
 │   ├── TurboMCConfigScreen.java 模组菜单（需 Cloth Config）
-│   └── HudCorner.java           HUD 停靠角落
+│   ├── PathEffort.java         「走向」的 A* 搜索强度档位（轻量 / 标准 / 重量）
+│   └── HudCorner.java           HUD 旧版停靠角落（仅用于旧配置回退）
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
     ├── action/                  动作层（Java 侧真正操作游戏的地方）
@@ -76,6 +77,8 @@ src/client/java/xyz/turbomc/client/
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
     │   ├── NativeRegistry.java  opcode → 动作的注册表
+    │   ├── JsonActions.java     JSON 积木的动作层（29 块，纯计算，不碰游戏状态）
+    │   ├── JsonText.java        严格 JSON 解析 + ECMAScript 兼容序列化（不借 Gson 的解析器）
     │   ├── ChatText.java        聊天清洗：换行 / § / 控制字符，256 字符与 768 字节双上限
     │   ├── ChatQueue.java       聊天发送队列：超长分段、按 tick 拉开间隔
     │   ├── path/                「走向」的移动会话（见 PATHFINDING.md）
@@ -98,6 +101,8 @@ src/client/java/xyz/turbomc/client/
     ├── vm/                      JS 运行时
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
+    │   ├── VmListActions.java   「把列表读成数组 / 设为」——需要 VM 内部状态，故注册在 RhinoVm.init()
+    │   ├── JsonBench.java       JSON 放 Java 还是 VM 的耗时基准（仅 verification 任务调用）
     │   └── *SmokeTest.java      纯 JVM 冒烟（不发布）
     ├── view/
     │   └── ViewSmoother.java    视角平滑：写入必须在渲染帧（tick 内写 50 ms 才一步，看得见台阶）
@@ -125,6 +130,22 @@ src/client/java/xyz/turbomc/client/
 `src/client/resources/assets/turbomc/vm/` 存放内嵌的 JS 运行时：
 `vm.es5.js`（scratch-vm）、`turbomc-extension.es5.js`（扩展）、`vm-bootstrap.js`
 （宿主与 VM 的粘合层）、若干 shim。
+
+扩展与映射表的**源**不在上面这棵树里，它们是生成物的输入：
+
+```
+turbowarp/src/
+├── blocks.data.js             96 块积木、12 个菜单、15 个分组标题、每块的占位方法体
+└── items.data.js              1505 条物品（注册名|中文名|英文名）
+
+tools/
+├── build-extension.js         渲染两份扩展副本（--check 供 CI 守新鲜度）
+├── build-mapping-report.js    渲染 turbowarp/mapping-report.md（同上）
+└── compare-getinfo.js         迁移期的一次性语义闸门（保留作回归用）
+```
+
+改积木只改 `blocks.data.js`，再跑两个生成器；直接改产物会在下次生成时被覆盖，
+CI 两步 `--check` 会拦。详见 §24。
 
 ## 五、必须知道的约束
 
@@ -539,8 +560,73 @@ Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `Scri
 「未知命令」不会断开，256 字符的上限也不适用于命令（命令上限是 32500），
 套用聊天的截断反而会把长命令切坏。
 
-## 六、HUD
+### 22. 工程声明了未实现的扩展时，必须用占位实例登记
 
+带第三方扩展的工程（`project.json` 里有 `extensions` 与 `extensionURLs`）直接载入会失败：
+
+```
+ReferenceError: "Worker" is not defined
+    at RhinoVm.loadProject
+```
+
+原因是 scratch-vm 的 `installTargets` 对每个「未加载」的 extensionID 调
+`loadExtensionURL(url)`，而沙箱路径是 `new Worker("./extension-worker.js")`——
+Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看到的是
+**「✕ 工程载入失败」**，不是「某个积木不生效」，这是最容易让人以为模组坏了的一种失败。
+
+`vm-bootstrap.js` 的 `__tmcRegisterUnknownExtensions` 在载入前为每个未知 id 注册一个
+`blocks: []` 的占位实例，让 `isExtensionLoaded` 为真，从而跳过 Worker 路径。
+该扩展的积木没有实现，走到时返回空值；其余积木照常运行。
+
+**两个必须记住的点**：`__tmcLoadProject` 收到的是 project.json 的**字符串**，
+必须先 `JSON.parse` 才能读 `.extensions`；占位注册只是让工程能载入，不等于支持该扩展。
+
+### 23. JSON 积木是「文本进、文本出」，不引入对象句柄
+
+29 块 JSON 积木（对齐 TurboWarp 扩展 `skyhigh173JSON`，MIT；原 32 块按下列规则合并）的输入输出全是标量，
+所以完全落在桥的「标量单值」约定内，没有第二套值模型：
+
+- 解析与序列化在 `action/JsonText`。**解析器是自己写的**：Gson 的 `JsonParser` 入口会把
+  `JsonReader` 临时切成宽松模式，`{a:1}` 会被判成合法，与浏览器的 `JSON.parse` 分叉；
+  数值序列化复用 `ScratchCast.numberToString`，否则 `1.0` 写回成 `"1.0"`，字符串比较会莫名不成立。
+- 列表互通的两块（`json.vm_getlist` / `json.vm_setlist`）必须读 VM 内部状态，
+  实现放在 `vm/VmListActions`、由 `RhinoVm.init()` 注册——保持 `vm → action` 这条既有依赖方向，
+  且仍走「桥 → NativeRegistry」单一路径，不在积木包装器里开分支。
+- **面板瘦身**（原 32 块 → 29 块）：「键数量」与「数组长度」合成一块「长度」（本就是同一实现）；
+  「是合法 JSON 吗」与「是 [对象/数组] 吗」合成三选一菜单；数组下标统一为 1 基后，
+  「数组第 n 项」与「按键取值」不再需要两块——**下标基准不一致比少一块积木危险得多**。
+- 与原文的偏差只有三处：解析错误返回中文说明带位置（浏览器文案无法跨引擎复刻）、
+  「长度」解析失败返回空串（原文是一个空格，明显笔误）、嵌套深度上限 256（防御递归栈）。
+
+### 24. 扩展的两份产物是生成物，唯一源在 `turbowarp/src`
+
+`turbowarp/turbomc-extension.js`（编辑器副本）与
+`assets/turbomc/vm/turbomc-extension.es5.js`（运行时副本）都由
+`node tools/build-extension.js` 渲染，数据源是：
+
+- `turbowarp/src/blocks.data.js` —— 96 块积木、12 个菜单、15 个分组标题、每块的占位方法体；
+- `turbowarp/src/items.data.js` —— 1505 条物品（`注册名|中文名|英文名`）。
+
+**直接改产物会在下次生成时被覆盖**，CI 用 `--check` 拦「产物过期」，`verify-extension.js` 继续守
+编辑器契约。两份产物只有四处差异，其余逐字一致：
+
+| 差异 | 编辑器副本 | 运行时副本 |
+|---|---|---|
+| 语法 | ES6 `class` | 普通对象 + 函数属性（**没有 Babel 中间层**） |
+| 分组标题 | 渲染 LABEL | 整段跳过（内嵌 `vm.es5.js` 不支持 label） |
+| 菜单 items | 内联数组（Worker 要结构化克隆） | 大菜单用函数引用（注册期不展开 1505 项，省约 1.6 秒） |
+| 占位方法 | 生成（浏览器里只能返回假值） | 不生成——包装器在注册扩展**之前**就把实现装到该对象上 |
+
+迁移时用 `tools/compare-getinfo.js` 做语义闸门：把基线与新产物分别加载、取 `getInfo()`，
+在**中英两种语言**下比较积木顺序/文案/参数/菜单取值/帽子属性；运行时按 opcode 排序后比较
+（顺序无意义），并抹平「数组 vs 函数引用」「有无标题」两处设计差异。要求零差异才允许切换。
+
+**`turbowarp/mapping-report.md` 同理**：由 `node tools/build-mapping-report.js` 从
+`Sb3Mapping.java` 与 `blocks.data.js` 生成，不再手工维护。生成时还会核对两边的 opcode 集合
+——「数据源有、映射表缺」或反之都会直接报错，因为那正是「面板里有积木、游戏里没反应」的成因。
+上一版手工维护的表已经漂移（JSON 组内顺序、`sensing` 组顺序都与面板/源码不符），生成后自动一致。
+
+## 六、HUD
 HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定，三处界面共用
 （HUD / 包列表 / 运行面板），不各自判断 `isRunning()`：
 
@@ -564,6 +650,13 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 
 状态行之下是脚本的「说 / 思考」气泡；寻路进行时再追加两行（目标 / 距离 / 节点进度 /
 规划耗时），受 `showPathHud` 控制。
+
+**位置用两个百分比，不用四角枚举**：`hudOffsetX/Y`（0–100）映射到「可放置区间」而不是
+裸屏幕坐标——`x = MARGIN + (W - boxW - 2·MARGIN) · pct/100`，于是任意百分比都落在屏幕内，
+窗口缩放与 GUI scale 变化自动跟随，不需要事后裁剪。代价是面板变宽时同一百分比的左边界会
+左移（`pct=100` 贴右不受影响）。四角退化成 `0 / 100` 的端点；旧配置没有这两个字段时按
+`hudCorner` 推导，行为不变。面板始终向右下展开、文字左对齐——右对齐会在内容宽度变化时
+左右抖动。
 
 这里补的是一个真实缺口：`looks_say` / `looks_think` 是 scratch-vm 的原生积木，
 游戏内原本**没有任何渲染出口**——不补的话脚本永远无法对外表达。

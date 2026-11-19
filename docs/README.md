@@ -1,18 +1,21 @@
 # 文档索引
 
-整个项目只维护七份文档，每份都有明确的职责，不重复内容。
+整个项目只维护下表这些文档，每份都有明确的职责，不重复内容。新增文档前先问：能不能补进
+`ARCHITECTURE.md` 的一节？
 
 | 文档 | 职责 |
 |---|---|
 | [../README.md](../README.md) | 面向使用者：装什么、怎么用、有哪些积木 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 面向维护者：**当前实现的唯一事实来源**——数据流、代码结构、必须知道的约束 |
+| [BACKLOG.md](BACKLOG.md) | **未完成工作的索引**：待决策 / 待实施 / 待验证 / 待确认，一行一件事，不含细节 |
 | [PATHFINDING.md](PATHFINDING.md) | 「走向」选型与实现细节：A\* 复用、分段重规划、按键节流、踩过的坑 |
 | [CONTAINER.md](CONTAINER.md) | 容器交互：积木清单、槽位编号、为什么只能走 `clickSlot`、必须知道的时序 |
 | [../turbowarp/README.md](../turbowarp/README.md) | TurboWarp 扩展的加载步骤与积木清单 |
-| [OPEN_*.md](OPEN_MOVE_PREEMPTION.md) | **未决问题的事实记录**：已核对的现状、待决策项、候选方案。不含决定，决策落地后必须归档。现有两份：[走向抢占](OPEN_MOVE_PREEMPTION.md)、[视角平滑](OPEN_VIEW_SMOOTHING.md) |
+| [OPEN_*.md](OPEN_MOVE_PREEMPTION.md) | **未决问题的事实记录**：已核对的现状、待决策项、候选方案。不含决定，决策落地后必须归档。现有三份：[走向抢占](OPEN_MOVE_PREEMPTION.md)、[视角平滑](OPEN_VIEW_SMOOTHING.md)、[JSON 实现位置](OPEN_JSON_PLACEMENT.md) |
 
-积木与 opcode 的逐条对应表由脚本从代码生成，不在上表内：
-[../turbowarp/mapping-report.md](../turbowarp/mapping-report.md)。
+积木与 opcode 的逐条对应表由代码生成，不在上表内：
+[../turbowarp/mapping-report.md](../turbowarp/mapping-report.md)
+（`node tools/build-mapping-report.js`，数据取自 `Sb3Mapping.java` 与 `turbowarp/src/blocks.data.js`）。
 
 ## 维护约定
 
@@ -26,3 +29,9 @@
    用途是避免同一问题被反复重新论证。一旦决策落地（改了代码或明确不修），
    必须把结论并入 ARCHITECTURE.md / PATHFINDING.md 并删除该文件——
    留着会变成一份描述「不存在的实现」的文档。
+5. **`BACKLOG.md` 是第 2 条的唯一例外**：它是未完成工作的**索引**，一行一件事、只写状态与链接，
+   不复制 `OPEN_*.md` 或 ARCHITECTURE 的内容。关闭即删行；决定不做的移进「已失效」并写一句原因。
+6. **扩展的两份产物是生成物，不要在产物上改**：源是 `turbowarp/src/blocks.data.js` 与
+   `items.data.js`，用 `node tools/build-extension.js` 生成编辑器副本与运行时副本；
+   CI 的 `--check` 会拦下与数据源不一致的产物。映射表同理，用
+   `node tools/build-mapping-report.js` 生成。

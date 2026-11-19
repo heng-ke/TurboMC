@@ -181,7 +181,38 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_clearFrames", "region.clear_frames"),
 
 			// ---- 调试（扩展）----
-			Map.entry("turbomc_log", "debug.log")
+			Map.entry("turbomc_log", "debug.log"),
+
+			// ---- JSON（扩展，对齐 TurboWarp 的 skyhigh173JSON）----
+			Map.entry("turbomc_jsonNew", "json.new"),
+			Map.entry("turbomc_jsonGet", "json.get"),
+			Map.entry("turbomc_jsonSet", "json.set"),
+			Map.entry("turbomc_jsonDelete", "json.delete"),
+			Map.entry("turbomc_jsonLength", "json.length"),
+			Map.entry("turbomc_jsonIs", "json.is"),
+			Map.entry("turbomc_jsonHasKey", "json.has_key"),
+			Map.entry("turbomc_jsonGetPath", "json.get_path"),
+			Map.entry("turbomc_jsonSetPath", "json.set_path"),
+			Map.entry("turbomc_jsonMinify", "json.minify"),
+			Map.entry("turbomc_jsonErrMsg", "json.err_msg"),
+			Map.entry("turbomc_jsonGetAll", "json.get_all"),
+			Map.entry("turbomc_jsonArrayPush", "json.array_push"),
+			Map.entry("turbomc_jsonArraySet", "json.array_set"),
+			Map.entry("turbomc_jsonArrayInsert", "json.array_insert"),
+			Map.entry("turbomc_jsonArrayDelete", "json.array_delete"),
+			Map.entry("turbomc_jsonArrayRemoveAll", "json.array_remove_all"),
+			Map.entry("turbomc_jsonArrayItemNum", "json.array_item_num"),
+			Map.entry("turbomc_jsonArrayFromTo", "json.array_fromto"),
+			Map.entry("turbomc_jsonArrayConcat", "json.array_concat"),
+			Map.entry("turbomc_jsonArrayMapField", "json.array_map_field"),
+			Map.entry("turbomc_jsonArraySetLen", "json.array_setlen"),
+			Map.entry("turbomc_jsonArrayCreate", "json.array_create"),
+			Map.entry("turbomc_jsonArrayJoin", "json.array_join"),
+			Map.entry("turbomc_jsonArraySort", "json.array_sort"),
+			Map.entry("turbomc_jsonArrayTextFilter", "json.array_textfilter"),
+			Map.entry("turbomc_jsonArrayAnalysis", "json.array_analysis"),
+			Map.entry("turbomc_jsonVmGetList", "json.vm_getlist"),
+			Map.entry("turbomc_jsonVmSetList", "json.vm_setlist")
 	);
 
 	public static String typeOf(String opcode) {

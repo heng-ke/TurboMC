@@ -132,4 +132,38 @@ class ScratchCastTest {
 	void nanFoldsToZero(String input) {
 		assertEquals(0d, ScratchCast.toNumber(input));
 	}
+
+	@Test
+	@DisplayName("compare：两边都能当数字时比数值，不是字典序")
+	void compareUsesNumbersWhenPossible() {
+		// 字典序会把 "10" 排在 "9" 前面，Scratch 的排序不能这样
+		assertTrue(ScratchCast.compare("9", "10") < 0);
+		assertTrue(ScratchCast.compare(9d, 10d) < 0);
+		assertEquals(0, ScratchCast.compare("5", 5d));
+	}
+
+	@Test
+	@DisplayName("compare：非数字走不分大小写的字典序")
+	void compareFallsBackToCaseInsensitiveText() {
+		assertTrue(ScratchCast.compare("apple", "Banana") < 0);
+		assertEquals(0, ScratchCast.compare("ABC", "abc"));
+	}
+
+	@Test
+	@DisplayName("compare：纯空白串按文本比，不当 0")
+	void compareTreatsBlankAsText() {
+		// " " 的 Number() 是 0，但上游把空白串改成 NaN，于是走字典序：" " 排在 "0" 前面
+		// （若按数值比，两者都是 0，结果会是相等）
+		assertTrue(ScratchCast.compare(" ", "0") < 0);
+		// 只要有一边是空白串，比较就整体退化为文本比较——另一边是不是数字都一样
+		assertTrue(ScratchCast.compare(" ", 0d) < 0);
+		assertTrue(ScratchCast.compare("", "a") < 0);
+	}
+
+	@Test
+	@DisplayName("compare：同号无穷相等，不能因相减得 NaN 而乱序")
+	void compareHandlesInfinities() {
+		assertEquals(0, ScratchCast.compare(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY));
+		assertTrue(ScratchCast.compare(Double.NEGATIVE_INFINITY, 0d) < 0);
+	}
 }

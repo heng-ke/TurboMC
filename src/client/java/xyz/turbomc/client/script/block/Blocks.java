@@ -363,6 +363,103 @@ final class Blocks {
 				BlockParam.fieldText("VALUE", ""));
 		regT("action.broadcast", "action", BlockShape.STACK, "广播 {MSG}",
 				BlockParam.text("MSG", ""));
+
+		// ---- JSON ----
+		// 对齐 TurboWarp 扩展 skyhigh173JSON（MIT）。参数名必须与扩展文案里的 [占位符] 完全一致：
+		// 运行期实参按占位符出现顺序传给 Java，改名字或改顺序都会静默错位（ARCHITECTURE §6.1）。
+		regT("json.new", "json", BlockShape.REPORTER, "新建 {json}",
+				BlockParam.text("json", "Object"));
+		regT("json.get", "json", BlockShape.REPORTER, "{json} 中 {item} 的值",
+				BlockParam.text("json", "{\"key\":\"value\"}"),
+				BlockParam.text("item", "key"));
+		regT("json.set", "json", BlockShape.REPORTER, "把 {json} 中 {item} 设为 {value}",
+				BlockParam.text("json", "{\"key\":\"value\"}"),
+				BlockParam.text("item", "key"),
+				BlockParam.text("value", "new value"));
+		regT("json.delete", "json", BlockShape.REPORTER, "删除 {json} 中的 {item}",
+				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"),
+				BlockParam.text("item", "key2"));
+		// 「键数量」与「数组长度」原本是同一实现的两种叫法，合并成一块：对对象给键数、对数组给元素数
+		regT("json.length", "json", BlockShape.REPORTER, "{json} 的长度",
+				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"));
+		regT("json.is", "json", BlockShape.BOOLEAN, "{json} 是 {check} 吗?",
+				BlockParam.text("json", "{\"key\":\"value\"}"),
+				BlockParam.text("check", "valid"));
+		regT("json.has_key", "json", BlockShape.BOOLEAN, "{json} 包含键 {key} 吗?",
+				BlockParam.text("json", "{\"key\":\"value\"}"),
+				BlockParam.text("key", "key2"));
+		regT("json.get_path", "json", BlockShape.REPORTER, "{json} 中路径 {path} 的值",
+				BlockParam.text("json", "{\"key\":{\"inner\":[true,false]}}"),
+				BlockParam.text("path", "[\"key\",\"inner\",1]"));
+		regT("json.set_path", "json", BlockShape.REPORTER, "把 {json} 中路径 {path} 的值设为 {data}",
+				BlockParam.text("json", "{\"key\":{\"inner\":[true,false]}}"),
+				BlockParam.text("path", "[\"key\",\"inner\",1]"),
+				BlockParam.text("data", "value"));
+		regT("json.minify", "json", BlockShape.REPORTER, "压缩 {json}",
+				BlockParam.text("json", " {\"key\" : \"value\" } "));
+		regT("json.err_msg", "json", BlockShape.REPORTER, "{json} 的解析错误",
+				BlockParam.text("json", "{\"key\":\"value\",}"));
+		regT("json.get_all", "json", BlockShape.REPORTER, "{json} 的全部 {Stype}",
+				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"),
+				BlockParam.text("Stype", "keys"));
+		regT("json.array_push", "json", BlockShape.REPORTER, "向数组 {json} 添加 {item}",
+				BlockParam.text("json", "[\"scratch\"]"),
+				BlockParam.text("item", "TurboWarp"));
+		regT("json.array_set", "json", BlockShape.REPORTER, "把数组 {json} 的第 {pos} 项换成 {item}",
+				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.number("pos", "2"),
+				BlockParam.text("item", "fav"));
+		regT("json.array_insert", "json", BlockShape.REPORTER, "在数组 {json} 的第 {pos} 项插入 {item}",
+				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.number("pos", "2"),
+				BlockParam.text("item", "pear"));
+		regT("json.array_delete", "json", BlockShape.REPORTER, "删除数组 {json} 的第 {item} 项",
+				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.number("item", "2"));
+		regT("json.array_remove_all", "json", BlockShape.REPORTER, "删除数组 {json} 中所有 {item}",
+				BlockParam.text("json", "[\"scratch\",\"a\",\"TurboWarp\",\"a\"]"),
+				BlockParam.text("item", "a"));
+		regT("json.array_item_num", "json", BlockShape.REPORTER, "{item} 在数组 {json} 中的项号",
+				BlockParam.text("item", "scratch"),
+				BlockParam.text("json", "[\"scratch\",\"TurboWarp\"]"));
+		regT("json.array_fromto", "json", BlockShape.REPORTER, "数组 {json} 的第 {item} 到第 {item2} 项",
+				BlockParam.text("json", "[1,2,3,4]"),
+				BlockParam.number("item", "2"),
+				BlockParam.number("item2", "3"));
+		regT("json.array_concat", "json", BlockShape.REPORTER, "拼接数组 {json} 和 {json2}",
+				BlockParam.text("json", "[\"scratch\"]"),
+				BlockParam.text("json2", "[\"TurboWarp\"]"));
+		regT("json.array_map_field", "json", BlockShape.REPORTER, "数组 {json} 中所有对象的 {key} 值",
+				BlockParam.text("json", "[{\"id\":12},{\"id\":24}]"),
+				BlockParam.text("key", "id"));
+		regT("json.array_setlen", "json", BlockShape.REPORTER, "把数组 {json} 的长度设为 {len}",
+				BlockParam.text("json", "[\"scratch\",\"TurboWarp\"]"),
+				BlockParam.number("len", "1"));
+		regT("json.array_create", "json", BlockShape.REPORTER, "按分隔符 {d} 把文本 {text} 拆成数组",
+				BlockParam.text("d", ","),
+				BlockParam.text("text", "a,b,c"));
+		regT("json.array_join", "json", BlockShape.REPORTER, "用分隔符 {d} 把数组 {json} 拼成文本",
+				BlockParam.text("d", ","),
+				BlockParam.text("json", "[\"a\",\"b\",\"c\"]"));
+		regT("json.array_sort", "json", BlockShape.REPORTER, "数组 {list} 按 {order} 排序",
+				BlockParam.text("list", "[5.23,214,522,61,1,0]"),
+				BlockParam.text("order", "ascending"));
+		regT("json.array_textfilter", "json", BlockShape.REPORTER,
+				"筛选数组 {list}：文本 {options} {text}，返回 {type}",
+				BlockParam.text("list", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.text("options", "includes"),
+				BlockParam.text("text", "e"),
+				BlockParam.text("type", "Array"));
+		regT("json.array_analysis", "json", BlockShape.REPORTER, "数组 {list} 的 {analysis}",
+				BlockParam.text("list", "[17,1,2017,0,120,14]"),
+				BlockParam.text("analysis", "average"));
+		// 列表名是普通文本：项目里变量与列表都按名字对应（ARCHITECTURE §17），
+		// 用下拉菜单存 id 反而会在改名后失效
+		regT("json.vm_getlist", "json", BlockShape.REPORTER, "把列表 {list} 读成数组",
+				BlockParam.text("list", "mylist"));
+		regT("json.vm_setlist", "json", BlockShape.STACK, "把列表 {list} 设为 {json}",
+				BlockParam.text("list", "mylist"),
+				BlockParam.text("json", "[\"apple\",\"banana\"]"));
 	}
 
 	private static void reg(String id, String category, BlockShape shape, BlockParam... params) {
