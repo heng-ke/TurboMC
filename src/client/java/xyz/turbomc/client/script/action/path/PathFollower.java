@@ -8,6 +8,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.action.ScriptKeys;
 import xyz.turbomc.client.script.action.motion.TurnMath;
 import xyz.turbomc.client.script.action.motion.TurnSession;
@@ -40,38 +41,31 @@ import java.util.List;
 public final class PathFollower {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
 
-	/** 会话上限 60 秒：128 格 × 0.216 格/tick ≈ 592 tick，绕路按 1.6 倍算 ≈ 950，再留分段停顿的余量。 */
-	private static final int MAX_TICKS = 1200;
+	/**
+	 * 会话上限（tick）：按起始距离缩放，128 格时仍是 1200 tick（约 60 秒）。
+	 *
+	 * <p>128 格 × 0.216 格/tick ≈ 592 tick，绕路按 1.6 倍算 ≈ 950，再留分段停顿的余量，
+	 * 由此定出 1200。改成按距离算是因为「最远目标距离」已可配置：只放大距离而不动超时，
+	 * 远距离目标会在走完之前被判超时。</p>
+	 */
+	private static final double TICKS_PER_BLOCK = 8.0;
+	private static final int TICKS_BASE = 176;
+	private static final int TICKS_MIN = 600;
+	private static final int TICKS_MAX = 3600;
 	/** 脚本侧等待上限比会话上限多留 40 tick，让 Java 的超时先发生。 */
 	private static final int WAIT_SLACK = 40;
 	/** 结束后保留约 3 秒，便于回看走了哪条路。 */
 	private static final int FADE_TICKS = 60;
 
-	/**
-	 * 节点推进阈值。参考实现用 1.0，角色会提前切角、贴着拐角内壁走；再小（0.35 以下）
-	 * 又会在拐角来回摆。0.5 是「贴得够近但不切角」的折中。
-	 */
-	private static final double NODE_REACH = 0.5;
-	/**
-	 * 超过这个角度先站定再转，其余边走边转。
-	 *
-	 * <p><b>为什么不只是「90° 以上会蹭墙」</b>：边走边转走的是圆弧，最小转弯半径
-	 * R = 速度 ÷ 角速度 ≈ 4.317 ÷ 4.19 ≈ 1.03 格（{@link TurnMath#MAX_YAW_SPEED}）。
-	 * 目标落在 1 格附近、又需要较大角度时，角色会绕着目标转圈，永远进不了
-	 * {@link #NODE_REACH}——实测的「原地转圈」正是这个区间。</p>
-	 *
-	 * <p>站定把速度降为 0，转弯半径随之为 0，绕圈在几何上就不成立。30° 与参考项目
-	 * areaautominer 的 {@code TURN_BEFORE_WALK_THRESHOLD} 一致。</p>
-	 */
-	private static final float STAND_TURN_DEG = 30f;
-
+	// 节点推进阈值与站定转向阈值已改为可配置项，见 TurboMCConfig#pathNodeReach() 与
+	// #pathStandTurnDeg()。两者的取舍说明（几何耦合：转弯半径 ≈ 1.03 格）留在配置字段的 javadoc 里。
 	private static final int STUCK_TICKS = 10;
 	/** 卡住重算上限。与半截路的分段次数分开计：这是「原地打转」，那是「够不到目标」。 */
 	private static final int MAX_REPLANS = 3;
 	private static final int REPLAN_INTERVAL = 20;
 	/**
 	 * 半截路的分段上限。被剪断时每段可能只有十几格，128 格最多也就十几段；
-	 * 给 16 是留余量，真正的总闸仍是 {@link #MAX_TICKS}。
+	 * 给 16 是留余量，真正的总闸仍是会话超时（{@link #maxTicksFor}）。
 	 */
 	private static final int MAX_PARTIAL_REPLANS = 16;
 	/** 连续几次半截路停在同一格：说明再算也一样，别空转。 */
@@ -161,13 +155,24 @@ public final class PathFollower {
 
 		session = new Session(target, client.world, posOf(player));
 		session.distance = target.horizontalDistanceTo(player);
+		session.maxTicks = maxTicksFor(session.distance);
 		lastState = State.FOLLOWING;
 		return true;
 	}
 
-	/** 脚本侧等待上限（tick）。比 {@link #MAX_TICKS} 多 40，让 Java 侧超时先结束。 */
-	public static int waitLimitTicks() {
-		return MAX_TICKS + WAIT_SLACK;
+	/**
+	 * 脚本侧等待上限（tick）。比会话上限多留 40 tick，让 Java 侧的超时先结束。
+	 *
+	 * <p>必须传玩家：上限按起始距离缩放，128 格时仍是 1200 + 40。</p>
+	 */
+	public static int waitLimitTicks(MoveTarget target, ClientPlayerEntity player) {
+		return maxTicksFor(target.horizontalDistanceTo(player)) + WAIT_SLACK;
+	}
+
+	/** 128 格 → 1200 tick，与改造前的固定值一致；距离越远上限越高。 */
+	private static int maxTicksFor(double distance) {
+		return MathHelper.clamp(
+				(int) Math.round(distance * TICKS_PER_BLOCK) + TICKS_BASE, TICKS_MIN, TICKS_MAX);
 	}
 
 	/** poll 的返回值：终态为真，且一直保持到下一次 start()。 */
@@ -265,7 +270,7 @@ public final class PathFollower {
 		}
 
 		s.ticks++;
-		if (s.ticks > MAX_TICKS) {
+		if (s.ticks > s.maxTicks) {
 			finish(s, State.TIMEOUT, client, null);
 			return;
 		}
@@ -306,8 +311,13 @@ public final class PathFollower {
 			return;
 		}
 
+		// 精度参数每 tick 现读配置：菜单里改完立刻生效，不需要重开会话。
+		TurboMCConfig config = TurboMCConfig.get();
+		double nodeReach = config.pathNodeReach();
+		double standTurnDeg = config.pathStandTurnDeg();
+
 		// 节点推进：一次可以跨多个（贴地小步常常一 tick 跨 2~3 个）
-		while (s.index < lastIndex && horizontalTo(player, s.nodes.get(s.index)) < NODE_REACH) {
+		while (s.index < lastIndex && horizontalTo(player, s.nodes.get(s.index)) < nodeReach) {
 			s.index++;
 			viewIndex = s.index;
 		}
@@ -315,7 +325,7 @@ public final class PathFollower {
 
 		// 水平已经贴住这个节点、但高度还没对上（典型是差 1 格台阶）：此时转向没有意义。
 		// 只有节点在上方才跳；节点在下方时松键让它自己落下，否则会原地一直往上蹦。
-		if (horizontalTo(player, node) < NODE_REACH) {
+		if (horizontalTo(player, node) < nodeReach) {
 			s.turning = false;
 			setForward(client, s, false);
 			setJump(client, s, node.getY() > player.getBlockPos().getY());
@@ -333,7 +343,7 @@ public final class PathFollower {
 		if (!TurnSession.isActive()) {
 			ViewSmoother.setWalkTarget(desiredYaw);
 		}
-		if (Math.abs(diff) > STAND_TURN_DEG) {
+		if (Math.abs(diff) > standTurnDeg) {
 			s.turning = true;
 			setForward(client, s, false);
 			setJump(client, s, false);
@@ -412,15 +422,19 @@ public final class PathFollower {
 	 * 是否已经站在 {@code end} 这一格上。
 	 *
 	 * <p>水平与垂直分开判，不能用 3D 距离：目标正上方 4 格的同一 (x,z) 水平距离是 0，
-	 * 只判水平会立刻宣布到达。垂直卡 0.6 格——容得下半砖的 0.5，容不下整整一格。</p>
+	 * 只判水平会立刻宣布到达。两个容差都来自配置（水平默认 0.6、垂直默认 0.6），
+	 * 垂直容差容得下半砖的 0.5，容不下整整一格。</p>
 	 *
 	 * <p>判的是路径终点而不是用户给的 target：A\* 会把终点吸到它认为可站的相邻格。</p>
 	 */
 	private static boolean isArrived(ClientPlayerEntity player, BlockPos end) {
+		TurboMCConfig config = TurboMCConfig.get();
+		double horizontal = config.pathArriveHorizontal();
+		double vertical = config.pathArriveVertical();
 		double dx = end.getX() + 0.5 - player.getX();
 		double dz = end.getZ() + 0.5 - player.getZ();
-		return dx * dx + dz * dz <= MoveTarget.ARRIVE_HORIZONTAL * MoveTarget.ARRIVE_HORIZONTAL
-				&& Math.abs(player.getY() - end.getY()) <= MoveTarget.ARRIVE_VERTICAL;
+		return dx * dx + dz * dz <= horizontal * horizontal
+				&& Math.abs(player.getY() - end.getY()) <= vertical;
 	}
 
 	private static boolean shouldJump(ClientPlayerEntity player, BlockPos node) {
@@ -652,6 +666,8 @@ public final class PathFollower {
 		List<BlockPos> nodes;
 		int index;
 		int ticks;
+		/** 本会话的 tick 上限，由起始距离算出（见 {@link #maxTicksFor}）。 */
+		int maxTicks = TICKS_MIN;
 		int fadeTicks = -1;
 		Vec3d anchor;
 		Vec3d lastPos;

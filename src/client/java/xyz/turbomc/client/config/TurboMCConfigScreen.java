@@ -47,13 +47,23 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.masterEnabled = value)
 				.build());
 
+		// HUD 位置：两个百分比替代原来的「四角」下拉。
+		// 0 = 贴起始边，100 = 贴另一侧，50 = 居中；角落只是这四个端点的特例，
+		// 因此不再需要单独的选择器——两套位置来源并存必然打架。
 		general.addEntry(entries
-				.startEnumSelector(Text.translatable("config.turbomc.hud_corner"), HudCorner.class, config.hudCorner)
-				.setDefaultValue(HudCorner.TOP_LEFT)
-				.setEnumNameProvider(corner -> Text.translatable(
-						"config.turbomc.hud_corner." + corner.name().toLowerCase(Locale.ROOT)))
-				.setTooltip(Text.translatable("config.turbomc.hud_corner.tooltip"))
-				.setSaveConsumer(value -> config.hudCorner = value)
+				.startIntSlider(Text.translatable("config.turbomc.hud_offset_x"),
+						(int) Math.round(config.hudPercentX()), 0, 100)
+				.setDefaultValue(0)
+				.setTooltip(Text.translatable("config.turbomc.hud_offset_x.tooltip"))
+				.setSaveConsumer(value -> config.hudOffsetX = (double) value)
+				.build());
+
+		general.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.hud_offset_y"),
+						(int) Math.round(config.hudPercentY()), 0, 100)
+				.setDefaultValue(0)
+				.setTooltip(Text.translatable("config.turbomc.hud_offset_y.tooltip"))
+				.setSaveConsumer(value -> config.hudOffsetY = (double) value)
 				.build());
 
 		// ---- 脚本引擎 ----
@@ -127,6 +137,78 @@ public final class TurboMCConfigScreen {
 				.setDefaultValue(8)
 				.setTooltip(Text.translatable("config.turbomc.chat_max_segments.tooltip"))
 				.setSaveConsumer(value -> config.chatMaxSegments = value)
+				.build());
+
+		// ---- 寻路 ----
+		// 放在脚本引擎之后：这些是「走向」积木的精度参数，改完下一 tick 即生效，无需重启。
+		ConfigCategory pathing = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.pathing"));
+		TurboMCConfig.Pathing path = config.pathingOrCreate();
+
+		pathing.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.pathing.hint"))
+				.build());
+
+		// 小数项用文本框：Cloth 21.11 只有 intSlider，0.6 这类值要么步进太粗，
+		// 要么得让用户自己换算。解析失败或越界按钳制后的值回写，不保留非法输入。
+		pathing.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.pathing.arrive_horizontal"),
+						num(path.arriveHorizontal, 0.6))
+				.setDefaultValue("0.6")
+				.setTooltip(Text.translatable("config.turbomc.pathing.arrive_horizontal.tooltip"))
+				.setSaveConsumer(value -> path.arriveHorizontal =
+						parseClamped(value, config.pathArriveHorizontal(), 0.30, 1.20))
+				.build());
+
+		pathing.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.pathing.arrive_vertical"),
+						num(path.arriveVertical, 0.6))
+				.setDefaultValue("0.6")
+				.setTooltip(Text.translatable("config.turbomc.pathing.arrive_vertical.tooltip"))
+				.setSaveConsumer(value -> path.arriveVertical =
+						parseClamped(value, config.pathArriveVertical(), 0.50, 0.90))
+				.build());
+
+		pathing.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.pathing.node_reach"),
+						num(path.nodeReach, 0.5))
+				.setDefaultValue("0.5")
+				.setTooltip(Text.translatable("config.turbomc.pathing.node_reach.tooltip"))
+				.setSaveConsumer(value -> path.nodeReach =
+						parseClamped(value, config.pathNodeReach(), 0.35, 0.60))
+				.build());
+
+		pathing.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.pathing.accuracy"),
+						config.pathAccuracy(), 0, 2)
+				.setDefaultValue(1)
+				.setTooltip(Text.translatable("config.turbomc.pathing.accuracy.tooltip"))
+				.setSaveConsumer(value -> path.accuracy = value)
+				.build());
+
+		pathing.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.pathing.stand_turn_deg"),
+						(int) Math.round(config.pathStandTurnDeg()), 20, 60)
+				.setDefaultValue(30)
+				.setTooltip(Text.translatable("config.turbomc.pathing.stand_turn_deg.tooltip"))
+				.setSaveConsumer(value -> path.standTurnDeg = (double) value)
+				.build());
+
+		pathing.addEntry(entries
+				.startEnumSelector(Text.translatable("config.turbomc.pathing.effort"),
+						PathEffort.class, config.pathEffort())
+				.setDefaultValue(PathEffort.NORMAL)
+				.setEnumNameProvider(effort -> Text.translatable(
+						"config.turbomc.pathing.effort." + effort.name().toLowerCase(Locale.ROOT)))
+				.setTooltip(Text.translatable("config.turbomc.pathing.effort.tooltip"))
+				.setSaveConsumer(value -> path.effort = value)
+				.build());
+
+		pathing.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.pathing.max_distance"),
+						config.pathMaxDistance(), 32, 192)
+				.setDefaultValue(128)
+				.setTooltip(Text.translatable("config.turbomc.pathing.max_distance.tooltip"))
+				.setSaveConsumer(value -> path.maxDistance = value)
 				.build());
 
 		// ---- AI 对话 ----
@@ -296,5 +378,26 @@ public final class TurboMCConfigScreen {
 		keys.addEntry(help.build());
 
 		return builder.build();
+	}
+
+	/** 小数项的显示文本：整数省略小数点后的零，其余原样。 */
+	private static String num(Double value, double fallback) {
+		double number = value == null ? fallback : value;
+		return number == Math.rint(number) ? String.valueOf((long) number) : String.valueOf(number);
+	}
+
+	/**
+	 * 解析小数并钳制到 [{@code min}, {@code max}]。
+	 *
+	 * <p>解析失败返回 {@code fallback}（调用方传当前生效值），不写 0——
+	 * 这些参数都容不下 0，静默归零会让寻路直接失效。</p>
+	 */
+	private static double parseClamped(String raw, double fallback, double min, double max) {
+		try {
+			double value = Double.parseDouble(raw == null ? "" : raw.trim());
+			return value < min ? min : Math.min(value, max);
+		} catch (RuntimeException ignored) {
+			return fallback;
+		}
 	}
 }

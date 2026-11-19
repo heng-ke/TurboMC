@@ -817,6 +817,35 @@ PathFollower.tick(client);   // 本 tick 新启动的会话立刻走第一步
 | `PATH_KEEP_TICKS` | 60 | 结束后保留 3 秒，便于回看路线 |
 | `LINE_WIDTH` | 2.0 | 与参考实现一致 |
 
+### 12.1 已开放为配置项（2026-11-19）
+
+下表常量原先写死在代码里，现由 `TurboMCConfig.Pathing`（配置文件 `pathing` 段、模组设置 → **寻路**）
+提供，**默认值与原常量完全一致**，所以不调节时行为不变。读取一律经钳制 getter，越界值不会生效。
+
+| 配置字段 | 对应原常量 | 默认 | 钳制范围 | 生效时机 |
+|---|---|---|---|---|
+| `arriveHorizontal` | `MoveTarget.ARRIVE_HORIZONTAL` | 0.6 | 0.30–1.20 | 每次判定即时 |
+| `arriveVertical` | `MoveTarget.ARRIVE_VERTICAL` | 0.6 | 0.50–0.90 | 每次判定即时 |
+| `nodeReach` | `NODE_REACH` | 0.5 | 0.35–0.60 | 每 tick |
+| `accuracy` | `ACCURACY` | 1 | 0–2 | 每次规划 |
+| `standTurnDeg` | `STAND_TURN_DEG` | 30° | 20–60 | 每 tick |
+| `effort` | `NODE_BUDGET_PER_BLOCK` | NORMAL(14) | 8 / 14 / 22 | 每次规划 |
+| `maxDistance` | `MAX_DISTANCE` | 128 | 32–192 | 每次规划 |
+
+两处必须联动的改动：
+
+1. **`maxDistance` 与会话超时联动。** `MAX_TICKS` 不再固定 1200，改由
+   `maxTicksFor(起始水平距离) = clamp(距离×8 + 176, 600, 3600)` 计算——128 格时正好 1200。
+   否则把最远距离放大后，远目标会在走完之前被判超时。脚本侧 `waitLimitTicks(target, player)`
+   用同一公式加 40 tick，保持「Java 侧超时先发生」的次序。
+2. **`nodeReach` 与 `standTurnDeg` 成对约束。** 边走边转的转弯半径 R = 4.317 ÷ 4.19 ≈ 1.03 格
+   （§5.4.1 的绕圈区间）。因此 `nodeReach` 上限压在 0.60（原「1.0 会切角」的结论不变），
+   `standTurnDeg` 下限压在 20°，避免两个极端组合把已修复的绕圈问题放回来。
+
+`SPAN_PER_BLOCK / MARGIN / MIN / MAX`（覆盖半径）与 `NODE_BUDGET_MIN / MAX` **刻意不暴露**：
+前者同时是 `ChunkCache` 覆盖半径、欧氏距离上限与累计代价上限，单独放宽任一项都会造成
+「穿墙」或「明明有路却停在中途」；后者作为预算的物理上下限保持不变。
+
 ---
 
 ## 十三、决策记录

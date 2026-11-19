@@ -11,7 +11,6 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.Text;
 import xyz.turbomc.client.config.TurboMCConfig;
-import xyz.turbomc.client.config.HudCorner;
 import xyz.turbomc.client.script.ScriptEngine;
 import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.ai.AiService;
@@ -89,7 +88,7 @@ public final class ScriptHudElement implements HudElement {
 		if (rows.isEmpty()) {
 			return;
 		}
-		draw(context, textRenderer, config.hudCorner, rows);
+		draw(context, textRenderer, config, rows);
 	}
 
 	/** 渲染单位：一行文字 + 颜色，背景按最宽的一行铺。 */
@@ -322,7 +321,7 @@ public final class ScriptHudElement implements HudElement {
 		rows.add(new Row(pathLine2, color));
 	}
 
-	private void draw(DrawContext context, TextRenderer textRenderer, HudCorner corner, List<Row> rows) {
+	private void draw(DrawContext context, TextRenderer textRenderer, TurboMCConfig config, List<Row> rows) {
 		int widest = 0;
 		for (Row row : rows) {
 			widest = Math.max(widest, textRenderer.getWidth(row.text()));
@@ -330,11 +329,9 @@ public final class ScriptHudElement implements HudElement {
 		int boxWidth = widest + PADDING * 2;
 		int boxHeight = rows.size() * LINE_HEIGHT + PADDING * 2;
 
-		boolean right = corner == HudCorner.TOP_RIGHT || corner == HudCorner.BOTTOM_RIGHT;
-		boolean bottom = corner == HudCorner.BOTTOM_LEFT || corner == HudCorner.BOTTOM_RIGHT;
-
-		int x = right ? context.getScaledWindowWidth() - MARGIN - boxWidth : MARGIN;
-		int y = bottom ? context.getScaledWindowHeight() - MARGIN - boxHeight : MARGIN;
+		// 位置由百分比决定，与旧的四角枚举解耦：角落只是「0 / 100」的特例
+		int x = axisOffset(context.getScaledWindowWidth(), boxWidth, config.hudPercentX());
+		int y = axisOffset(context.getScaledWindowHeight(), boxHeight, config.hudPercentY());
 
 		// 半透明底衬：白字直接压在高对比度场景上会看不清
 		context.fill(x, y, x + boxWidth, y + boxHeight, 0x90000000);
@@ -344,6 +341,24 @@ public final class ScriptHudElement implements HudElement {
 			context.drawTextWithShadow(textRenderer, row.text(), x + PADDING, textY, row.color());
 			textY += LINE_HEIGHT;
 		}
+	}
+
+	/**
+	 * 百分比 → 该轴上的像素坐标。
+	 *
+	 * <p>映射的是「可放置区间」而不是裸屏幕坐标：0% 贴住边距，100% 贴住另一侧边距，
+	 * 50% 居中。这样任意百分比都天然落在屏幕内，不需要事后裁剪；代价是面板越宽，
+	 * 同一个百分比对应的左边界越靠左——刻意取舍，换来的是「永远不会有一半跑出屏幕」。</p>
+	 *
+	 * <p>面板比可用区域还宽时（小窗口 + 长监视器名），区间取 0 并贴住起始边距：
+	 * 右侧溢出至少保证开头可读，居中会让两侧都被裁掉。</p>
+	 */
+	private static int axisOffset(int screenSize, int boxSize, double percent) {
+		int range = screenSize - boxSize - MARGIN * 2;
+		if (range <= 0) {
+			return MARGIN;
+		}
+		return MARGIN + (int) Math.round(range * (percent / 100.0));
 	}
 
 	/**

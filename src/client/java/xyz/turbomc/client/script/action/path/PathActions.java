@@ -52,7 +52,7 @@ public final class PathActions {
 		if (!PathFollower.start(client, target)) {
 			return;   // 已在目标内 / 目标在未加载区：不挂起，立刻返回
 		}
-		ctx.requestWaitUntil("move", PathFollower.waitLimitTicks());
+		ctx.requestWaitUntil("move", PathFollower.waitLimitTicks(target, player));
 	}
 
 	private static int clampY(double value) {

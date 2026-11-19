@@ -15,6 +15,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ import java.util.Set;
  * 漏一个就是静默返回 null 或旧路径。直接调 {@link PathNodeNavigator} 则参数直给，
  * 没有隐式状态。</p>
  *
- * <p>节点预算按距离给：{@code 距离 × 14}，clamp 到 [128, 3000]。原版生物用的是
+ * <p>节点预算按距离给：{@code 距离 × 每格预算}（档位默认 14），clamp 到 [128, 3000]。原版生物用的是
  * {@code FOLLOW_RANGE × 16 ≈ 560}，那是固定值、与目标远近无关；这里按距离缩放，
  * 近距离不至于吃掉整帧，远距离也不会在半途撞顶。参考实现的预算直接等于直线距离，
  * 绕行时容易撞顶并静默返回半截路径。</p>
@@ -39,8 +40,9 @@ import java.util.Set;
 public final class PathPlanner {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
 
-	/** 目标上限：客户端视距 16 区块 = 256 格，128 一定已加载；再远基本超出服务端视距。 */
-	private static final int MAX_DISTANCE = 128;
+	// 目标上限与到达容差已改为可配置项，见 TurboMCConfig#pathMaxDistance() / #pathAccuracy()。
+	// 上限仍在配置侧钳制到 32–192：客户端视距 16 区块 = 256 格，再远基本超出服务端视距。
+
 	/**
 	 * 覆盖半径 = 目标距离 × 该系数 + 余量，同时作为 A\* 的代价上限。
 	 *
@@ -50,22 +52,19 @@ public final class PathPlanner {
 	 * （每步欧氏距离相加），下坡、上台阶、跨沟时单步能到 3~4，所以这个上限必须按"路径能有多长"给，
 	 * 不能按"目标有多远"给——给成 1.6 倍会让绕行在地形起伏处被剪断，表现为"明明有路却停在中途"。
 	 * 而 {@code ChunkCache} 又必须覆盖它，否则缓存之外全是空气，A\* 会从那里"穿墙"过去。</p>
+	 *
+	 * <p><b>这三个数不对外暴露</b>：单独放宽任何一个都会破坏上面的一致性。</p>
 	 */
 	private static final double SPAN_PER_BLOCK = 2.5;
 	private static final int SPAN_MARGIN = 32;
 	private static final int SPAN_MIN = 48;
 	private static final int SPAN_MAX = 200;
 	/**
-	 * 到达容差：A\* 弹出一个节点后，若它与目标格的<b>曼哈顿距离</b>不超过该值，即判定到达。
+	 * 节点预算 = 距离 × {@code pathBudgetPerBlock()}，clamp 到 [128, 3000]。
 	 *
-	 * <p>它<b>不是</b>节点粒度，也不减少搜索量——只决定 A\* 在哪里停。取 1 表示终点必须落在
-	 * 目标格六个紧邻面之一，也就是「玩家站到目标旁边」就算到了。</p>
-	 *
-	 * <p>不再按距离放宽：远处目标本来就是分段靠近（§6.3.1），把容差放到 2 只会让终点
-	 * 停在离目标两格的地方，与「走向精确坐标」的语义冲突。</p>
+	 * <p>每格预算来自配置里的搜索强度档位（默认 14）。上下限保持固定：
+	 * 低于 128 时近距离直线都会撞顶，高于 3000 单帧规划耗时不可控。</p>
 	 */
-	private static final int ACCURACY = 1;
-	private static final int BUDGET_PER_BLOCK = 14;
 	private static final int BUDGET_MIN = 128;
 	private static final int BUDGET_MAX = 3000;
 	/** 单帧预算告警线：超过它说明这一帧会明显掉帧，需要复核参数。 */
@@ -114,11 +113,12 @@ public final class PathPlanner {
 	/**
 	 * 规划一条路线。
 	 *
-	 * <p>返回 {@code null} 表示这一段完全走不了：目标区块未加载、超过 {@link #MAX_DISTANCE}、
+	 * <p>返回 {@code null} 表示这一段完全走不了：目标区块未加载、超过配置的最远目标距离（默认 128 格）、
 	 * A\* 无解、半截路只有一个节点（一步都没迈出去），或路径经过未加载区块。
 	 * 只是「够不到目标但能往前走」时返回 {@code reached=false} 的 {@link Plan}。</p>
 	 */
 	public static Plan plan(World world, ClientPlayerEntity player, BlockPos target) {
+		TurboMCConfig config = TurboMCConfig.get();
 		if (!world.isChunkLoaded(target)) {
 			LOG.warn("[path] 目标区块未加载 ({}, {}, {})",
 					target.getX(), target.getY(), target.getZ());
@@ -126,8 +126,9 @@ public final class PathPlanner {
 		}
 		Vec3d center = Vec3d.ofCenter(target);
 		double distance = Math.sqrt(squaredHorizontal(player, center));
-		if (distance > MAX_DISTANCE) {
-			LOG.info("[path] 目标太远 {} 格（上限 {}）", (int) distance, MAX_DISTANCE);
+		int maxDistance = config.pathMaxDistance();
+		if (distance > maxDistance) {
+			LOG.info("[path] 目标太远 {} 格（上限 {}）", (int) distance, maxDistance);
 			return null;
 		}
 
@@ -149,7 +150,8 @@ public final class PathPlanner {
 			nodeMaker.setCanSwim(true);            // 玩家会游泳；关掉它会把水域判成不可通行
 			nodeMaker.setCanWalkOverFences(false); // 玩家翻不过栅栏，与原版一致
 		}
-		int budget = MathHelper.clamp((int) (distance * BUDGET_PER_BLOCK), BUDGET_MIN, BUDGET_MAX);
+		int budget = MathHelper.clamp(
+				(int) (distance * config.pathBudgetPerBlock()), BUDGET_MIN, BUDGET_MAX);
 		if (navigator == null) {
 			navigator = new PathNodeNavigator(nodeMaker, budget);
 			navigatorBudget = budget;
@@ -164,7 +166,7 @@ public final class PathPlanner {
 			// span 同时是「节点离起点的欧氏距离上限」与「累计路径代价上限」，
 			// 也是 ChunkCache 的覆盖半径——三者必须一致，否则不是剪断路径，就是探出缓存穿墙。
 			path = navigator.findPathToAny(cache, mob, Set.of(target),
-					(float) span, ACCURACY, 1.0f);
+					(float) span, config.pathAccuracy(), 1.0f);
 		} catch (RuntimeException e) {
 			LOG.warn("[path] 规划抛异常：{}", e.toString());
 			return null;
@@ -237,7 +239,7 @@ public final class PathPlanner {
 	 * 目标格明显不是"能站的地方"时给一条日志。
 	 *
 	 * <p>路线 B 直接调 {@link PathNodeNavigator}，<b>没有</b> {@code MobNavigation.retargetToSolidBlock}
-	 * 那一步"目标在空中时向下吸附"。但到达判定用的是曼哈顿距离（{@link #ACCURACY}），
+	 * 那一步"目标在空中时向下吸附"。但到达判定用的是曼哈顿距离（配置项 {@code pathAccuracy}，默认 1），
 	 * 所以 y 偏 1 格时相邻格仍算命中，偏 2 格以上才真的够不着。
 	 * 这里刻意<b>不改目标</b>（y 由脚本作者给定，静默改掉更难查），只在日志里点明位置。</p>
 	 */

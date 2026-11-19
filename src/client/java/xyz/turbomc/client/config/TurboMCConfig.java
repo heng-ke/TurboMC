@@ -36,7 +36,26 @@ public final class TurboMCConfig {
 
 	// ---- 常规 ----
 	public boolean masterEnabled = true;
+
+	/**
+	 * 旧版 HUD 停靠角落。仅用于读取旧配置时推导初始百分比，不再由界面写入。
+	 *
+	 * <p>保留字段而不是删掉，是为了让老 json 里的 {@code hudCorner} 继续有意义：
+	 * 它决定 {@link #hudOffsetX} / {@link #hudOffsetY} 未设置时的回退位置。
+	 * 新的唯一定位真源是下面两个百分比。</p>
+	 */
 	public HudCorner hudCorner = HudCorner.TOP_LEFT;
+
+	/**
+	 * HUD 左上角相对屏幕「可放置区域」的水平百分比，0–100；{@code null} = 未设置。
+	 *
+	 * <p>用包装类型而不是 {@code double}：缺字段与「显式设成 0」必须能区分，
+	 * 否则旧配置里的「右上」会被一个默认 0 直接抹成左上。</p>
+	 */
+	public Double hudOffsetX;
+
+	/** 垂直百分比，语义同 {@link #hudOffsetX}。 */
+	public Double hudOffsetY;
 
 	// ---- 脚本引擎 ----
 	/**
@@ -135,6 +154,16 @@ public final class TurboMCConfig {
 	public boolean showPathHud = true;
 
 	/**
+	 * 「走向」的精度与搜索参数。
+	 *
+	 * <p>与 {@link Ai} 同样的问题：旧配置文件里没有这一段，Gson 用 Unsafe 建实例、
+	 * 不执行字段初始化器，所以字段可能整体为 {@code null}。读取一律走
+	 * {@link #pathingSection()} 系列 getter（缺段/缺字段回退默认值并钳制），
+	 * 写入走 {@link #pathingOrCreate()}。</p>
+	 */
+	public Pathing pathing = new Pathing();
+
+	/**
 	 * 脚本禁止按下的键。为空列表表示不拦截任何键（不建议）。
 	 *
 	 * <p>{@code null} 表示「从未配置过」，读取时回退到 {@link #DEFAULT_BLOCKED_KEYS}——
@@ -202,6 +231,28 @@ public final class TurboMCConfig {
 	 */
 	public boolean shouldDisableEngineOnExit() {
 		return disableEngineOnExit == null || disableEngineOnExit;
+	}
+
+	/**
+	 * HUD 水平位置百分比（0–100）。
+	 *
+	 * <p>未配置时按 {@link #hudCorner} 推导，于是旧配置的四角落点原样落到
+	 * 0 / 100 上，行为与改造前一致；枚举本身也可能是 {@code null}（手改过的 json），
+	 * 一并按左上处理，不抛空指针。</p>
+	 */
+	public double hudPercentX() {
+		if (hudOffsetX != null) {
+			return clamp(hudOffsetX, 0.0, 100.0);
+		}
+		return hudCorner == HudCorner.TOP_RIGHT || hudCorner == HudCorner.BOTTOM_RIGHT ? 100.0 : 0.0;
+	}
+
+	/** HUD 垂直位置百分比（0–100），推导规则同 {@link #hudPercentX()}。 */
+	public double hudPercentY() {
+		if (hudOffsetY != null) {
+			return clamp(hudOffsetY, 0.0, 100.0);
+		}
+		return hudCorner == HudCorner.BOTTOM_LEFT || hudCorner == HudCorner.BOTTOM_RIGHT ? 100.0 : 0.0;
 	}
 
 
@@ -291,6 +342,142 @@ public final class TurboMCConfig {
 			ai = new Ai();
 		}
 		return ai;
+	}
+
+	/**
+	 * 配置段 {@code pathing}：「走向」的精度、搜索强度与放弃策略。
+	 *
+	 * <p>字段全用包装类型，缺字段与「配成 0」必须能区分——{@code accuracy = 0}
+	 * 是合法值（要求终点落在目标格本身），{@code arriveHorizontal} 极小值虽然没意义
+	 * 但也不该被当成「没配过」。默认值即改造前写死在
+	 * {@code MoveTarget}/{@code PathFollower}/{@code PathPlanner} 里的常量。</p>
+	 */
+	public static final class Pathing {
+		/**
+		 * 水平到达半径（格）。
+		 *
+		 * <p>玩家与路径终点格中心的水平距离小于它即判到达。调大提前停步，
+		 * 调小容易出现「差一点点永远判不到」。默认 0.6 比节点推进阈值宽，
+		 * 是为了避免两个判定打架。</p>
+		 */
+		public Double arriveHorizontal = 0.6;
+
+		/**
+		 * 垂直到达容差（格）。
+		 *
+		 * <p>0.6 容得下半砖的 0.5，容不下整整一格；给到 1.0 会把「站在台阶下方
+		 * 同一格」判成已到达。</p>
+		 */
+		public Double arriveVertical = 0.6;
+
+		/**
+		 * 节点推进阈值（格）：走到离当前节点多近就切下一个节点。
+		 *
+		 * <p><b>上限 0.6 是硬约束</b>：参考实现用 1.0 会提前切角、贴着拐角内壁走。
+		 * 而它又与 {@link #standTurnDeg} 存在几何耦合——边走边转的转弯半径
+		 * R = 速度 ÷ 角速度 ≈ 4.317 ÷ 4.19 ≈ 1.03 格，目标落在 1 格附近且需要大角度时
+		 * 角色会绕着目标转圈，永远进不了这个阈值。所以这两个值不要各调各的。</p>
+		 */
+		public Double nodeReach = 0.5;
+
+		/**
+		 * A\* 到达容差（曼哈顿距离，格）。
+		 *
+		 * <p><b>不是节点粒度，也不减少搜索量</b>：只决定 A\* 在哪里停。
+		 * 1 表示终点必须落在目标格六个紧邻面之一；0 表示必须正好是目标格；
+		 * 2 会让终点停在离目标两格处，与「走向精确坐标」的语义冲突。</p>
+		 */
+		public Integer accuracy = 1;
+
+		/**
+		 * 站定转向阈值（度）：朝向偏差大于它就先站定转身，否则边走边转。
+		 *
+		 * <p>站定把速度降为 0，转弯半径随之为 0，绕圈在几何上就不成立。
+		 * 调得过大会缩小「站定」的适用范围，把 {@link #nodeReach} 那段的绕圈区间放回来。</p>
+		 */
+		public Double standTurnDeg = 30.0;
+
+		/** A\* 搜索强度档位，映射到每格节点预算。 */
+		public PathEffort effort = PathEffort.NORMAL;
+
+		/**
+		 * 最远目标距离（格）。
+		 *
+		 * <p>会话超时按这个距离缩放（见 {@code PathFollower.maxTicksFor}），改大不会
+		 * 让远距离目标被判超时早退。但超过约 67 格起会被覆盖半径上限削成半截路，
+		 * 转为「走一段算一段」的分段接近，实际耗时与卡顿都会上升。</p>
+		 */
+		public Integer maxDistance = 128;
+	}
+
+	/** 缺段时的只读兜底。绝不写回：写入一律走 {@link #pathingOrCreate()}。 */
+	private static final Pathing PATHING_DEFAULTS = new Pathing();
+
+	private Pathing pathingSection() {
+		return pathing == null ? PATHING_DEFAULTS : pathing;
+	}
+
+	/** 配置界面用：需要写入时确保对象存在。 */
+	public Pathing pathingOrCreate() {
+		if (pathing == null) {
+			pathing = new Pathing();
+		}
+		return pathing;
+	}
+
+	/** 水平到达半径（格），钳制到 0.30–1.20。 */
+	public double pathArriveHorizontal() {
+		Double value = pathingSection().arriveHorizontal;
+		return value == null ? 0.6 : clamp(value, 0.30, 1.20);
+	}
+
+	/** 垂直到达容差（格），钳制到 0.50–0.90。 */
+	public double pathArriveVertical() {
+		Double value = pathingSection().arriveVertical;
+		return value == null ? 0.6 : clamp(value, 0.50, 0.90);
+	}
+
+	/**
+	 * 节点推进阈值（格），钳制到 0.35–0.60。
+	 *
+	 * <p>上限 0.60 是刻意的：再大就会提前切角，贴着拐角内壁走。</p>
+	 */
+	public double pathNodeReach() {
+		Double value = pathingSection().nodeReach;
+		return value == null ? 0.5 : clamp(value, 0.35, 0.60);
+	}
+
+	/** A\* 到达容差（格），钳制到 0–2。 */
+	public int pathAccuracy() {
+		Integer value = pathingSection().accuracy;
+		return value == null ? 1 : Math.max(0, Math.min(2, value));
+	}
+
+	/** 站定转向阈值（度），钳制到 20–60。 */
+	public double pathStandTurnDeg() {
+		Double value = pathingSection().standTurnDeg;
+		return value == null ? 30.0 : clamp(value, 20.0, 60.0);
+	}
+
+	/** 搜索强度档位；缺字段按 {@link PathEffort#NORMAL}。 */
+	public PathEffort pathEffort() {
+		PathEffort value = pathingSection().effort;
+		return value == null ? PathEffort.NORMAL : value;
+	}
+
+	/** 每格节点预算，由 {@link #pathEffort()} 映射。 */
+	public int pathBudgetPerBlock() {
+		return pathEffort().budgetPerBlock();
+	}
+
+	/** 最远目标距离（格），钳制到 32–192。 */
+	public int pathMaxDistance() {
+		Integer value = pathingSection().maxDistance;
+		return value == null ? 128 : Math.max(32, Math.min(192, value));
+	}
+
+	private static double clamp(double value, double min, double max) {
+		return value < min ? min : Math.min(value, max);
 	}
 
 	private static String trim(String value) {
