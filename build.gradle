@@ -128,8 +128,14 @@ jar {
 	}
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-	// 冒烟测试类只用于 `gradlew vmSmoke / vmWrite`，不随模组发布
+	// 冒烟 / 基准类只用于 `gradlew vm*`，不随模组发布。
+	// 别只写 *SmokeTest*：同目录的 ChatHatTest（vmChat 的入口）与 JsonBench 不符合该模式，
+	// 曾因此混进发布 jar（约 23 KB 带 main 的测试代码）。这三个任务用的都是 classes 目录，
+	// 从 jar 里排除不影响它们运行。
 	exclude "xyz/turbomc/client/script/vm/*SmokeTest*.class"
+	exclude "xyz/turbomc/client/script/vm/*Test.class"
+	exclude 'xyz/turbomc/client/script/vm/*Test$*.class'
+	exclude "xyz/turbomc/client/script/vm/JsonBench*.class"
 }
 
 // VM 后端的冒烟测试：不启动客户端，直接验证 Rhino + scratch-vm 链路

@@ -52,6 +52,15 @@ public final class AiSmokeTest {
 		String base = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
 
 		AiService ai = AiService.get();
+		// 先走热一次再开始断言。
+		//
+		// 首个请求要付 HttpClient 初始化 + JVM 冷启动 + JIT 的成本，偶发超过后面的 3 秒硬超时，
+		// 表现是第一条断言「正常回复」直接 ✗（整批跑 11 个冒烟任务时实测约一半概率，
+		// 单独跑永远通过）。用一个一次性会话、宽超时预热，既不打乱断言，
+		// 也不放松任何正式用例的超时阈值——那些阈值本身就是被测语义的一部分。
+		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 15000, 4, 2));
+		await(ai, "s-warmup", "hello", 15000);
+
 		// 超时设 3000 ms：桩对 "slow" 睡 4000 ms，正好越过这条线。
 		// 不用 1200/1500 那种紧贴的余量：并行跑多个冒烟任务时 CPU 一忙就会误判超时（实测过）
 		ai.settingsProvider(() -> new AiService.Settings(base, "test-key", "stub-model", 0.7, 64, 3000, 4, 2));
