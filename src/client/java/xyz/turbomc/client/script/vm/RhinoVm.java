@@ -387,6 +387,8 @@ public final class RhinoVm {
 			// 单帧执行超时：真机上多由 GC 或宿主同步调用（发聊天 / 执行命令）造成抖动。
 			// 只跳过本帧，绝不能 stopAll——那会把整个工程的脚本全部停掉，
 			// 用户看到的现象是「脚本跑着跑着不动了」，且界面上没有任何提示。
+			// 载入期（loadProject / greenFlag）用的是同一个中断，但时限由 LOAD_DEADLINE_MS
+			// 单独给出，且在那两个方法里就地抛出，不会落到这个 catch。
 			long now = System.nanoTime();
 			if (now - lastTimeoutLogNanos > TIMEOUT_LOG_INTERVAL) {
 				lastTimeoutLogNanos = now;

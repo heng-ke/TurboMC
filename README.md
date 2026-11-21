@@ -49,6 +49,7 @@
 |---|---|
 | `● 运行中：包名` | 正常跑着 |
 | `○ 引擎已关闭` / `○ 没有启用的脚本包` | 没按 F6，或没选包 |
+| `○ 退出世界后自动关闭` | 按配置在退世界时自动关掉，下次进世界需按 F6 |
 | `○ 已停止全部（按 F6 重新开启）` | 脚本里执行了「停止全部」 |
 | `✕ 工程载入失败：原因` | sb3 读不出来，附带具体原因 |
 | `✕ 运行出错已停止：原因` | 脚本抛异常、VM 已停；按 F6 或在面板里点「重新载入」复位 |
@@ -80,7 +81,9 @@
 不会出现「攻击无效实体」被服务端断开的情况。
 
 脚本的「说 / 思考」会显示在 HUD 上——这两个是 scratch-vm 的原生积木，游戏内没有
-渲染出口，HUD 是它们唯一的表达通道。
+渲染出口，HUD 是它们唯一的表达通道。每句停留 5 秒；同时显示几条可在
+模组设置 → 脚本引擎 → **同时显示气泡数** 调（默认 3，1～6），超出的不逐个画，
+而是补一行「…还有 N 条」，免得多个角色同时说话时看不出还有谁开过口。
 
 **AI 对话**：`最近的聊天` 取到玩家说的话，`让会话 [SESSION] 回应 [TEXT]` 发给大模型并
 等回复（等待期间脚本挂起，不卡游戏）。接口走 OpenAI 兼容协议，在 `config/turbomc.json`
@@ -107,7 +110,9 @@ HUD 的停留时长、最多行数与预览字数在模组设置 → AI 对话�
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物位于 `build/libs/turbomc-<mod_version>.jar`。
+产物位于 `build/libs/turbomc-<mod_version>.jar`。发布 jar **不含**冒烟/基准类
+（`*SmokeTest*`、`ChatHatTest`、`JsonBench` 在 `jar` 任务里排除），它们只在
+`./gradlew vm*` 时用 `classes` 目录运行。
 
 冒烟测试不需要启动客户端：
 
@@ -118,6 +123,8 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmImport                 # sb3 解析 + 执行
 ./gradlew vmChat                   # 聊天帽子：一次事件只触发一次、关键词过滤
 ./gradlew vmKeyHat                 # 按键帽子：对得上起 1 个线程、对不上起 0 个
+./gradlew vmScreenHat              # 界面帽子：按 SCREEN 字段匹配触发
+./gradlew vmAi                     # AI 对话：正常 / 非 2xx / 坏 JSON / 超时 / 并发 / 端到端
 ./gradlew vmList                   # HUD 读列表 + 算术积木参数名映射
 ./gradlew vmDepth                  # 超长积木链的深度保护
 ./gradlew vmNumberFormat           # 数值字符串化是 ECMAScript 格式

@@ -31,6 +31,10 @@ import java.util.Map;
  *
  * <p>气泡状态从 VM 的每个 target 上读取，用 {@code usageId} 判定是否是新的一句；
  * 每句停留 {@value #HOLD_MS} 毫秒后自动消失，避免一句「你好」永久挡住画面。</p>
+ *
+ * <p>同时显示几条由配置 {@code hudMaxBubbles} 决定（默认 3，范围 1～6）：气泡是叠在
+ * 画面上的，条数必须封顶。被挤掉的不静默丢弃——末尾补一行「…还有 N 条」，
+ * 否则四五个角色同时说话时，玩家会以为某个角色根本没开口。</p>
  */
 public final class ScriptHudElement implements HudElement {
 	/** 一句气泡停留时长。 */

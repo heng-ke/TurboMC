@@ -194,11 +194,17 @@ Integer/Long/Object）。**不要放开整个 `java.lang`**——那样脚本就
 编辑器概念里的 `TICKS` 按 tick 计（20 tick = 1 秒），sb3 的 `control_wait` 用
 `DURATION` 按**秒**计。导入时 ×20、显示时 ÷20，两处都要做。
 
-### 5. 单帧超时只跳过该帧
+### 5. 单帧超时只跳过该帧；载入期另有一道时限
 
 `RhinoVm` 用 Rhino 的指令观察器做时间预算（`budgetNanos × 4`）。超时**不能
 `stopAll`**——那会把整个工程停掉，用户看到的现象是「脚本跑着跑着不动了」，
 而且没有任何提示。现在只跳过该帧并节流记日志。
+
+**载入期（`loadProject` / `greenFlag`）必须单独设限**：这段时间此前完全不在预算内，
+而坏工程恰恰在这里出事——`next` 链成环时 VM 不报错，只是无限执行同一批积木，
+堆涨到数 GB、窗口无响应（DEF-04，实测 7.9 GB）。现在这两个入口会武装
+`LOAD_DEADLINE_MS`（10 s），超时抛 `EvaluatorException`，工程直接标为载入失败。
+数值给得宽，是因为正常载入要几百毫秒，与单帧的 16 ms 不是一个量级。
 
 ### 6. opcode 映射必须一对一
 
@@ -291,6 +297,23 @@ JS 侧必须返回**数组**而不是计数，否则永远显示 0。
 
 > 为什么不用「版本号比对」：版本号一致不等于积木一致（改文案、删积木都不改版本），
 > 而 opcode 集合是真正决定「积木能不能用」的那份数据。
+
+### 6.4 未知扩展前缀要在载入前兜住，不能整包报废
+
+scratch-vm 的 `installTargets` **不读**工程里的 `extensions` 数组，它逐个积木调
+`getExtensionIdForOpcode(opcode)` 反推扩展 id，再对「未加载」的 id 调
+`loadExtensionURL()`。Rhino 里没有 `Worker`，那条路必然以
+`ReferenceError: "Worker" is not defined` 结束，**整个工程载入失败**——玩家看到的是
+「✕ 工程载入失败」，而不是「某个积木不生效」。
+
+因此 `__tmcLoadProject` 在交给 VM 之前接管 `extensionManager.loadExtensionURL`：
+未知 id 直接登记一个空占位实例（`isExtensionLoaded` 为真）并返回已完成的 Promise，
+日志点名是哪个扩展。核心前缀（`operator` / `control` …）在更早的
+`getExtensionIdForOpcode` 阶段就返回 null，根本走不到这里，所以**不需要维护前缀白名单**
+——漏项会误判，后果比兜底更严重。
+
+代价写在明处：未知扩展的积木执行时返回空值（与 KN-05 的占位语义一致）。
+`logic_*` 这类 Blockly 遗留 opcode 是最常见的触发源（DEF-10）。
 
 ### 7. 脚本按下的键必须在引擎停止时统一释放
 
@@ -807,11 +830,17 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 |---|---|---|---|
 | `RUNNING` | `●` | 绿 | 工程已载入并在推进 |
 | `OFF` / `NO_PACK` / `NO_WORLD` / `OFF_WORLD_EXIT` | `○` | 灰 | 没开、没选包、还没进世界、退出世界自动关 |
-| `HALTED` | `○` | 黄 | 脚本执行了「停止全部」，需按 F6 |
+| `HALTED` | `○` | 黄 | 脚本执行了「停止全部」，按**一次** F6 即重开 |
 | `LOAD_FAILED` / `RUNTIME_ERROR` | `✕` | 红 | 工程读不出/启动失败、运行期异常 |
 
 状态之后跟具体原因（异常摘要，截断 60 字），故障时单独占一行：挤在状态行里会被宽度
 裁掉，等于没显示。这是「为什么脚本不动」在游戏内唯一的自查出口。
+
+**`NO_WORLD` 只在标题界面成立**：人已经站在世界里、只是引擎关着时，必须显示
+`OFF`。早先关闭分支只在 `running / RUNNING / HALTED` 时收尾，`NO_WORLD` 会永久残留，
+表现是「人在世界里，HUD 说还没进入世界」，按一次 F6 才纠正（DEF-01）。
+判据收在 `Status.staleWhenEngineOff()` 里，只认 `NO_WORLD` 与 `OFF_WORLD_EXIT`——
+`LOAD_FAILED` / `RUNTIME_ERROR` 必须保留，改成「已关闭」等于抹掉唯一的诊断信息。
 
 **故障状态不被覆盖**：`stop(status, detail)` 内部拆成 `teardown()` + `setStatus()`，
 `teardown()` 只收尾（会话、按键表、聊天队列、AI 请求），不改状态。否则「载入失败」
@@ -823,6 +852,12 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 
 状态行之下是脚本的「说 / 思考」气泡；寻路进行时再追加两行（目标 / 距离 / 节点进度 /
 规划耗时），受 `showPathHud` 控制。
+
+气泡同时显示几条由 `hudMaxBubbles` 决定（默认 3，范围 1～6）。选取与过期都收在
+`SpeechBubbleBook` 里：到期时把 `usageId` 记进 `retired`，否则 VM 会一直上报同一句，
+下一帧又被当成新气泡重新登记，形成「删掉即复活」（DEF-06）。被上限挤掉的不静默丢弃，
+末尾补一行「…还有 N 条」——同一 tick 内多个角色说话时，最早登记的那个必然被挤出
+（时间戳相同，稳定排序按登记顺序），没有这行提示，玩家会以为它没开口。
 
 **位置用两个百分比，不用四角枚举**：`hudOffsetX/Y`（0–100）映射到「可放置区间」而不是
 裸屏幕坐标——`x = MARGIN + (W - boxW - 2·MARGIN) · pct/100`，于是任意百分比都落在屏幕内，
