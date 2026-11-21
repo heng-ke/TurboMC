@@ -108,6 +108,14 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.hud_max_bubbles"),
+						config.hudBubbleLimit(), 1, 6)
+				.setDefaultValue(3)
+				.setTooltip(Text.translatable("config.turbomc.hud_max_bubbles.tooltip"))
+				.setSaveConsumer(value -> config.hudMaxBubbles = value)
+				.build());
+
+		script.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.chat_interval"),
 						config.chatIntervalTicks == null ? 3 : config.chatIntervalTicks, 1, 20)
 				.setDefaultValue(3)
@@ -273,12 +281,14 @@ public final class TurboMCConfigScreen {
 
 		ai.addEntry(entries
 				.startStrField(Text.translatable("config.turbomc.ai.max_tokens"),
-						String.valueOf(section.maxTokens == null ? 300 : section.maxTokens))
-				.setDefaultValue("300")
+						String.valueOf(section.maxTokens == null
+								? TurboMCConfig.DEFAULT_MAX_TOKENS : section.maxTokens))
+				.setDefaultValue(String.valueOf(TurboMCConfig.DEFAULT_MAX_TOKENS))
 				.setTooltip(Text.translatable("config.turbomc.ai.max_tokens.tooltip"))
 				.setSaveConsumer(value -> {
 					try {
-						section.maxTokens = Integer.parseInt(value.trim());
+						// 保存时就钳到有效范围：否则界面会留住一个运行时永不生效的数字（DEF-05）
+						section.maxTokens = TurboMCConfig.clampMaxTokens(Integer.parseInt(value.trim()));
 					} catch (RuntimeException ignored) {
 						// 同上：非法输入不覆盖
 					}

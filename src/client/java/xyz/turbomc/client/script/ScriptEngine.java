@@ -19,6 +19,7 @@ import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
+import xyz.turbomc.client.script.sb3.ProjectSanity;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 import xyz.turbomc.client.script.render.FrameOverlay;
 import xyz.turbomc.client.script.store.PackStore;
@@ -110,6 +111,12 @@ public final class ScriptEngine {
 			halted = false;
 			if (running || status == Status.RUNNING || status == Status.HALTED) {
 				stop(Status.OFF, null);
+			} else if (status.staleWhenEngineOff()) {
+				// 人已经站在世界里，这两个状态都是过期的现场：NO_WORLD 是标题界面留下的
+				// （或引擎关闭时 restart() 写的），OFF_WORLD_EXIT 是上一局退出时留下的。
+				// 留着不动就是「人在世界里，HUD 说还没进入世界」，要按一次 F6 才纠正（DEF-01）。
+				// 故障态（LOAD_FAILED / RUNTIME_ERROR）不在此列，它们要保留给玩家看。
+				setStatus(Status.OFF, null);
 			}
 			return;
 		}
@@ -224,6 +231,16 @@ public final class ScriptEngine {
 		}
 
 		try {
+			// 先做一次结构校验：VM 在 Rhino 里遇到「造型为空」这类缺陷时，
+			// 抛的是 Non-ascii character in FixedAsciiString，跟真实原因完全无关（DEF-03）
+			ProjectSanity.Problem problem = ProjectSanity.check(json);
+			if (problem != null) {
+				healthy = false;
+				setStatus(Status.LOAD_FAILED, Text.translatable(problem.key(), problem.args()));
+				LOG.error("[script] 工程 {} 未通过载入前校验：{} {}",
+						pack.fileName, problem.key(), java.util.Arrays.toString(problem.args()));
+				return;
+			}
 			RhinoVm vm = RhinoVm.get();
 			long perf = PerfProbe.begin();
 			if (!vm.isReady()) {
@@ -495,7 +512,18 @@ public final class ScriptEngine {
 		/** 工程读取 / 启动失败。 */
 		LOAD_FAILED,
 		/** 运行期异常，VM 已停止。 */
-		RUNTIME_ERROR
+		RUNTIME_ERROR;
+
+		/**
+		 * 引擎关闭时，该状态是否属于「过期现场」。
+		 *
+		 * <p>只认这两个：{@link #NO_WORLD} 是标题界面（或引擎关闭时 {@code restart()}）写的，
+		 * {@link #OFF_WORLD_EXIT} 是上一局退出时写的。人已经在世界里时它们都是假话。
+		 * 故障态必须排除在外——把 {@code LOAD_FAILED} 改成「已关闭」等于抹掉唯一的诊断信息。</p>
+		 */
+		public boolean staleWhenEngineOff() {
+			return this == NO_WORLD || this == OFF_WORLD_EXIT;
+		}
 	}
 
 	public Status status() {
@@ -579,6 +607,30 @@ public final class ScriptEngine {
 		GameActions.clearChatQueue();
 		// 旧工程画的框不该留到新工程里：坐标可能来自另一套脚本、甚至另一个维度
 		FrameOverlay.clear();
+	}
+
+	/**
+	 * 「停止全部」后按 F6：直接重开一次，不经过「先关再开」。
+	 *
+	 * <p>HALTED 时开关本来就是 true（否则 tick 早就走到关闭分支了），所以按键那侧
+	 * 再反转一次只会先把引擎关掉，玩家要按两下才回来，而 HUD 明明写着「按 F6 重新开启」
+	 * （DEF-02）。这里把这一下直接消费成重启。</p>
+	 *
+	 * @return {@code true} 表示确实处于「停止全部」并已重启，调用方不要再反转开关
+	 */
+	public boolean resumeFromHalt() {
+		if (!halted) {
+			return false;
+		}
+		TurboMCConfig config = TurboMCConfig.get();
+		if (!config.scriptEngineEnabled) {
+			// halted 只可能在开关为真时产生；这里兜一手，避免留下「开了却不跑」的组合
+			config.scriptEngineEnabled = true;
+			TurboMCConfig.save();
+		}
+		restart();
+		LOG.info("[script] 从「停止全部」直接重开");
+		return true;
 	}
 
 	public boolean isRunning() {

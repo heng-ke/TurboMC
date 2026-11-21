@@ -315,15 +315,28 @@ public final class RhinoVm {
 	}
 
 	/**
+	 * 载入期（{@code loadProject} / {@code greenFlag}）的时间上限。
+	 *
+	 * <p>单帧预算只有几毫秒，而载入一次工程要几百毫秒，两者不能共用同一个数。
+	 * 这段时间此前<b>完全没有上限</b>：坏工程的 {@code next} 链成环时，VM 在
+	 * {@code installTargets} / {@code greenFlag} 里无限循环，堆一路涨到 7.9 GB、
+	 * 窗口无响应，只能强杀进程（DEF-04，实测 {@code -Xmx512m} 下 20 秒 OOM）。
+	 * 这里给一个宽松但确定的兜底：宁可让这份工程载入失败，也不能把客户端拖死。</p>
+	 */
+	private static final long LOAD_DEADLINE_MS = 10_000L;
+
+	/**
 	 * 载入工程（project.json 字符串）。JS 侧的 Promise 由同步泵推进，因此这里是阻塞的。
 	 */
 	public void loadProject(String projectJson) {
 		requireReady();
 		Context cx = factory.enterContext();
+		armLoadDeadline();
 		try {
 			Object promise = call(cx, "__tmcLoadProject", new Object[]{projectJson});
 			call(cx, "__waitPromise", new Object[]{promise, PROMISE_ROUNDS});
 		} finally {
+			factory.disarmDeadline();
 			Context.exit();
 		}
 	}
@@ -331,11 +344,18 @@ public final class RhinoVm {
 	public void greenFlag() {
 		requireReady();
 		Context cx = factory.enterContext();
+		armLoadDeadline();
 		try {
 			call(cx, "__tmcGreenFlag", new Object[0]);
 		} finally {
+			factory.disarmDeadline();
 			Context.exit();
 		}
+	}
+
+	/** 载入期上锁：进入 VM 之前武装期限，离开时由调用方解除。 */
+	private void armLoadDeadline() {
+		factory.armDeadline(System.nanoTime() + LOAD_DEADLINE_MS * 1_000_000L);
 	}
 
 	/**
@@ -637,7 +657,8 @@ public final class RhinoVm {
 			long limit = deadline;
 			if (limit != 0L && System.nanoTime() > limit) {
 				deadline = 0L;
-				throw new EvaluatorException("脚本执行超出单帧时间预算，已中断");
+				// 文案不写「单帧」：这条中断同时用于逐帧执行与载入期（两者上限不同）
+				throw new EvaluatorException("脚本执行超出时间上限，已中断");
 			}
 		}
 	}

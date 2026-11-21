@@ -181,6 +181,15 @@ public class TurboMCClient implements ClientModInitializer {
 
 	private void onClientTick(MinecraftClient client) {
 		while (toggleScriptKey.wasPressed()) {
+			// 「停止全部」后 HUD 写的是「按 F6 重新开启」，那这一下就必须直接重开：
+			// 此时开关本来就是 true，走下面的反转只会先把引擎关掉，玩家要按两次（DEF-02）
+			if (ScriptEngine.get().resumeFromHalt()) {
+				if (client.player != null) {
+					client.player.sendMessage(
+							Text.translatable("message.turbomc.script_on"), true);
+				}
+				continue;
+			}
 			boolean enabled = !TurboMCConfig.get().scriptEngineEnabled;
 			TurboMCConfig.get().scriptEngineEnabled = enabled;
 			TurboMCConfig.save();

@@ -20,8 +20,6 @@ import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.vm.RhinoVm;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -37,24 +35,19 @@ import java.util.Map;
 public final class ScriptHudElement implements HudElement {
 	/** 一句气泡停留时长。 */
 	private static final long HOLD_MS = 5000L;
-	/** 同时最多显示几句。 */
-	private static final int MAX_BUBBLES = 3;
 	/** 单行最大像素宽度，超出按宽度截断。 */
 	private static final int MAX_WIDTH = 200;
 	private static final int LINE_HEIGHT = 10;
 	private static final int PADDING = 3;
 	private static final int MARGIN = 4;
 
-	/** 角色名 → 当前气泡。scratch-vm 里气泡是按 target 存的，同一角色只会有一条。 */
-	private final Map<String, Bubble> bubbles = new LinkedHashMap<>();
+	/** 气泡簿记：到期删除并记住 usageId，避免「删掉即复活」（DEF-06）。 */
+	private final SpeechBubbleBook bubbles = new SpeechBubbleBook(HOLD_MS);
 
 	/** 寻路两行的缓存：内容没变就不重建 Text，避免每帧几十个临时对象。 */
 	private String pathCacheKey;
 	private Text pathLine1;
 	private Text pathLine2;
-
-	private record Bubble(String name, String text, boolean think, String usageId, long updatedAt) {
-	}
 
 	@Override
 	public void render(DrawContext context, RenderTickCounter tickCounter) {
@@ -131,17 +124,17 @@ public final class ScriptHudElement implements HudElement {
 		addMonitorRows(rows, textRenderer);
 		addAiRows(rows, textRenderer);
 
-		// 按时间正序：旧消息在上，新消息贴着状态行往下排
-		List<Bubble> visible = bubbles.values().stream()
-				.sorted(Comparator.comparingLong(Bubble::updatedAt))
-				.toList();
-		List<Bubble> tail = visible.size() <= MAX_BUBBLES
-				? visible
-				: visible.subList(visible.size() - MAX_BUBBLES, visible.size());
-		for (Bubble bubble : tail) {
+		// 按时间正序：旧消息在上，新消息贴着状态行往下排。
+		// 条数上限走配置（默认 3）：气泡是叠在画面上的，必须封顶；
+		// 被挤掉的不静默丢弃，补一行「…还有 N 条」，否则会以为某个角色没说话。
+		SpeechBubbleBook.View bubbleView = bubbles.view(config.hudBubbleLimit());
+		for (SpeechBubbleBook.Bubble bubble : bubbleView.shown()) {
 			String line = bubble.name() + "：" + bubble.text();
 			String clipped = textRenderer.trimToWidth(line, MAX_WIDTH);
 			rows.add(new Row(Text.literal(clipped), bubble.think() ? 0xFFB0B0B0 : 0xFFFFFFFF));
+		}
+		if (bubbleView.hidden() > 0) {
+			rows.add(new Row(Text.translatable("hud.turbomc.bubbles_more", bubbleView.hidden()), 0xFF9E9E9E));
 		}
 		return rows;
 	}
@@ -153,7 +146,8 @@ public final class ScriptHudElement implements HudElement {
 	 * 脚本「显示变量」只是登记名字，值在这里现读 VM。Minecraft 的 tick 与渲染同在
 	 * 主线程，和 {@link #pollSpeech} 取气泡是同一条路，不存在并发读写。</p>
 	 */
-	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
+	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {
+		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
 		if (monitors.isEmpty()) {
 			return;
 		}
@@ -161,9 +155,11 @@ public final class ScriptHudElement implements HudElement {
 		int limit = Math.max(1, TurboMCConfig.get().monitorListItems);
 		for (Map.Entry<String, MonitorStore.Kind> entry : monitors.entrySet()) {
 			String name = entry.getKey();
-			String text = entry.getValue() == MonitorStore.Kind.LIST
-					? name + " = [" + listPreview(vm, name, limit) + "]"
-					: name + " = " + stringify(vm.getVariable(name));
+			if (entry.getValue() == MonitorStore.Kind.LIST) {
+				rows.add(new Row(listRow(textRenderer, name, vm, limit), 0xFFFFD54F));
+				continue;
+			}
+			String text = name + " = " + stringify(vm.getVariable(name));
 			rows.add(new Row(Text.literal(textRenderer.trimToWidth(text, MAX_WIDTH)), 0xFFFFD54F));
 		}
 	}
@@ -253,12 +249,33 @@ public final class ScriptHudElement implements HudElement {
 		return text.substring(0, text.offsetByCodePoints(0, limit)) + "…";
 	}
 
-	/** 列表前 N 项，超出部分只报总数——整表刷在 HUD 上会挡住半个屏幕。 */
-	private String listPreview(RhinoVm vm, String name, int limit) {
+	/**
+	 * 列表监视器一行：总数必须留在屏上。
+	 *
+	 * <p>先前把「…(共 N 项)」接在项目后面，再由 {@code trimToWidth} 整体裁剪——被裁掉的
+	 * 永远是结尾，也就是总数那一截，玩家只看得到前几项、不知道列表到底多长（DEF-07）。
+	 * 这里反过来：先给头（名字）与尾（总数）留出宽度，中间的项目用剩余宽度截断。</p>
+	 */
+	private Text listRow(TextRenderer textRenderer, String name, RhinoVm vm, int limit) {
+		ListSnapshot snapshot = snapshotList(vm, name, limit);
+		String head = name + " = [";
+		String suffix = snapshot.truncated() ? " …(共 " + snapshot.total() + " 项)]" : "]";
+		int room = MAX_WIDTH - textRenderer.getWidth(head) - textRenderer.getWidth(suffix);
+		String items = room > 0 ? textRenderer.trimToWidth(snapshot.items(), room) : "";
+		// 兜底：名字本身超长时（head + suffix 已经放不下），仍以不越界为先
+		return Text.literal(textRenderer.trimToWidth(head + items + suffix, MAX_WIDTH));
+	}
+
+	/** 列表快照：前 N 项的文本、总项数、是否被截断。 */
+	private record ListSnapshot(String items, int total, boolean truncated) {
+	}
+
+	/** 列表前 N 项，整表刷在 HUD 上会挡住半个屏幕。 */
+	private ListSnapshot snapshotList(RhinoVm vm, String name, int limit) {
 		try {
 			JsonElement parsed = JsonParser.parseString(vm.getList(name));
 			if (!parsed.isJsonArray()) {
-				return "";
+				return new ListSnapshot("", 0, false);
 			}
 			JsonArray array = parsed.getAsJsonArray();
 			int shown = Math.min(limit, array.size());
@@ -270,12 +287,9 @@ public final class ScriptHudElement implements HudElement {
 				JsonElement item = array.get(i);
 				builder.append(item.isJsonNull() ? "" : item.getAsString());
 			}
-			if (array.size() > shown) {
-				builder.append(" …(共 ").append(array.size()).append(" 项)");
-			}
-			return builder.toString();
+			return new ListSnapshot(builder.toString(), array.size(), array.size() > shown);
 		} catch (RuntimeException e) {
-			return "";
+			return new ListSnapshot("", 0, false);
 		}
 	}
 
@@ -391,18 +405,10 @@ public final class ScriptHudElement implements HudElement {
 					continue;
 				}
 				JsonObject item = element.getAsJsonObject();
-				String name = string(item, "name");
-				String text = string(item, "text");
-				String id = string(item, "id");
-				if (name.isEmpty() || text.isEmpty()) {
-					continue;
-				}
-				Bubble existing = bubbles.get(name);
-				// usageId 每次说话都会变，比比对文本可靠：同一句话连说两次也能识别
-				if (existing == null || !existing.usageId().equals(id)) {
-					boolean think = item.has("think") && item.get("think").getAsBoolean();
-					bubbles.put(name, new Bubble(name, text, think, id, now));
-				}
+				boolean think = item.has("think") && item.get("think").getAsBoolean();
+				// usageId 每次说话都会变，比比对文本可靠：同一句话连说两次也能识别。
+				// 是否该显示、是否已经播完，交给簿记判断（DEF-06 的复活就在那里拦住）
+				bubbles.poll(string(item, "name"), string(item, "text"), think, string(item, "id"), now);
 			}
 		} catch (RuntimeException e) {
 			// 解析失败不该影响渲染，最坏情况只是这一帧没有新气泡
@@ -410,7 +416,7 @@ public final class ScriptHudElement implements HudElement {
 	}
 
 	private void expire(long now) {
-		bubbles.values().removeIf(bubble -> now - bubble.updatedAt() > HOLD_MS);
+		bubbles.expire(now);
 	}
 
 	private static String string(JsonObject object, String key) {

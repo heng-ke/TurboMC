@@ -514,6 +514,11 @@ public final class JsonActions {
 			case "median": {
 				double[] sorted = values.clone();
 				java.util.Arrays.sort(sorted);
+				if (sorted.length == 0) {
+					// 空数组没有中位数。与 average（0/0）保持一致返回 NaN，
+					// 而不是走进偶数分支去取 sorted[-1] 抛 AIOOBE（DEF-08）
+					return Double.NaN;
+				}
 				int middle = sorted.length / 2;
 				if (sorted.length % 2 == 0) {
 					return (sorted[middle - 1] + sorted[middle]) / 2;

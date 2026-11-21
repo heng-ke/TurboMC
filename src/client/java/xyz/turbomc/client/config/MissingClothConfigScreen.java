@@ -26,11 +26,13 @@ public class MissingClothConfigScreen extends Screen {
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
 		super.render(context, mouseX, mouseY, deltaTicks);
+		// 颜色按 ARGB 解释，alpha 必须显式给出：写成 0xFFFFFF 时 alpha=0，
+		// 文字全透明，玩家只能看到一个「完成」按钮（DEF-09）
 		context.drawCenteredTextWithShadow(this.textRenderer, this.title,
-				this.width / 2, this.height / 2 - 40, 0xFFFFFF);
+				this.width / 2, this.height / 2 - 40, 0xFFFFFFFF);
 		context.drawCenteredTextWithShadow(this.textRenderer,
 				Text.translatable("config.turbomc.missing_cloth_config.body"),
-				this.width / 2, this.height / 2 - 16, 0xA0A0A0);
+				this.width / 2, this.height / 2 - 16, 0xFFA0A0A0);
 	}
 
 	@Override

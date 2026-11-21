@@ -95,6 +95,26 @@ public final class TurboMCConfig {
 	public int monitorListItems = 5;
 
 	/**
+	 * HUD 上同时显示几句「说 / 思考」气泡（1～6）。空值按 3 处理。
+	 *
+	 * <p>气泡是叠在画面上的，条数越多挡得越多。超出这个数的气泡不逐个画，
+	 * 但也不会静默消失——HUD 会补一行「…还有 N 条」（见 {@code ScriptHudElement}），
+	 * 否则四五个角色同时说话时，玩家会以为某个角色根本没说话。</p>
+	 */
+	public Integer hudMaxBubbles = 3;
+
+	/**
+	 * 气泡显示条数的有效值。
+	 *
+	 * <p>名字不带 {@code max} 前缀是为了和字段 {@link #hudMaxBubbles} 区分开：
+	 * 这里返回的是钳制后的值，直接给渲染用。</p>
+	 */
+	public int hudBubbleLimit() {
+		Integer value = hudMaxBubbles;
+		return value == null ? 3 : Math.max(1, Math.min(6, value));
+	}
+
+	/**
 	 * 连续发送聊天的间隔（tick，20 tick = 1 秒）。
 	 *
 	 * <p>超长回复会被切成多段逐条发出，段与段之间就是这个间隔。默认 3 tick ≈ 150 ms
@@ -264,6 +284,21 @@ public final class TurboMCConfig {
 		return result;
 	}
 
+	/** maxTokens 的默认值与有效范围。输入框与运行时共用这一份，避免「显示 99999、实际 8192」（DEF-05）。 */
+	public static final int DEFAULT_MAX_TOKENS = 300;
+	public static final int MIN_MAX_TOKENS = 1;
+	public static final int MAX_MAX_TOKENS = 8192;
+
+	/**
+	 * 把 maxTokens 钳到有效范围。
+	 *
+	 * <p>输入框保存与运行时归一化都必须走这里：只在运行时钳制，界面上就会留下一个
+	 * 永远不会生效的数字，玩家无从知道真实上限（DEF-05）。</p>
+	 */
+	public static int clampMaxTokens(int value) {
+		return Math.max(MIN_MAX_TOKENS, Math.min(MAX_MAX_TOKENS, value));
+	}
+
 	/**
 	 * 归一化后的大模型配置。
 	 *
@@ -276,7 +311,7 @@ public final class TurboMCConfig {
 				trim(section.apiKey),
 				trim(section.model),
 				section.temperature == null ? 0.7 : Math.max(0.0, Math.min(2.0, section.temperature)),
-				section.maxTokens == null ? 300 : Math.max(1, Math.min(8192, section.maxTokens)),
+				section.maxTokens == null ? DEFAULT_MAX_TOKENS : clampMaxTokens(section.maxTokens),
 				section.timeoutMs == null ? 30000 : Math.max(1000, Math.min(300000, section.timeoutMs)),
 				section.historyTurns == null ? 8 : Math.max(0, Math.min(50, section.historyTurns)),
 				section.maxConcurrent == null ? 2 : Math.max(1, Math.min(16, section.maxConcurrent)));

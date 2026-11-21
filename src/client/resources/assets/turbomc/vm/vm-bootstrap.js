@@ -510,8 +510,13 @@ function __tmcRegisterExtension() {
 	manager._registerExtensionInfo(serviceName, __tmcInfo);
 }
 
+/** 占位扩展的 info：没有任何积木，只用来让 {@code isExtensionLoaded} 为真。 */
+function __tmcStubInfo(id) {
+	return {id: id, name: id, blocks: []};
+}
+
 /**
- * 给「工程声明了、但宿主没实现」的扩展登记一个占位实例。
+ * 给「宿主没实现」的扩展登记一个占位实例。
  *
  * <p>不加这一步，scratch-vm 的 {@code installTargets} 会认为该扩展没加载，
  * 转而用 {@code new Worker("./extension-worker.js")} 去拉 {@code extensionURLs} 里的地址。
@@ -520,32 +525,67 @@ function __tmcRegisterExtension() {
  *
  * <p>占位实例只做一件事：让 {@code isExtensionLoaded} 为真，从而跳过 Worker 路径。
  * 该扩展的积木没有原始实现，走到时返回空值，其余积木照常运行。</p>
+ *
+ * @returns {boolean} 本次是否真的登记了（已加载过的返回 false）
  */
-function __tmcStubInfo(id) {
-	return {id: id, name: id, blocks: []};
+function __tmcStubExtension(id) {
+	var manager = __tmcVm.extensionManager;
+	if (!id || manager.isExtensionLoaded(id)) {
+		return false;
+	}
+	var info = __tmcStubInfo(id);
+	var serviceName = manager._registerInternalExtension({
+		getInfo: function () {
+			return info;
+		}
+	});
+	manager._loadedExtensions.set(id, serviceName);
+	manager._registerExtensionInfo(serviceName, info);
+	print('[vm] 未支持的扩展「' + id + '」已按占位登记：其积木返回空值，其余脚本照常运行');
+	return true;
 }
 
+/** 工程 {@code extensions} 里声明、但宿主没实现的扩展。 */
 function __tmcRegisterUnknownExtensions(json) {
 	var ids = json && json.extensions;
 	if (!ids || !ids.length) {
 		return;
 	}
-	var manager = __tmcVm.extensionManager;
 	for (var i = 0; i < ids.length; i++) {
-		var id = ids[i];
-		if (!id || manager.isExtensionLoaded(id)) {
-			continue;
-		}
-		var info = __tmcStubInfo(id);
-		var serviceName = manager._registerInternalExtension({
-			getInfo: function () {
-				return info;
-			}
-		});
-		manager._loadedExtensions.set(id, serviceName);
-		manager._registerExtensionInfo(serviceName, info);
-		print('[vm] 未支持的扩展「' + id + '」已按占位登记：其积木返回空值，其余脚本照常运行');
+		__tmcStubExtension(ids[i]);
 	}
+}
+
+/**
+ * 兜住「只出现在积木 opcode 里、没有写进 {@code extensions} 数组」的未知前缀。
+ *
+ * <p><b>为什么单靠 {@code __tmcRegisterUnknownExtensions} 不够</b>：scratch-vm 的
+ * {@code installTargets} 不读 {@code extensions} 数组，它是逐个积木调
+ * {@code getExtensionIdForOpcode(opcode)} 反推扩展 id，再对未加载的 id 调
+ * {@code loadExtensionURL()}。所以 {@code logic_boolean} 这种「前缀不在核心表里、
+ * 清单里又没声明」的积木，会直接落到 Worker 分支把整个工程带崩——报错还是
+ * {@code Worker is not defined}，与真实原因毫无关系。</p>
+ *
+ * <p><b>为什么拦 {@code loadExtensionURL} 而不是扫 opcode</b>：能走到这里的 id，
+ * 已经由 VM 自己判定为「非核心前缀且未加载」，不需要在这里维护一份核心前缀白名单
+ * （白名单一旦漏项就会误判 {@code operator}/{@code control}，后果更严重）；
+ * 顺带也覆盖了 sb3 的数组简写形态与运行期一切加载路径。</p>
+ *
+ * <p><b>代价</b>：未知扩展的积木执行时返回空值（与 KN-05 既有语义一致），
+ * 并在日志里点名是哪个扩展。宿主不联网加载扩展，因此永久接管该入口是安全的；
+ * 原实现保留在 {@code __tmcOriginalLoadExtensionURL} 便于排查。</p>
+ */
+function __tmcGuardUnknownExtensionLoads() {
+	var manager = __tmcVm.extensionManager;
+	if (!manager || manager.__tmcLoadGuard) {
+		return;
+	}
+	manager.__tmcLoadGuard = true;
+	manager.__tmcOriginalLoadExtensionURL = manager.loadExtensionURL;
+	manager.loadExtensionURL = function (id) {
+		__tmcStubExtension(id);
+		return Promise.resolve();
+	};
 }
 
 function __tmcLoadProject(json) {
@@ -561,6 +601,8 @@ function __tmcLoadProject(json) {
 		}
 	}
 	__tmcRegisterUnknownExtensions(project);
+	// 必须早于 loadProject：installTargets 在 loadProject 内部同步推导扩展 id
+	__tmcGuardUnknownExtensionLoads();
 	return __tmcVm.loadProject(json);
 }
 
