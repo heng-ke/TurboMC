@@ -70,6 +70,16 @@ public final class RemoteBridge {
 	 */
 	private volatile String cachedWorld = "";
 	private volatile String cachedInstance = "";
+	/**
+	 * 生效中的 Origin 白名单，由主线程每 tick 从配置刷新。
+	 *
+	 * <p>握手在 WebSocket I/O 线程上，不能去遍历配置里的那个 {@code ArrayList}（界面随时会改它）。
+	 * 每 tick 拷一份不可变快照放在这里：改配置最迟下一 tick 生效，不需要重开监听。
+	 * 从列表里去掉的来源会被 {@link #revokeRemovedOrigin()} 断开当前连接。</p>
+	 */
+	private volatile List<String> allowedOrigins = List.of();
+	/** 当前控制者的 Origin，用于「来源被移除后断开它」。{@code null} 表示握手没带。 */
+	private volatile String controllerOrigin;
 	private final SnapshotPublisher snapshotPublisher = new SnapshotPublisher();
 	private final RemoteExecutor executor = new RemoteExecutor();
 
@@ -113,10 +123,11 @@ public final class RemoteBridge {
 		}
 		TurboMCConfig config = TurboMCConfig.get();
 		int wanted = config.remotePort();
-		List<String> origins = config.remoteAllowedOrigins();
+		// 先把白名单拍一份快照：监听可能在下一 tick 之前就收到连接，那时 tick 还没来得及刷新
+		allowedOrigins = config.remoteAllowedOrigins();
 
 		if (wanted > 0) {
-			if (bind(wanted, origins)) {
+			if (bind(wanted)) {
 				return started(wanted, "固定端口");
 			}
 			return failed("端口 " + wanted + " 被占用或无法绑定");
@@ -124,7 +135,7 @@ public final class RemoteBridge {
 
 		for (int i = 0; i < RemoteProtocol.MAX_PORT_TRIES; i++) {
 			int candidate = RemoteProtocol.BASE_PORT + i;
-			if (bind(candidate, origins)) {
+			if (bind(candidate)) {
 				return started(candidate, "自动分配");
 			}
 		}
@@ -157,6 +168,7 @@ public final class RemoteBridge {
 		server = null;
 		port = 0;
 		controller = null;
+		controllerOrigin = null;
 		// 关掉再开（或改了端口）应当立刻重试，不继承上一次失败的冷却
 		retryAfter = 0L;
 		lastError = "";
@@ -178,10 +190,10 @@ public final class RemoteBridge {
 	 * 所以这里用 latch 等一小会儿，否则「端口被占」会被当成启动成功，
 	 * 后续所有连接都石沉大海。</p>
 	 */
-	private boolean bind(int candidate, List<String> origins) {
+	private boolean bind(int candidate) {
 		CountDownLatch latch = new CountDownLatch(1);
 		AtomicBoolean ok = new AtomicBoolean(false);
-		Server instance = new Server(new InetSocketAddress("127.0.0.1", candidate), origins, latch, ok);
+		Server instance = new Server(new InetSocketAddress("127.0.0.1", candidate), latch, ok);
 		try {
 			instance.start();
 			if (!latch.await(2, TimeUnit.SECONDS) || !ok.get()) {
@@ -217,6 +229,9 @@ public final class RemoteBridge {
 				? ""
 				: client.world.getRegistryKey().getValue().toString();
 		cachedInstance = instanceName();
+		// 白名单同理：模组菜单里改完，下一次握手就用新的一份，不必重开监听
+		allowedOrigins = TurboMCConfig.get().remoteAllowedOrigins();
+		revokeRemovedOrigin();
 
 		WebSocket socket = controller;
 		if (socket == null || !socket.isOpen()) {
@@ -231,6 +246,34 @@ public final class RemoteBridge {
 		} catch (RuntimeException e) {
 			// 快照异常不得影响游戏：记一次日志，下一 tick 继续
 			LOG.warn("[remote] 快照推送失败: {}", e.toString());
+		}
+	}
+
+	/**
+	 * 白名单里删掉某个来源后，把已经建立的连接一并断开。
+	 *
+	 * <p>只撤销、不补授权：新增来源不需要动既有连接（它已经过握手了），但删掉的意思是
+	 * 「不再信任」——还留着一条活连接，等于白名单形同虚设。</p>
+	 *
+	 * <p>不要在这里把 {@code controller} 置空：{@code onClose} 靠「controller == conn」
+	 * 判断该不该让内 VM 撤销让位（{@code endRemoteSession}），提前置空会让引擎永远停在
+	 * REMOTE。{@code close()} 之后 {@code isOpen()} 即为假，所以不会每 tick 重复触发。</p>
+	 */
+	private void revokeRemovedOrigin() {
+		WebSocket socket = controller;
+		if (socket == null || !socket.isOpen()) {
+			return;
+		}
+		if (RemoteProtocol.originAllowed(controllerOrigin, allowedOrigins)) {
+			return;
+		}
+		String shown = controllerOrigin == null || controllerOrigin.isEmpty() ? "null" : controllerOrigin;
+		LOG.warn("[remote] 来源 {} 已不在白名单，断开当前连接", shown);
+		try {
+			socket.send("{\"t\":\"" + RemoteProtocol.T_EVICTED + "\"}");
+			socket.close(1008, "origin revoked");
+		} catch (RuntimeException e) {
+			LOG.warn("[remote] 断开已撤销的来源时出错: {}", e.toString());
 		}
 	}
 
@@ -266,6 +309,7 @@ public final class RemoteBridge {
 	public void endSession() {
 		WebSocket socket = controller;
 		controller = null;
+		controllerOrigin = null;
 		// 会话没了，内 VM 的让位也要撤：否则引擎永远停在 REMOTE，玩家按 F6 也没反应
 		onMainThread(() -> ScriptEngine.get().endRemoteSession());
 		if (socket == null) {
@@ -482,14 +526,11 @@ public final class RemoteBridge {
 
 	/** 单连接的服务端；每次换端口都会新建一个实例。 */
 	private final class Server extends WebSocketServer {
-		private final List<String> origins;
 		private final CountDownLatch startLatch;
 		private final AtomicBoolean startOk;
 
-		private Server(InetSocketAddress address, List<String> origins,
-					   CountDownLatch startLatch, AtomicBoolean startOk) {
+		private Server(InetSocketAddress address, CountDownLatch startLatch, AtomicBoolean startOk) {
 			super(address);
-			this.origins = origins;
 			this.startLatch = startLatch;
 			this.startOk = startOk;
 			// 浏览器无法主动发 WS ping 帧，由服务端探活；3 秒收不到 pong 即断开
@@ -513,7 +554,8 @@ public final class RemoteBridge {
 		public ServerHandshakeBuilder onWebsocketHandshakeReceivedAsServer(
 				WebSocket conn, Draft draft, ClientHandshake request) throws InvalidDataException {
 			String origin = request.getFieldValue("origin");
-			if (!RemoteProtocol.originAllowed(origin, origins)) {
+			// 读主线程维护的快照而不是配置本体：模组菜单里改完，这里下一次握手就用新的
+			if (!RemoteProtocol.originAllowed(origin, allowedOrigins)) {
 				lastRejectedOrigin = origin == null ? "null" : origin;
 				LOG.warn("[remote] 拒绝握手：Origin 不在白名单（{}）", lastRejectedOrigin);
 				throw new InvalidDataException(1008, "origin not allowed");
@@ -525,6 +567,8 @@ public final class RemoteBridge {
 		public void onOpen(WebSocket conn, ClientHandshake handshake) {
 			WebSocket previous = controller;
 			controller = conn;
+			// 记下来源：白名单里删掉它之后，要把这条已经建立的连接一并断开
+			controllerOrigin = handshake == null ? null : handshake.getFieldValue("origin");
 			if (previous != null && previous != conn && previous.isOpen()) {
 				// 单控制者：旧连接先收手再断开，避免两个标签页来回抢占
 				try {
@@ -542,6 +586,7 @@ public final class RemoteBridge {
 		public void onClose(WebSocket conn, int code, String reason, boolean remote) {
 			if (controller == conn) {
 				controller = null;
+				controllerOrigin = null;
 				// 断线同样要让位撤销：否则 HUD 一直写「远程调试中」，而浏览器已经走了
 				onMainThread(() -> ScriptEngine.get().endRemoteSession());
 			}

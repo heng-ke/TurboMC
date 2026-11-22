@@ -124,7 +124,7 @@
   "config.turbomc.dev_remote": "Remote dev bridge (development)",
   "config.turbomc.dev_remote.tooltip": "Listens on 127.0.0.1 so a TurboWarp extension can drive scripts directly. Port and instance name live under the dev section of config/turbomc.json; keep it off unless developing",
   "config.turbomc.dev_origins": "Allowed origins",
-  "config.turbomc.dev_origins.tooltip": "Only pages whose Origin matches this list may connect to the bridge. The list is pre-filled with the built-in defaults (TurboWarp site, desktop app, localhost) — edit it in place: https://your.domain for a self-hosted TurboWarp, http://localhost:PORT for a local server, http://localhost:* when the port varies. Clearing every row and saving restores the defaults. Toggle the bridge off and on again for changes to apply",
+  "config.turbomc.dev_origins.tooltip": "Only pages whose Origin matches this list may connect to the bridge. The list is pre-filled with the built-in defaults (TurboWarp site, desktop app, localhost) — edit it in place: https://your.domain for a self-hosted TurboWarp, http://localhost:PORT for a local server, http://localhost:* when the port varies. Changes apply to the next connection; removing an origin also drops the connection it is using right now. Clearing every row and saving restores the defaults",
   "config.turbomc.dev_origins.invalid": "Expected scheme://host[:port], or null for local files",
   "status.turbomc.load_failed": "Failed to load project",
   "status.turbomc.runtime_error": "Runtime error, stopped",
