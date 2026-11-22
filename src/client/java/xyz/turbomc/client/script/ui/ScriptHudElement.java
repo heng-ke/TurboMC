@@ -54,6 +54,22 @@ public final class ScriptHudElement implements HudElement {
 	private Text pathLine1;
 	private Text pathLine2;
 
+	/** 气泡 JSON 的解析缓存：字符串没变就不重复解析（每帧都要取一次）。 */
+	private String cachedSpeechJson;
+	private JsonArray cachedSpeech;
+
+	/** 列表监视器的解析缓存：名字 → 上一次的原始 JSON 与解析结果。 */
+	private final Map<String, ListCache> listCache = new java.util.HashMap<>();
+
+	/** 列表缓存项；{@code limit} 也纳入比较，因为 HUD 的显示条数可热改。 */
+	private record ListCache(String json, int limit, ListSnapshot snapshot) {
+	}
+
+	/** AI 快照的采样缓存：HUD 状态行不需要每帧新建一份（含每会话加锁与排序）。 */
+	private AiService.Snapshot cachedAi;
+	private long cachedAiAtNanos;
+	private static final long AI_SNAPSHOT_INTERVAL_NANOS = 250_000_000L;
+
 	@Override
 	public void render(DrawContext context, RenderTickCounter tickCounter) {
 		MinecraftClient client = MinecraftClient.getInstance();
@@ -203,7 +219,7 @@ public final class ScriptHudElement implements HudElement {
 	 * <p>未配置时只在「用过」之后提示一次，避免从没用过 AI 的人被一行红字长期打扰。</p>
 	 */
 	private void addAiRows(List<Row> rows, TextRenderer textRenderer) {
-		AiService.Snapshot snapshot = AiService.get().snapshot();
+		AiService.Snapshot snapshot = aiSnapshot();
 		if (!snapshot.configured()) {
 			if (snapshot.attempted()) {
 				addAiRow(rows, textRenderer,
@@ -258,9 +274,24 @@ public final class ScriptHudElement implements HudElement {
 		}
 	}
 
+	/**
+	 * AI 快照每 250 ms 采一次。
+	 *
+	 * <p>每次调用都要遍历全部会话、各加一次锁、为每个会话生成三个截断字符串再排序；
+	 * HUD 上只是两行状态，用不着每帧新建。250 ms 与界面显示「等待 0.1 秒」的精度同量级，
+	 * 再快也看不出差别。</p>
+	 */
+	private AiService.Snapshot aiSnapshot() {
+		long now = System.nanoTime();
+		if (cachedAi == null || now - cachedAiAtNanos > AI_SNAPSHOT_INTERVAL_NANOS) {
+			cachedAi = AiService.get().snapshot();
+			cachedAiAtNanos = now;
+		}
+		return cachedAi;
+	}
+
 	/** 统一按 {@link #MAX_WIDTH} 裁剪：行太宽会把整个 HUD 底板撑出屏幕。 */
-	private void addAiRow(List<Row> rows, TextRenderer textRenderer, Text text, int color) {
-		rows.add(new Row(Text.literal(textRenderer.trimToWidth(text.getString(), MAX_WIDTH)), color));
+	private void addAiRow(List<Row> rows, TextRenderer textRenderer, Text text, int color) {		rows.add(new Row(Text.literal(textRenderer.trimToWidth(text.getString(), MAX_WIDTH)), color));
 	}
 
 	private static String seconds(long millis) {
@@ -301,8 +332,25 @@ public final class ScriptHudElement implements HudElement {
 
 	/** 列表前 N 项，整表刷在 HUD 上会挡住半个屏幕。 */
 	private ListSnapshot snapshotList(RhinoVm vm, String name, int limit) {
+		String json;
 		try {
-			JsonElement parsed = JsonParser.parseString(vm.getList(name));
+			json = vm.getList(name);
+		} catch (RuntimeException e) {
+			return new ListSnapshot("", 0, false);
+		}
+		// 列表内容大多时候不变，缓存解析结果：getList 是字符串快照，比较比解析便宜得多
+		ListCache cached = listCache.get(name);
+		if (cached != null && cached.limit() == limit && cached.json().equals(json)) {
+			return cached.snapshot();
+		}
+		ListSnapshot snapshot = parseList(json, limit);
+		listCache.put(name, new ListCache(json, limit, snapshot));
+		return snapshot;
+	}
+
+	private static ListSnapshot parseList(String json, int limit) {
+		try {
+			JsonElement parsed = JsonParser.parseString(json);
 			if (!parsed.isJsonArray()) {
 				return new ListSnapshot("", 0, false);
 			}
@@ -427,20 +475,26 @@ public final class ScriptHudElement implements HudElement {
 		if (json == null || json.isEmpty()) {
 			return;
 		}
-		try {
-			JsonArray array = JsonParser.parseString(json).getAsJsonArray();
-			for (JsonElement element : array) {
-				if (!element.isJsonObject()) {
-					continue;
-				}
-				JsonObject item = element.getAsJsonObject();
-				boolean think = item.has("think") && item.get("think").getAsBoolean();
-				// usageId 每次说话都会变，比比对文本可靠：同一句话连说两次也能识别。
-				// 是否该显示、是否已经播完，交给簿记判断（DEF-06 的复活就在那里拦住）
-				bubbles.poll(string(item, "name"), string(item, "text"), think, string(item, "id"), now);
+		// 解析结果按原始字符串缓存：VM 每帧都返回同一份 JSON，重复解析纯属浪费。
+		// 循环本身仍每帧跑——气泡过期依赖 now 推进，不能跟着一起缓存
+		if (!json.equals(cachedSpeechJson) || cachedSpeech == null) {
+			try {
+				cachedSpeech = JsonParser.parseString(json).getAsJsonArray();
+				cachedSpeechJson = json;
+			} catch (RuntimeException e) {
+				// 解析失败不该影响渲染，最坏情况只是这一帧没有新气泡
+				return;
 			}
-		} catch (RuntimeException e) {
-			// 解析失败不该影响渲染，最坏情况只是这一帧没有新气泡
+		}
+		for (JsonElement element : cachedSpeech) {
+			if (!element.isJsonObject()) {
+				continue;
+			}
+			JsonObject item = element.getAsJsonObject();
+			boolean think = item.has("think") && item.get("think").getAsBoolean();
+			// usageId 每次说话都会变，比比对文本可靠：同一句话连说两次也能识别。
+			// 是否该显示、是否已经播完，交给簿记判断（DEF-06 的复活就在那里拦住）
+			bubbles.poll(string(item, "name"), string(item, "text"), think, string(item, "id"), now);
 		}
 	}
 

@@ -12,7 +12,7 @@
 | 槽位 [i] 的物品 | `world.slot_item` | 返回注册名 `minecraft:iron_ore`；空槽返回空串 |
 | 槽位 [i] 的数量 | `world.slot_amount` | 空槽返回 0 |
 | 第一个装着 [物品] 的槽位 | `world.first_slot_of` | 找不到返回 -1 |
-| 点击槽位 [i] 用 [左/右] | `action.click_slot` | `PICKUP`，拿起或放下 |
+| 点击槽位 [i] 用 [左/右/中] | `action.click_slot` | 左/右是 `PICKUP`（button 0/1）；中是 `CLONE`（button 2，仅创造模式），见 §三 |
 | 快速移动槽位 [i] | `action.quick_move_slot` | `QUICK_MOVE`，等价 Shift+点击 |
 | 关闭界面 | `action.close_container` | 恢复移动与操作 |
 
@@ -44,17 +44,30 @@ public void clickSlot(int syncId, int slotId, int button,
                       SlotActionType actionType, PlayerEntity player);
 ```
 
-`SlotActionType` 七种，目前只用了前两个：
+`SlotActionType` 七种，目前用了三种：
 
 ```
 PICKUP       拿起 / 放下（button 0=左键，1=右键）
 QUICK_MOVE   Shift+点击，容器与背包之间自动转移
 SWAP         与快捷栏第 button 格交换
-CLONE        仅创造模式
+CLONE        仅创造模式：把该格物品复制到光标（中键）
 THROW        丢弃
 QUICK_CRAFT  拖拽分堆
 PICKUP_ALL   双击收集同类
 ```
+
+**中键必须走 `CLONE`，不能给 `PICKUP` 传 button 2。** 原版
+`ScreenHandler.internalOnSlotClick` 的 PICKUP 分支只接受 button 0/1，其余值会一路落到
+SWAP、CLONE、THROW、PICKUP_ALL 的判定，全部不匹配后直接返回——**什么都不做**。
+真正的中键语义是 `CLONE` + button 2，而且服务端还要求创造模式、光标为空，
+所以生存模式点中键是安全的空操作。
+
+**打开容器不转视角。** `onPlayerInteractBlock` 服务端只校验
+`canInteractWithBlockAt(pos, distance)`，不看 yaw/pitch，命中点由 `BlockHitResult` 带过去。
+写视角反而会把「走向」的节奏打乱：`PathFollower` 每 tick 比较角度差，超过
+`standTurnDeg`（默认 30°）就松开前进键站定，`ViewSmoother` 又会把这次写入当成外部改动，
+让位一帧再平滑转回来——表现为「走过去开箱子，人顿一下再回弹」。想让角色看过去，
+脚本自己加一条「看向坐标」。
 
 ## 四、必须知道的时序
 

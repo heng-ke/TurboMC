@@ -32,16 +32,37 @@ public final class ExtensionExportSmokeTest {
 		ExtensionExporter.Result updated = ExtensionExporter.exportTo(dir);
 		byte[] reloaded = Files.readAllBytes(target);
 
+		// 失败路径：把目标位置占成一个**非空**目录，两次移动都会失败，临时文件必须被清掉。
+		// 空目录在 Windows 上会被 MoveFileEx 直接替换掉，所以里面必须放一个文件。
+		// 这里守的是「config/turbomc/ 里堆一堆 .tmp」——建了临时文件却不清理的老问题。
+		Path blocked = Files.createTempDirectory("turbomc-ext-blocked");
+		Path blocker = blocked.resolve(ExtensionExporter.FILE_NAME);
+		Files.createDirectory(blocker);
+		Files.writeString(blocker.resolve("occupied"), "x");
+		boolean threw = false;
+		try {
+			ExtensionExporter.exportTo(blocked);
+		} catch (java.io.IOException expected) {
+			threw = true;
+		}
+		long leftovers;
+		try (var stream = Files.list(blocked)) {
+			leftovers = stream.filter(p -> p.getFileName().toString().endsWith(".tmp")).count();
+		}
+		boolean cleanupOk = threw && leftovers == 0;
+
 		boolean ok = created == ExtensionExporter.Result.CREATED
 				&& exists
 				&& unchanged == ExtensionExporter.Result.UNCHANGED
 				&& updated == ExtensionExporter.Result.UPDATED
 				&& bundled.length > 0
 				&& Arrays.equals(installed, bundled)
-				&& Arrays.equals(reloaded, bundled);
+				&& Arrays.equals(reloaded, bundled)
+				&& cleanupOk;
 
 		System.out.printf("[ext] created=%s unchanged=%s updated=%s bytes=%d%n",
 				created, unchanged, updated, bundled.length);
+		System.out.printf("[ext] 失败清理：抛出=%s 残留 .tmp=%d%n", threw, leftovers);
 		System.out.println(ok ? "EXT EXPORT PASS" : "EXT EXPORT FAIL");
 		System.exit(ok ? 0 : 1);
 	}

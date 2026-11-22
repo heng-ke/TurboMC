@@ -434,9 +434,15 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 tick 只登记目标角度，帧层用 `1 - exp(-k·dt)` 收敛并按 240°/s 限速——写入频率跟上帧率，台阶消失，
 整条路径不需要 mixin。玩家动鼠标（yaw 被外部改过）时本帧让位，下一帧继续。
 
-视角归属分四档：`WALK`（寻路）/ `TURN`（平滑转向）/ `MANUAL`（「看向 / 看向坐标」积木直接写值，
-保持到下一次走向或转向开始）/ `NONE`。`MANUAL` 期间移动方向由 yaw 派生，因此走向会把角色带向
-新朝向——这是「看向接管视角」的既定取舍，不是缺陷。
+视角归属分四档：`WALK`（寻路）/ `TURN`（平滑转向）/ `MANUAL`（「看向 / 看向坐标」积木直接写值）/
+`NONE`。转移规则只有两条：**`TURN` 谁也抢不走**（`TurnSession.isActive()` 时 `PathFollower` 干脆不登记
+走路目标）；**其余状态都会被 `setWalkTarget` 降级成 `WALK`，包括 `MANUAL`**。
+
+`MANUAL` 必须能被走向接管，这不是可选项：帧层在 `MANUAL` 里只把「上一帧写下的 yaw」对齐就返回，
+不再写角度。若走向还在跑却抢不回视角，`PathFollower` 每 tick 算出的角度差恒大于
+`standTurnDeg`（默认 30°），于是永远松着前进键——角色站在原地直到走向会话超时（按距离算最长
+1200 tick）。类注释里的「保持到下一次走向或转向开始」就是这个语义；只排除 `TURN` 才是对的。
+代价是「看向」在走向期间保持不住：下一 tick 视角就平滑转回路径方向。
 
 ### 14. 寻路有两处输出：世界里的路线 + HUD 的状态行
 
@@ -498,6 +504,11 @@ scratch-vm 的 `runtime.stopAll()` 只清线程并发一个事件，宿主不订
 1.4.0 及更早每天首次启动都有前者。
 
 代价转移到启动阶段（游戏本来在加载资源，几乎无感）；这是刻意的交换，别为了省 0.6 秒改回去。
+
+**兜底路径要给提示**：预热没跑成（标题界面时总开关是关的、或预热抛了异常）时，`start()` 会在
+进世界的第一帧再付一次约 1.1 秒的 `vm.init`，没有提示就是「卡死」。所以 `vm.init()` 之前会发一条
+动作栏消息（`message.turbomc.vm_warming`）。把 `preload` 挪到后台线程是另一件事：得先验证
+scratch-vm 的构造与 Rhino `Context` 的线程归属，没验证之前不要动初始化时机。
 
 ### 19. 聊天文本在帽子积木里只进不出
 
@@ -578,10 +589,21 @@ if (pushed && needle !== null) { pushed.tmcChat = needle; }
 **标签不跨线程**：广播派生的线程、绿旗线程身上没有副本，只能走回落/空串。要跨广播传消息，
 自己在线程里先存进变量。
 
-**已知隐患（未处理）**：两个回调都运行在网络线程，会直接操作 Rhino 的
-`runtime.threads`——`_pushThread` 前的 busy 检查与随后的 push 并非原子。现有 `CHAT`
-路径一直如此，本批次为控制改动面保持一致。要改成主线程投递，得同时重排「记录 → 派发」
-的时序与 `ChatGate` 去重窗口，属独立批次。
+**线程归属：两个回调都在客户端主线程**，与 `vm.tick` 天然串行，`_pushThread` 前的 busy 检查
+不存在并发问题。依据是 1.21.11 的 `ClientPlayNetworkHandler.onChatMessage` / `onGameMessage`
+第一句就调 `NetworkThreadUtils.forceMainThread(packet, this, client.getPacketApplyBatcher())`：
+不在 batcher 线程时把包塞进队列并抛 `OffThreadException`，包随后在 `MinecraftClient.tick()`
+的 `packetApplyBatcher.apply()` 里执行——而 batcher 是用 `MinecraftClient.thread`（渲染线程）
+构造的。Fabric 的 `CHAT` / `GAME` 事件就在这条链路的 `ChatListener.showMessageToPlayer` /
+`handleSystemMessage` 里同步触发。
+
+**真正在 Netty 上的是 `DISCONNECT`**（`ClientPlayConnectionEvents`），所以它的收尾必须
+`client.execute(...)` 投递回主线程——见 `TurboMCClient.onInitializeClient` 里的注册。
+
+两个聊天监听器入口各留了一次 `isOnThread()` 断言：将来上游改了这条路径、或别的模组手工
+重放事件，日志会先露头，而不是变成「帽子偶尔丢一次」这种查不出来的现象。
+曾经有一份审计把聊天回调判成网络线程，进而建议改成「入队 + 主线程派发」——那会白白延后
+一个 tick 并引入丢消息，不要照着做。
 
 ### 20. AI 请求靠 poll 挂起，而 `poll` 的默认返回值是「已完成」
 
@@ -622,7 +644,13 @@ Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `Scri
 - HUD 的成功行**把回复拼成字面量**而不是塞进翻译格式串：少一个 `%s` 就整段消失，
   这种坑的排查成本远高于省下来的那几行。
 - **文本一律截断**（提问 80、回复 80、错误 80），HUD 再按宽度二次裁剪；完整内容在日志。
-- 聚合逐会话加锁并拷贝，不做长临界区：调用方是渲染线程，每帧一次。
+- 聚合逐会话加锁并拷贝，不做长临界区：调用方是渲染线程（HUD 每 250 ms 采样一次，面板按需刷新）。
+
+**`ask()` 只允许在主线程调用**（`AiActions` 在 `vm.tick` 里同步调）。并发上限读的是全局
+`inFlight.size()`，而「检查 → 构造请求 → `sendAsync` → 占位」不是原子操作；它现在成立，
+靠的就是单线程串行。**刻意不加锁**：lock 方案要在五个失败分支（未配置 / 会话忙 / 并发满 /
+构造失败 / 提交失败）上各释放一次占位，漏一个就是「AI 永久报并发已满」，比这个当前不可达的
+竞态更难查。入口留了一次「构造线程比对」，越线程调用会在日志里露头。
 
 呈现分两层：HUD 一行结论（只在有活动时出现，成功/失败停留时长、最多行数、回复预览字数
 三个值都在模组设置里可调），运行面板给明细（阶段、耗时、历史轮数、回复前 80 字、错误原文）。
@@ -683,9 +711,18 @@ Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `Scri
 这顺带修掉一个旧行为：以前同帧的第二次「在聊天栏说」会被 50 ms 节流**静默丢弃**，
 现在全部入队，一条不丢。
 
-`执行命令` 不走这条：`sendChatCommand` 是独立包，服务端按命令解析，非法内容只报
-「未知命令」不会断开，256 字符的上限也不适用于命令（命令上限是 32500），
-套用聊天的截断反而会把长命令切坏。
+`执行命令` **同样要清洗，但不能套用聊天的截断**。这两条容易搞反，逐条记下实测结论：
+
+- **会断开**。`ServerPlayNetworkHandler.onCommandExecution` 第一句是 `validateMessage`，它先跑
+  `hasIllegalCharacter`（判定式 `c != '§' && c >= ' ' && c != 0x7F`），命中直接
+  `disconnect("multiplayer.disconnect.illegal_characters")`。所以命令里带换行、`§`、控制字符
+  一样会把玩家踢掉——「命令只是报未知命令」是错的。`GameActions.command()` 因此也走
+  `ChatText.clean`，但**只在检测到非法字符时**才清洗（`clean` 会把连续空格折成一个，
+  而命令的 NBT / JSON 参数里可能有合法的双空格）。
+- **长度不判**。命令包用 `PacketByteBuf.readString()` / `writeString()`，上限是 **32767**
+  （不是 32500，也不是聊天的 256——256 只属于聊天包 `readUtf(256)` 与原版输入框）。
+  截断后的命令会变成另一条命令（`/give` 的物品名被切一半），比原样发出去更危险，
+  所以这里既不截断也不丢弃，长命令交给服务端与代理自行裁决。
 
 ### 22. 工程声明了未实现的扩展时，必须用占位实例登记
 
@@ -942,6 +979,12 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 末尾补一行「…还有 N 条」——同一 tick 内多个角色说话时，最早登记的那个必然被挤出
 （时间戳相同，稳定排序按登记顺序），没有这行提示，玩家会以为它没开口。
 
+**HUD 在渲染帧上跑，只缓存「不变的东西」**：气泡 JSON 与列表解析结果按原始字符串比较后
+缓存（VM 每帧返回同一份 JSON 是常态），AI 快照 250 ms 采一次，寻路两行按内容变化才重建 `Text`。
+**监视器的数值仍然每帧读 VM**——`vm.getVariable` 是这条路径上最贵的一次反射，
+但缓存它会让数字滞后，调脚本时看着「不跟手」，所以宁可留着。
+判断要不要优化的依据是 `hud.read` 的 PerfProbe 窗口（`avg` 长期为 0，`max` 才是有意义的那一列）。
+
 **位置用两个百分比，不用四角枚举**：`hudOffsetX/Y`（0–100）映射到「可放置区间」而不是
 裸屏幕坐标——`x = MARGIN + (W - boxW - 2·MARGIN) · pct/100`，于是任意百分比都落在屏幕内，
 窗口缩放与 GUI scale 变化自动跟随，不需要事后裁剪。代价是面板变宽时同一百分比的左边界会
@@ -1031,6 +1074,8 @@ S→C {"t":"stopped"} | {"t":"pong"} | {"t":"evicted"} | {"t":"snap",...} | {"t"
   缺 `limit` 时「等条件但最多等 N 帧」会退化成无限等。
 - **`welcome` 下发服务端自己的参数**（`snapshotHz` / `maxCallsPerTick` / `queue` / `schema`），
   客户端不硬编码，换版本不会对不上。
+- **`instance` / `world` 读的是主线程缓存**（`RemoteBridge.cachedInstance` / `cachedWorld`，每 tick 刷新）。
+  握手在 WebSocket I/O 线程上，直接读 `client.world` 会撞上主线程切维度，欢迎包里就可能出现旧维度或空串。
 - **错误带 `code`**：`unmapped`（opcode 未映射）、`rate`（限流）、`budget`（超预算）、
   `notfound`（动作层未实现）、`internal`（异常）。只有 `rate` 值得重试，靠字符串区分不出来。
 - `id` 由客户端单调递增，重连后归零。
@@ -1189,7 +1234,7 @@ opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command',
 | unsandboxed | **硬要求**。sandboxed 扩展跑在扩展 Worker 里，没有 `document`，权限请求直接失败 |
 | LNA（本地网络访问） | https 页面连 `ws://127.0.0.1` 需一次 `loopback-network` 授权，且**首次必须由用户手势触发**（故「保存后自动连接」被禁止）；`file://` 与桌面自定义协议属同地址空间，不触发 |
 | TurboWarp Desktop | RPC **可用**（`tw-editor://.`，p50 0.5ms）；画面 `NotSupportedError`（主进程无 display media handler） |
-| Origin 白名单 | 默认含自建站、官方站、`http://localhost:*`、`http://127.0.0.1:*`、`tw-editor://.`、`null`；可在配置里加 |
+| Origin 白名单 | 默认含自建站、官方站、`http://localhost:*`、`http://127.0.0.1:*`、`tw-editor://.`；**不含 `null`**（那是 `file://` 页面，等于「下载一个 HTML 双击打开就能接管游戏」，需要时在模组菜单里手动加一行 `null`）。列表可在 ModMenu「远程开发桥」下方增删，留空即用默认值 |
 | 绑定 | 只绑 `127.0.0.1`，不做跨机；单控制者，新连接接管时旧连接收 `evicted` |
 
 **`permissions.query` 的状态 ≠ 是否被拦**。Desktop 的 `loopback-network` 报 `denied` 却仍能连——

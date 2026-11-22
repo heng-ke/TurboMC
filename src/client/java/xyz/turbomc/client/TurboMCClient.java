@@ -43,6 +43,10 @@ public class TurboMCClient implements ClientModInitializer {
 
 	private final TriggerDispatcher triggerDispatcher = new TriggerDispatcher();
 
+	/** 聊天回调的线程断言只提示一次：正常情况永远不触发，触发一次就够了。 */
+	private static final java.util.concurrent.atomic.AtomicBoolean WARNED_OFF_THREAD_CHAT =
+			new java.util.concurrent.atomic.AtomicBoolean();
+
 	/** 远程会话期间被临时改成 false 的「失焦暂停」原值；null 表示当前没改过。 */
 	private Boolean pauseOnLostFocusBackup;
 	@Override
@@ -79,6 +83,7 @@ public class TurboMCClient implements ClientModInitializer {
 
 		ClientReceiveMessageEvents.CHAT.register(
 				(message, signedMessage, sender, params, receptionTimestamp) -> {
+					assertMainThread("CHAT");
 					// 引擎没在跑就不必算签名、也不必入队：入队的线程永远不会被 step。
 					// 远程会话例外：那时内 VM 是停的，但帽子要由浏览器那侧起
 					if (!ScriptEngine.get().acceptsTriggers()) {
@@ -115,10 +120,13 @@ public class TurboMCClient implements ClientModInitializer {
 		// 前者靠 overlay 标记，后者靠 ChatServerAnyMatch 默认为 false——只放行
 		// 「关键词可确定且命中」的帽子，空关键词/复合表达式一律不启动。
 		//
-		// 已知隐患（本批次不处理）：与上面的 CHAT 回调一样，这里运行在网络线程，
-		// 会直接操作 Rhino 里的 runtime.threads。改主线程投递要重排时序与去重，
-		// 属独立批次，见 docs/ARCHITECTURE.md「双通道：玩家聊天 ≠ 服务器系统消息」。
+		// 线程：与上面的 CHAT 回调一样在主线程。1.21.11 的 ClientPlayNetworkHandler
+		// 两个入口（onChatMessage / onGameMessage）第一句就是 NetworkThreadUtils.forceMainThread：
+		// 不在客户端线程时把包塞进 PacketApplyBatcher 并抛 OffThreadException，
+		// 随后由 MinecraftClient.tick() 里的 apply() 执行。所以这两个回调与 vm.tick 天然串行，
+		// 不需要「入队 + 主线程派发」。真正在 Netty 上的是 DISCONNECT（见下方注册处，已投递回主线程）。
 		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+			assertMainThread("GAME");
 			// 动作栏（血量、计时、经验提示）不是聊天，混进来会让帽子疯狂启动
 			if (overlay) {
 				return;
@@ -297,6 +305,28 @@ public class TurboMCClient implements ClientModInitializer {
 		// 快照放在最后：本 tick 的界面/血量/坐标变化都已落定，推出去的就是这一帧的最终值。
 		// 同时它也承担浏览器侧的时钟（wait 与 poll 都按快照 tick 推进）。
 		RemoteBridge.get().tick(client);
+	}
+
+	/**
+	 * 确认聊天回调落在客户端主线程。
+	 *
+	 * <p>1.21.11 的 {@code ClientPlayNetworkHandler.onChatMessage} / {@code onGameMessage}
+	 * 第一句是 {@code NetworkThreadUtils.forceMainThread(packet, this, client.getPacketApplyBatcher())}：
+	 * 不在 batcher 线程时把包塞进队列并抛 {@code OffThreadException}，包随后在
+	 * {@code MinecraftClient.tick()} 的 {@code packetApplyBatcher.apply()} 里执行。
+	 * 而 batcher 是用 {@code MinecraftClient.thread} 构造的，也就是渲染线程——
+	 * 所以这两个事件本来就与 {@code vm.tick} 同线程，不存在与 VM 的并发。</p>
+	 *
+	 * <p>这里只留一道便宜的保险：将来若上游改了这条路径、或别的模组手工重放事件，
+	 * 会先在日志里露头，而不是变成「帽子偶尔丢一次」这种查不出来的现象。</p>
+	 */
+	private static void assertMainThread(String channel) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && !client.isOnThread()
+				&& WARNED_OFF_THREAD_CHAT.compareAndSet(false, true)) {
+			TurboMC.LOGGER.warn("[chat] {} 回调不在主线程：引擎状态与 VM 访问需要重新评估（本警告只出现一次）",
+					channel);
+		}
 	}
 
 	/**

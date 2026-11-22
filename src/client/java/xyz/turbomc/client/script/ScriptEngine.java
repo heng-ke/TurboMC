@@ -189,6 +189,21 @@ public final class ScriptEngine {
 	}
 
 	/**
+	 * 兜底初始化 VM 之前的一条动作栏提示。
+	 *
+	 * <p>实测 {@code vm.init} 单次 1140 ms（见 {@code run/logs} 的 vm.init 耗时告警），
+	 * 整段阻塞在渲染线程上——没有提示时玩家看到的是「进世界第一帧卡死」，很容易当成崩溃。
+	 * 把 {@code preload} 挪到后台线程要先验证 scratch-vm 的构造与 Rhino {@code Context}
+	 * 的线程归属，没验证之前只做提示，不动初始化时机。</p>
+	 */
+	private static void warnWarming() {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && client.player != null) {
+			client.player.sendMessage(Text.translatable("message.turbomc.vm_warming"), true);
+		}
+	}
+
+	/**
 	 * 在标题界面/加载界面把 VM 备好，把「首次反序列化」的冷路径提前走掉。
 	 *
 	 * <p><b>为什么放在这里</b>：模组初始化阶段做重活会拖慢启动，异常还会连累整个客户端；
@@ -261,8 +276,10 @@ public final class ScriptEngine {
 			RhinoVm vm = RhinoVm.get();
 			long perf = PerfProbe.begin();
 			if (!vm.isReady()) {
-				// 正常路径已在标题界面预热（见 tryWarmUp）；走到这里是预热没跑成，
-				// 兜底付一次 0.6–0.7 秒的 VM 脚本解析
+				// 正常路径已在标题界面预热（见 tryWarmUp）；走到这里是预热没跑成
+				// （标题界面时总开关是关的，或预热抛了异常），兜底要付一次约 1.1 秒的
+				// VM 脚本解析，全在渲染线程上。先给玩家一句话，别让人以为卡死。
+				warnWarming();
 				vm.init();
 			}
 			long load = PerfProbe.begin();

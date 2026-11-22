@@ -23,7 +23,6 @@
 		]
 	},
 	"mixins": [
-		"turbomc.mixins.json",
 		{
 			"config": "turbomc.client.mixins.json",
 			"environment": "client"

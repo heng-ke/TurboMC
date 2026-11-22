@@ -78,7 +78,12 @@ public final class ViewSmoother {
 	public static void setWalkTarget(float yaw) {
 		targetYaw = yaw;
 		pitchActive = false;
-		if (mode != Mode.TURN && mode != Mode.MANUAL) {
+		// 只让「平滑转向」压过走路。MANUAL（「看向 / 看向坐标」写入后占用）必须能被
+		// 走向接管——否则走向途中执行「看向」会把模式永久钉在 MANUAL：帧层不再写 yaw，
+		// PathFollower 每 tick 判定角度差 > standTurnDeg（默认 30°）就松开前进键，
+		// 角色会站在原地直到整个走向会话超时（最长按距离算到 1200 tick）。
+		// 类注释写的「保持到下一次走向或转向开始」就是这个语义，这里是实现漏了 MANUAL。
+		if (mode != Mode.TURN) {
 			mode = Mode.WALK;
 		}
 	}
@@ -108,8 +113,18 @@ public final class ViewSmoother {
 		float clampedPitch = MathHelper.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
 		client.player.setYaw(yaw);
 		client.player.setPitch(clampedPitch);
+		adoptManual(yaw, clampedPitch);
+	}
+
+	/**
+	 * 只登记 MANUAL 归属，不写玩家角度。
+	 *
+	 * <p>写值那半需要客户端实例，状态这半不需要——拆开之后「MANUAL 该不该被走向接管」
+	 * 这类转移规则可以用纯 JVM 单测守住（见 {@code ViewSmootherTest}）。</p>
+	 */
+	static void adoptManual(float yaw, float pitch) {
 		targetYaw = yaw;
-		targetPitch = clampedPitch;
+		targetPitch = pitch;
 		pitchActive = true;
 		mode = Mode.MANUAL;
 		lastAppliedYaw = yaw;

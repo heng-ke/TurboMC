@@ -85,12 +85,27 @@ public final class ExtensionExporter {
 		boolean existed = Files.exists(target);
 		// 先写临时文件再替换：写到一半崩掉不会留下半截 js，TurboWarp 那边不至于读到坏文件
 		Path temp = Files.createTempFile(dir, ".turbomc-extension", ".tmp");
-		Files.write(temp, bundled);
+		boolean moved = false;
 		try {
-			Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-		} catch (IOException atomicUnsupported) {
-			// 部分网络盘 / 非 NTFS 文件系统不支持原子移动，退回普通覆盖
-			Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			Files.write(temp, bundled);
+			try {
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			} catch (IOException atomicUnsupported) {
+				// 部分网络盘 / 非 NTFS 文件系统不支持原子移动，退回普通覆盖。
+				// 这个 catch 也会接住「目标被占用 / 磁盘满」，所以下面这次同样可能失败——
+				// 失败时由 finally 负责清理，别在 config/turbomc/ 里留下半成品
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+			moved = true;
+		} finally {
+			if (!moved) {
+				// 删除自身失败只能忽略：它不能盖掉导致清理的那条原始异常
+				try {
+					Files.deleteIfExists(temp);
+				} catch (IOException ignored) {
+					// 忽略
+				}
+			}
 		}
 		return existed ? Result.UPDATED : Result.CREATED;
 	}

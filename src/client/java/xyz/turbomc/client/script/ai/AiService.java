@@ -153,6 +153,12 @@ public final class AiService {
 	private int connectTimeoutMs;
 	private int counter;
 
+	/** 构造时所在的线程，也就是「唯一允许调用 {@link #ask} 的线程」。 */
+	private final Thread ownerThread = Thread.currentThread();
+	/** 越线程调用的提示只打一次。 */
+	private final java.util.concurrent.atomic.AtomicBoolean warnedOffThread =
+			new java.util.concurrent.atomic.AtomicBoolean();
+
 	private AiService() {
 	}
 
@@ -173,10 +179,25 @@ public final class AiService {
 	/**
 	 * 提交一次请求。
 	 *
+	 * <p><b>只允许在客户端主线程调用</b>（也就是构造本类的那条线程）。原因：「并发上限」
+	 * 读的是全局 {@code inFlight.size()}，而检查与 {@code inFlight.put} 之间隔着请求构造
+	 * 与 {@code sendAsync}，不是原子操作；它现在成立，靠的是唯一的生产调用点
+	 * {@code AiActions.ask} 在 {@code vm.tick} 里同步执行、两次调用天然串行。</p>
+	 *
+	 * <p><b>刻意不加锁</b>：lock 方案要在「未配置 / 会话忙 / 并发满 / 构造失败 / 提交失败」
+	 * 五个返回分支上各释放一次占位，漏一个就是「AI 永久报并发已满」——那比现在这个
+	 * 不可达的竞态更难查。改为在入口做一次便宜的线程自检：将来若有人从 AI 回调或网络线程
+	 * 调进来，日志会先露头。</p>
+	 *
 	 * @return 请求 id，供脚本侧 {@code requestWaitUntil("ai:" + id)} 挂起；<b>失败返回 null</b>
 	 *         （未配置、会话忙、并发满、文本为空）
 	 */
 	public String ask(String sessionKey, String text) {
+		if (Thread.currentThread() != ownerThread && warnedOffThread.compareAndSet(false, true)) {
+			LOG.warn("[ai] ask() 被非主线程调用（{}）：并发上限的「检查 + 占位」不是原子操作，"
+					+ "多线程调用会超发，请改回主线程（本警告只出现一次）",
+					Thread.currentThread().getName());
+		}
 		String key = normalize(sessionKey);
 		attempted = true;
 		Settings settings = settingsProvider.get();
