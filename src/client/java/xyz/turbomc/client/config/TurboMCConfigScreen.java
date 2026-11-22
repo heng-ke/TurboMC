@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -179,13 +180,14 @@ public final class TurboMCConfigScreen {
 
 		// 「允许的来源」：远程桥只校验 WebSocket 的 Origin，所以自建 TurboWarp 站点
 		// （https://自己的域名、http://localhost:端口）必须能在这里加，否则只能手改 json。
-		// 留空 = 用内置默认值；手填的列表会整体替换默认值，不是追加。
+		//
+		// 列表里直接显示「当前生效值」：配置为空时就是出厂默认那几条。使用者打开界面看到的是
+		// 实际放行什么，而不是一个空列表 + 一句「留空即用默认值」——后者等于把默认值藏起来。
+		// 重置按钮（Cloth 的 per-entry reset）指向出厂默认，一键回到初始状态。
+		List<String> effectiveOrigins = new ArrayList<>(config.remoteAllowedOrigins());
 		script.addEntry(entries
-				.startStrList(Text.translatable("config.turbomc.dev_origins"),
-						config.dev == null || config.dev.allowedOrigins == null
-								? new ArrayList<>()
-								: new ArrayList<>(config.dev.allowedOrigins))
-				.setDefaultValue(new ArrayList<>())
+				.startStrList(Text.translatable("config.turbomc.dev_origins"), effectiveOrigins)
+				.setDefaultValue(new ArrayList<>(TurboMCConfig.DEFAULT_DEV_ORIGINS))
 				.setExpanded(false)
 				.setTooltip(Text.translatable("config.turbomc.dev_origins.tooltip"))
 				// 拼错的来源不会报错，只会「连不上」，所以在格子里就地标红：
@@ -197,6 +199,8 @@ public final class TurboMCConfigScreen {
 					if (config.dev == null) {
 						config.dev = new TurboMCConfig.Dev();
 					}
+					// 整份清空仍按「用出厂默认」处理（见 remoteAllowedOrigins），
+					// 所以这里原样保存即可，不需要特判空列表
 					config.dev.allowedOrigins = value == null
 							? new ArrayList<>()
 							: new ArrayList<>(value);

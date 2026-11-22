@@ -66,7 +66,7 @@ public final class RemoteProtocol {
 	 *
 	 * <p>规则只有两种形态，刻意保持简单：</p>
 	 * <ul>
-	 *   <li><b>精确匹配</b>：{@code https://zzj.hengke.xyz}、{@code tw-editor://.}、{@code null}。</li>
+	 *   <li><b>精确匹配</b>：{@code https://turbowarp.org}、{@code tw-editor://.}、{@code null}。</li>
 	 *   <li><b>端口通配</b>：以 {@code :*} 结尾，去掉 {@code *} 后按前缀匹配，
 	 *       例如 {@code http://localhost:*} 放行 {@code http://localhost:8080}。</li>
 	 * </ul>

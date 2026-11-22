@@ -124,7 +124,7 @@
   "config.turbomc.dev_remote": "远程开发桥（开发用）",
   "config.turbomc.dev_remote.tooltip": "在 127.0.0.1 上监听，供 TurboWarp 扩展直连调脚本。端口与实例名见 config/turbomc.json 的 dev 段；不开发请保持关闭",
   "config.turbomc.dev_origins": "允许的来源（Origin）",
-  "config.turbomc.dev_origins.tooltip": "只有 Origin 命中这个列表的页面才能连上远程桥。留空 = 用内置默认值（官网、自建站、localhost、TurboWarp Desktop）；自己填会整体替换默认值。自己搭的 TurboWarp 站点写 https://你的域名，本地服务写 http://localhost:端口，端口不固定可写 http://localhost:*。改完要把上面的开关关掉再打开才生效",
+  "config.turbomc.dev_origins.tooltip": "只有 Origin 命中这份列表的页面才能连上远程桥。列表已列出出厂默认值（TurboWarp 官网、桌面版、本机 localhost），直接在上面改：自建站写 https://你的域名，本地服务写 http://localhost:端口，端口不固定写 http://localhost:*。整份清空后保存 = 回到出厂默认。改完要把上面的开关关掉再打开才生效",
   "config.turbomc.dev_origins.invalid": "格式应为 scheme://主机[:端口]，或填 null（本地文件页面）",
   "status.turbomc.load_failed": "工程载入失败",
   "status.turbomc.runtime_error": "运行出错已停止",

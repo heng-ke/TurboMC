@@ -1234,7 +1234,7 @@ opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command',
 | unsandboxed | **硬要求**。sandboxed 扩展跑在扩展 Worker 里，没有 `document`，权限请求直接失败 |
 | LNA（本地网络访问） | https 页面连 `ws://127.0.0.1` 需一次 `loopback-network` 授权，且**首次必须由用户手势触发**（故「保存后自动连接」被禁止）；`file://` 与桌面自定义协议属同地址空间，不触发 |
 | TurboWarp Desktop | RPC **可用**（`tw-editor://.`，p50 0.5ms）；画面 `NotSupportedError`（主进程无 display media handler） |
-| Origin 白名单 | 默认含自建站、官方站、`http://localhost:*`、`http://127.0.0.1:*`、`tw-editor://.`；**不含 `null`**（那是 `file://` 页面，等于「下载一个 HTML 双击打开就能接管游戏」，需要时在模组菜单里手动加一行 `null`）。列表可在 ModMenu「远程开发桥」下方增删，留空即用默认值 |
+| Origin 白名单 | 默认只有 TurboWarp 官方站、桌面版与 `http://localhost:*` / `http://127.0.0.1:*`——**不含任何个人站点，也不含 `null`**（那是 `file://` 页面，等于「下载一个 HTML 双击打开就能接管游戏」，需要时手动加一行）。ModMenu「远程开发桥」下面的列表直接显示这份出厂值，可增删；整份清空后保存回到出厂值。改完要重开关一次才生效 |
 | 绑定 | 只绑 `127.0.0.1`，不做跨机；单控制者，新连接接管时旧连接收 `evicted` |
 
 **`permissions.query` 的状态 ≠ 是否被拦**。Desktop 的 `loopback-network` 报 `denied` 却仍能连——
