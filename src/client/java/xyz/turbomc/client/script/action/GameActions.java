@@ -83,6 +83,8 @@ public final class GameActions {
 	private static boolean warnedChatSanitize;
 	/** 分段发送的提示同样只打一次。 */
 	private static boolean warnedChatSegmented;
+	/** 命令清洗的提示同样只打一次。 */
+	private static boolean warnedCommandSanitize;
 
 	/** 上次重生请求时间，避免循环里连发。 */
 	private static long lastRespawnAt;
@@ -315,6 +317,21 @@ public final class GameActions {
 
 	/**
 	 * 执行一条命令，自动补前导斜杠。
+	 *
+	 * <p><b>为什么必须清洗</b>：命令与聊天共用同一个「文本出口」，服务端
+	 * {@code ServerPlayNetworkHandler.validateMessage} 一进来就先跑 {@code hasIllegalCharacter}
+	 * （判定式 {@code c != '§' && c >= ' ' && c != 0x7F}），命中直接
+	 * {@code disconnect("multiplayer.disconnect.illegal_characters")}——脚本把带换行、
+	 * {@code §}、控制字符的文本交给这块积木，玩家会当场掉线。聊天那条路径早就走
+	 * {@link ChatText#clean}，命令这条一直漏着。</p>
+	 *
+	 * <p><b>只在真的含非法字符时才清洗</b>：{@code clean} 会把连续空格折成一个，
+	 * 而命令里的 NBT / JSON 字符串可能有合法的双空格，无条件套用会改坏参数。</p>
+	 *
+	 * <p><b>不判长度、不截断</b>：命令包没有 256 上限（那是聊天包 {@code readUtf(256)}
+	 * 与原版输入框的限制，命令包的 {@code readString()} 上限是 32767），长命令该由服务端
+	 * 与代理自行裁决。截断后的命令是另一条命令（{@code /give} 的物品名被切一半），
+	 * 比原样发出去更危险，所以这里既不截断也不丢弃。</p>
 	 */
 	private static void command(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
@@ -326,10 +343,41 @@ public final class GameActions {
 			return;
 		}
 		String body = text.startsWith("/") ? text.substring(1) : text;
-		if (body.isBlank() || chatThrottled()) {
+		if (body.isBlank()) {
 			return;
 		}
-		client.getNetworkHandler().sendChatCommand(body);
+		String clean = hasIllegalCommandChar(body) ? ChatText.clean(body) : body;
+		if (clean.isBlank()) {
+			warnKey("command-empty", "命令去掉换行/控制字符后为空，已忽略");
+			return;
+		}
+		if (!clean.equals(body) && !warnedCommandSanitize) {
+			warnedCommandSanitize = true;
+			// 只记长度不记内容：命令里可能带玩家名、坐标或物品参数
+			LOG.warn("[script] 「执行命令」的内容含换行/格式符或控制字符，已清洗后发送："
+					+ "原始 {} 字 → 发送 {} 字（本提示只出现一次）", body.length(), clean.length());
+		}
+		if (chatThrottled()) {
+			return;
+		}
+		client.getNetworkHandler().sendChatCommand(clean);
+	}
+
+	/**
+	 * 命令里是否含服务端会判非法的字符。
+	 *
+	 * <p>与 {@code StringHelper.isValidChar} 对齐：{@code §}、码点小于 0x20、
+	 * 以及 0x7F 与 0x80–0x9F 这些控制字符。检测到才调 {@link ChatText#clean}，
+	 * 避免为了极少数脏字符去动整条命令的空格。</p>
+	 */
+	private static boolean hasIllegalCommandChar(String text) {
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '\u00A7' || Character.isISOControl(c)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

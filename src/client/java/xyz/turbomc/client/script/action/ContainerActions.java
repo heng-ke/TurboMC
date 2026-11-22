@@ -2,7 +2,6 @@ package xyz.turbomc.client.script.action;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
-import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -39,6 +38,8 @@ public final class ContainerActions {
 	/** 距离超限的告警节流，避免每 tick 刷屏。 */
 	private static final long REACH_WARN_INTERVAL = 5_000_000_000L;
 	private static long lastReachWarn;
+	/** 已提示过的非法按钮名，避免每 tick 刷屏。 */
+	private static final java.util.Set<String> WARNED_BUTTONS = new java.util.HashSet<>();
 
 	private ContainerActions() {
 	}
@@ -88,21 +89,47 @@ public final class ContainerActions {
 			return;
 		}
 
-		client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, center);
+		// 刻意不转视角。服务端 onPlayerInteractBlock 只校验 canInteractWithBlockAt 的距离，
+		// 不看玩家朝向，命中点由下面的 BlockHitResult 带过去；写 yaw/pitch 反而会把
+		// 「走向」的节奏打乱——PathFollower 每 tick 比较角度差，超过 standTurnDeg（默认 30°）
+		// 就松前进键站定；ViewSmoother 又会把这次写入当成外部改动，让位一帧再平滑转回来，
+		// 表现为「走过去开箱子，人会顿一下再回弹」。想看向容器就自己加「看向坐标」。
 		client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND,
 				new BlockHitResult(center, Direction.UP, pos, false));
 		client.player.swingHand(Hand.MAIN_HAND);
 	}
 
 	/**
-	 * 点击槽位：左键拿起或放下（button 0=左，1=右）。
+	 * 点击槽位：{@code left} 举起 / 放下整叠，{@code right} 分半堆放，
+	 * {@code middle} 在创造模式下把该格物品复制到光标。
+	 *
+	 * <p><b>中键不是「按钮 2 的 PICKUP」</b>：原版 {@code ScreenHandler.internalOnSlotClick}
+	 * 的 PICKUP 分支只接受 button 0 / 1，其余会落到后面 SWAP、CLONE、THROW 的判定，
+	 * 全部不匹配后直接返回——也就是什么都不做。真正的中键语义是
+	 * {@code SlotActionType.CLONE} + button 2，且服务端还要求创造模式、光标为空，
+	 * 所以生存模式点中键是安全的空操作。</p>
 	 *
 	 * <p>需要界面已打开，否则什么都不会发生。</p>
 	 */
 	private static void clickSlot(ScriptContext ctx, Object[] args) {
-		// 菜单值是 left / right，不是数字；右键用于分半堆放
-		int button = args.length > 1 && "right".equalsIgnoreCase(Values.asString(args[1]).trim()) ? 1 : 0;
-		perform(ctx, args, SlotActionType.PICKUP, button);
+		// 菜单值是 left / right / middle，不是数字
+		String raw = args.length > 1 ? Values.asString(args[1]).trim() : "";
+		if ("middle".equalsIgnoreCase(raw)) {
+			perform(ctx, args, SlotActionType.CLONE, 2);
+			return;
+		}
+		if (!raw.isEmpty() && !"left".equalsIgnoreCase(raw) && !"right".equalsIgnoreCase(raw)) {
+			// 拼错的按钮名过去会被静默当成左键（拿起整叠），后果是把容器搞乱，必须说清楚
+			warnUnknownButton(raw);
+		}
+		perform(ctx, args, SlotActionType.PICKUP, "right".equalsIgnoreCase(raw) ? 1 : 0);
+	}
+
+	/** 未知按钮名只提示一次，避免循环脚本把日志刷爆。 */
+	private static void warnUnknownButton(String raw) {
+		if (WARNED_BUTTONS.add(raw.toLowerCase(Locale.ROOT))) {
+			LOG.warn("[script] 「点击槽位」的按钮 \"{}\" 无法识别，按 left 处理；可选 left / right / middle", raw);
+		}
 	}
 
 	/**
