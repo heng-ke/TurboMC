@@ -10,6 +10,10 @@ import xyz.turbomc.client.script.runtime.ScratchCast;
 /**
  * JSON 文本的解析与序列化，逐条对齐 TurboWarp 扩展 {@code skyhigh173JSON}（Skyhigh173 &amp; Mio，MIT）。
  *
+ * <p><b>现在的用途</b>：JSON 积木本身已经迁到 JS（{@code turbowarp/src/json-lite.js}，
+ * 浏览器与游戏内共用同一份实现），不再有任何积木走这里。本类只剩两项职责：
+ * {@link Snapshots} 用 {@link #stringify} 拼快照文本，以及测试用它校验快照输出。
+ * 保留的原因是快照在 Java 侧拼 JSON，与积木语义无关。</p>
  * <p><b>为什么自己写解析器</b>：Gson 的 {@code JsonParser} 在入口处会把 {@code JsonReader}
  * 临时切成宽松模式（即使外面 setLenient(false) 也会被它覆盖），于是 {@code {a:1}}、单引号、
  * 注释统统被当成合法 JSON。原扩展走的是浏览器 {@code JSON.parse}，严格得多——

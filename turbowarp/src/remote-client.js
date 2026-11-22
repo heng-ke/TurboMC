@@ -1284,9 +1284,12 @@ function installRemote(Scratch, ext, meta) {
 	/**
 	 * 用 JSON 数组覆盖列表。
 	 *
-	 * <p>列表项只能是标量：对象/数组转成 JSON 文本、{@code null} 变空串——与 Java 侧
-	 * {@code VmListActions.toScratchList} 一致。不这么转，塞进去的对象只会变成
-	 * {@code [object Object]}，一进一出结构就没了。</p>
+	 * <p>列表项只能是标量：对象/数组转成 JSON 文本、{@code null} 变空串。不这么转，
+	 * 塞进去的对象只会变成 {@code [object Object]}，一进一出结构就没了。</p>
+	 *
+	 * <p>读写两块（{@code jsonVmGetList} / {@code jsonVmSetList}）都在本地做：它们操作的是
+	 * 当前 VM 自己的列表，发到对面写没有意义。所以游戏内与浏览器走同一条路径，
+	 * 转换规则只此一份（见 {@code json-lite.js}）。</p>
 	 */
 	function writeVmList(name, json) {
 		const found = findVmList(name);

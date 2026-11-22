@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * JSON 积木的纯逻辑约束。
+ * Java 侧 JSON 工具（快照序列化）的纯逻辑约束。
  *
- * <p>这几条都是「错了不报错、只是结果悄悄不对」的地方：宽松解析会把非法 JSON 判成合法、
- * 数值格式不一致会让字符串比较永远不相等、下标基准错了只会读到隔壁一项。</p>
+ * <p>JSON 积木本身的语义已由 {@code turbowarp/src/json-lite.js} 承担，
+ * 行为回归见 {@link JsonCoreParityTest}；这里守的是快照仍在用的解析与序列化。</p>
  */
 class JsonTextTest {
 

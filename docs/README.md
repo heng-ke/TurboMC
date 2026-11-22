@@ -11,7 +11,7 @@
 | [PATHFINDING.md](PATHFINDING.md) | 「走向」选型与实现细节：A\* 复用、分段重规划、按键节流、踩过的坑 |
 | [CONTAINER.md](CONTAINER.md) | 容器交互：积木清单、槽位编号、为什么只能走 `clickSlot`、必须知道的时序 |
 | [../turbowarp/README.md](../turbowarp/README.md) | TurboWarp 扩展的加载步骤与积木清单 |
-| [OPEN_*.md](OPEN_MOVE_PREEMPTION.md) | **未决问题的事实记录**：已核对的现状、待决策项、候选方案。不含决定，决策落地后必须归档。现有三份：[走向抢占](OPEN_MOVE_PREEMPTION.md)、[视角平滑](OPEN_VIEW_SMOOTHING.md)、[JSON 实现位置](OPEN_JSON_PLACEMENT.md) |
+| [OPEN_*.md](OPEN_MOVE_PREEMPTION.md) | **未决问题的事实记录**：已核对的现状、待决策项、候选方案。不含决定，决策落地后必须归档。现有两份：[走向抢占](OPEN_MOVE_PREEMPTION.md)、[视角平滑](OPEN_VIEW_SMOOTHING.md) |
 
 积木与 opcode 的逐条对应表由代码生成，不在上表内：
 [../turbowarp/mapping-report.md](../turbowarp/mapping-report.md)

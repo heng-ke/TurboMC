@@ -1,0 +1,538 @@
+[
+  {
+    "id": "new-object",
+    "out": "{}"
+  },
+  {
+    "id": "new-array",
+    "out": "[]"
+  },
+  {
+    "id": "new-other",
+    "out": ""
+  },
+  {
+    "id": "len-obj",
+    "out": "2"
+  },
+  {
+    "id": "len-arr",
+    "out": "3"
+  },
+  {
+    "id": "len-bad",
+    "out": ""
+  },
+  {
+    "id": "len-scalar",
+    "out": ""
+  },
+  {
+    "id": "len-null",
+    "out": ""
+  },
+  {
+    "id": "get-obj-hit",
+    "out": "x"
+  },
+  {
+    "id": "get-obj-miss",
+    "out": ""
+  },
+  {
+    "id": "get-obj-container",
+    "out": "{\"k\":[1,2]}"
+  },
+  {
+    "id": "get-arr-1",
+    "out": "10"
+  },
+  {
+    "id": "get-arr-last",
+    "out": "30"
+  },
+  {
+    "id": "get-arr-zero",
+    "out": ""
+  },
+  {
+    "id": "get-arr-over",
+    "out": ""
+  },
+  {
+    "id": "get-arr-null",
+    "out": ""
+  },
+  {
+    "id": "get-bad",
+    "out": ""
+  },
+  {
+    "id": "set-obj-add",
+    "out": "{\"a\":1,\"b\":\"2\"}"
+  },
+  {
+    "id": "set-obj-overwrite",
+    "out": "{\"a\":\"9\"}"
+  },
+  {
+    "id": "set-obj-container",
+    "out": "{\"k\":{\"x\":1}}"
+  },
+  {
+    "id": "set-obj-array-value",
+    "out": "{\"k\":[1,2]}"
+  },
+  {
+    "id": "set-obj-text",
+    "out": "{\"k\":\"hello\"}"
+  },
+  {
+    "id": "set-arr-2",
+    "out": "[1,\"99\",3]"
+  },
+  {
+    "id": "set-arr-extend",
+    "out": "[1,null,null,\"9\"]"
+  },
+  {
+    "id": "set-arr-zero",
+    "out": "[1,2]"
+  },
+  {
+    "id": "set-bad",
+    "out": ""
+  },
+  {
+    "id": "del-obj",
+    "out": "{\"b\":2}"
+  },
+  {
+    "id": "del-arr",
+    "out": "[1,null,3]"
+  },
+  {
+    "id": "del-arr-zero",
+    "out": "[1,2,3]"
+  },
+  {
+    "id": "del-bad-json",
+    "out": ""
+  },
+  {
+    "id": "is-valid-obj",
+    "out": "true"
+  },
+  {
+    "id": "is-valid-bad",
+    "out": "false"
+  },
+  {
+    "id": "is-valid-number",
+    "out": "false"
+  },
+  {
+    "id": "is-obj-yes",
+    "out": "true"
+  },
+  {
+    "id": "is-obj-no",
+    "out": "false"
+  },
+  {
+    "id": "is-arr-yes",
+    "out": "true"
+  },
+  {
+    "id": "is-nonstring",
+    "out": "false"
+  },
+  {
+    "id": "has-key-yes",
+    "out": "true"
+  },
+  {
+    "id": "has-key-no",
+    "out": "false"
+  },
+  {
+    "id": "has-key-num",
+    "out": "true"
+  },
+  {
+    "id": "has-arr-yes",
+    "out": "true"
+  },
+  {
+    "id": "has-arr-length",
+    "out": "false"
+  },
+  {
+    "id": "has-arr-zero",
+    "out": "false"
+  },
+  {
+    "id": "has-bad-json",
+    "out": "false"
+  },
+  {
+    "id": "getpath-nested",
+    "out": "20"
+  },
+  {
+    "id": "getpath-missing",
+    "out": ""
+  },
+  {
+    "id": "getpath-empty",
+    "out": "{\"a\":1}"
+  },
+  {
+    "id": "getpath-bad-path",
+    "out": ""
+  },
+  {
+    "id": "getpath-bad-json",
+    "out": ""
+  },
+  {
+    "id": "setpath-replace",
+    "out": "{\"a\":{\"b\":\"2\"}}"
+  },
+  {
+    "id": "setpath-newkey",
+    "out": "{\"a\":{\"c\":\"3\"}}"
+  },
+  {
+    "id": "setpath-missing-mid",
+    "out": ""
+  },
+  {
+    "id": "setpath-empty",
+    "out": "{\"a\":1}"
+  },
+  {
+    "id": "setpath-arr",
+    "out": "{\"a\":[\"9\",2]}"
+  },
+  {
+    "id": "setpath-bad-json",
+    "out": ""
+  },
+  {
+    "id": "minify",
+    "out": "{\"a\":[1,2]}"
+  },
+  {
+    "id": "minify-bad",
+    "out": ""
+  },
+  {
+    "id": "err-ok",
+    "out": ""
+  },
+  {
+    "id": "err-trailing",
+    "out": "JSON 解析失败：值后面还有内容（位置 3）"
+  },
+  {
+    "id": "err-comma",
+    "out": "JSON 解析失败：不允许尾随逗号（位置 3）"
+  },
+  {
+    "id": "err-unquoted",
+    "out": "JSON 解析失败：键必须是双引号字符串（位置 1）"
+  },
+  {
+    "id": "err-truncated",
+    "out": "JSON 解析失败：数组未闭合（位置 2）"
+  },
+  {
+    "id": "err-scalar",
+    "out": "JSON 必须是对象或数组"
+  },
+  {
+    "id": "err-empty",
+    "out": "JSON 解析失败：JSON 提前结束（位置 0）"
+  },
+  {
+    "id": "err-string",
+    "out": "JSON 必须是对象或数组"
+  },
+  {
+    "id": "getall-keys",
+    "out": "[\"a\",\"b\"]"
+  },
+  {
+    "id": "getall-values",
+    "out": "[1,\"\"]"
+  },
+  {
+    "id": "getall-datas",
+    "out": "[[\"a\",1]]"
+  },
+  {
+    "id": "getall-arr-keys",
+    "out": "[\"0\",\"1\"]"
+  },
+  {
+    "id": "getall-bad-kind",
+    "out": ""
+  },
+  {
+    "id": "getall-bad-json",
+    "out": ""
+  },
+  {
+    "id": "push",
+    "out": "[1,2,\"3\"]"
+  },
+  {
+    "id": "push-container",
+    "out": "[{\"x\":1}]"
+  },
+  {
+    "id": "push-not-array",
+    "out": ""
+  },
+  {
+    "id": "aset-2",
+    "out": "[1,\"99\",3]"
+  },
+  {
+    "id": "aset-extend",
+    "out": "[1,null,\"9\"]"
+  },
+  {
+    "id": "aset-zero",
+    "out": "[1,2]"
+  },
+  {
+    "id": "aset-bad-json",
+    "out": ""
+  },
+  {
+    "id": "ainsert-1",
+    "out": "[\"9\",1,2]"
+  },
+  {
+    "id": "ainsert-2",
+    "out": "[1,\"9\",2]"
+  },
+  {
+    "id": "ainsert-over",
+    "out": "[1,2,\"9\"]"
+  },
+  {
+    "id": "ainsert-bad-json",
+    "out": ""
+  },
+  {
+    "id": "adel-1",
+    "out": "[2,3]"
+  },
+  {
+    "id": "adel-2",
+    "out": "[1,3]"
+  },
+  {
+    "id": "adel-zero",
+    "out": "[1,2]"
+  },
+  {
+    "id": "adel-over",
+    "out": "[1,2,3]"
+  },
+  {
+    "id": "adel-bad-json",
+    "out": ""
+  },
+  {
+    "id": "aremoveall",
+    "out": "[1,2,1,3]"
+  },
+  {
+    "id": "aremoveall-str",
+    "out": "[1,2]"
+  },
+  {
+    "id": "aremoveall-obj",
+    "out": "[{\"a\":1}]"
+  },
+  {
+    "id": "aremoveall-bad-json",
+    "out": ""
+  },
+  {
+    "id": "anum-found",
+    "out": "0"
+  },
+  {
+    "id": "anum-miss",
+    "out": "0"
+  },
+  {
+    "id": "anum-type",
+    "out": "1"
+  },
+  {
+    "id": "anum-bad-json",
+    "out": ""
+  },
+  {
+    "id": "afromto",
+    "out": "[1,2]"
+  },
+  {
+    "id": "afromto-tail",
+    "out": "[2,3,4]"
+  },
+  {
+    "id": "afromto-rev",
+    "out": "[]"
+  },
+  {
+    "id": "afromto-bad-json",
+    "out": ""
+  },
+  {
+    "id": "aconcat",
+    "out": "[1,2,3]"
+  },
+  {
+    "id": "aconcat-bad",
+    "out": ""
+  },
+  {
+    "id": "amap",
+    "out": "[1,null]"
+  },
+  {
+    "id": "amap-mixed",
+    "out": "[1,null]"
+  },
+  {
+    "id": "amap-bad-json",
+    "out": ""
+  },
+  {
+    "id": "asetlen-shrink",
+    "out": "[1,2]"
+  },
+  {
+    "id": "asetlen-grow",
+    "out": "[1,null,null]"
+  },
+  {
+    "id": "asetlen-neg",
+    "out": ""
+  },
+  {
+    "id": "asetlen-frac",
+    "out": ""
+  },
+  {
+    "id": "acreate",
+    "out": "[\"a\",\"b\",\"c\"]"
+  },
+  {
+    "id": "acreate-empty",
+    "out": "[\"a\",\"b\",\"c\"]"
+  },
+  {
+    "id": "ajoin",
+    "out": "1-2-3"
+  },
+  {
+    "id": "ajoin-null",
+    "out": "1,,3"
+  },
+  {
+    "id": "ajoin-bad-json",
+    "out": ""
+  },
+  {
+    "id": "asort-num",
+    "out": "[1,2,3]"
+  },
+  {
+    "id": "asort-text",
+    "out": "[\"A\",\"b\",\"c\"]"
+  },
+  {
+    "id": "asort-desc",
+    "out": "[3,2,1]"
+  },
+  {
+    "id": "asort-mixed",
+    "out": "[9,10,\"a\"]"
+  },
+  {
+    "id": "asort-bad-json",
+    "out": ""
+  },
+  {
+    "id": "afilter-inc",
+    "out": "[\"banana\"]"
+  },
+  {
+    "id": "afilter-start",
+    "out": "{\"1\":\"apple\"}"
+  },
+  {
+    "id": "afilter-bad-shape",
+    "out": ""
+  },
+  {
+    "id": "afilter-bad-json",
+    "out": ""
+  },
+  {
+    "id": "aanalysis-max",
+    "out": "5"
+  },
+  {
+    "id": "aanalysis-min",
+    "out": "1"
+  },
+  {
+    "id": "aanalysis-sum",
+    "out": "9"
+  },
+  {
+    "id": "aanalysis-avg",
+    "out": "2.5"
+  },
+  {
+    "id": "aanalysis-median-odd",
+    "out": "2"
+  },
+  {
+    "id": "aanalysis-median-even",
+    "out": "2.5"
+  },
+  {
+    "id": "aanalysis-mode",
+    "out": "2"
+  },
+  {
+    "id": "aanalysis-variance",
+    "out": "1.25"
+  },
+  {
+    "id": "aanalysis-empty-max",
+    "out": "-Infinity"
+  },
+  {
+    "id": "aanalysis-empty-avg",
+    "out": "NaN"
+  },
+  {
+    "id": "aanalysis-string-nums",
+    "out": "3"
+  },
+  {
+    "id": "aanalysis-bad-json",
+    "out": "0"
+  }
+]

@@ -145,6 +145,69 @@ function __tmcPendingCount() {
  */
 var __tmcBooleanBlocks = 0;
 
+/*
+ * JSON 一族不走桥：json-core.es5.js 是与浏览器同一份实现，本机直接求值。
+ *
+ * <p>为什么不保留「桥 → Java」这条路：两份实现一旦分叉，就会出现「开发时对、发布后错」。
+ * 统一到 JS 之后，Rhino 的解释开销比 Java 慢，但换来的是单份实现与单份用例；
+ * 实测开销集中在逐元素操作，属于可接受的取舍。</p>
+ */
+var __tmcJson = typeof createJsonLite === 'function' ? createJsonLite() : null;
+if (!__tmcJson) {
+	print('[turbomc] JSON 核心未加载（json-core.es5.js），JSON 积木将返回空值');
+}
+
+/** 把按名字传的 args 依 argOrder 拍平成有序数组，与桥的入参形态保持一致。 */
+function __tmcArgsInOrder(names, args) {
+	var out = [];
+	for (var i = 0; i < names.length; i++) {
+		out.push(args ? args[names[i]] : undefined);
+	}
+	return out;
+}
+
+/** 装一块纯计算积木：调用时只做「取参 + 本地计算」，热路径上不经过桥。 */
+function __tmcJsonBlock(fn, names) {
+	return function (args) {
+		return fn(__tmcArgsInOrder(names, args));
+	};
+}
+
+/**
+ * 「把列表设为数组」的取值转换：列表项只能是标量。
+ *
+ * <p>对象/数组转 JSON 文本、{@code null} 变空串——与浏览器侧 writeVmList 一致。
+ * 不这么转，塞进去的对象只会变成 {@code [object Object]}，一进一出结构就没了。</p>
+ */
+function __tmcJsonListValues(json) {
+	var value;
+	try {
+		value = JSON.parse(json);
+	} catch (e) {
+		return null;
+	}
+	if (!Array.isArray(value)) {
+		return null;
+	}
+	var out = [];
+	for (var i = 0; i < value.length; i++) {
+		var item = value[i];
+		if (item === null || item === undefined) {
+			out.push('');
+		} else if (typeof item === 'object') {
+			out.push(JSON.stringify(item));
+		} else {
+			out.push(item);
+		}
+	}
+	return out;
+}
+
+/** 取名字参数：只有 undefined 算缺省，null 与原来一样转成 "null"。 */
+function __tmcNameArg(value) {
+	return value === undefined ? '' : String(value);
+}
+
 for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 	(function (block) {
 		// 没有 opcode 的条目不是积木：LABEL（面板分类标题）与 BUTTON 都属于这类。
@@ -167,6 +230,32 @@ for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 		var isBoolean = shape === 'boolean';
 		if (isBoolean) {
 			__tmcBooleanBlocks++;
+		}
+		// 纯计算的 JSON 积木：安装期就换成直接调用，运行期不做 opcode 判断。
+		var local = __tmcJson ? __tmcJson.blocks[block.opcode] : null;
+		if (local) {
+			Scratch.__instance[block.opcode] = __tmcJsonBlock(local, names);
+			return;
+		}
+		// 两块读写 VM 列表的积木需要 VM 内部状态，仍在本机实现，只是要等 __tmcVm 就绪。
+		if (block.opcode === 'jsonVmGetList') {
+			Scratch.__instance[block.opcode] = function (args) {
+				var json = __tmcReadList(__tmcNameArg(args ? args.list : undefined));
+				// 列表不存在给空串；存在但为空给 "[]"——两者语义不同，不能合并
+				return json === null ? '' : json;
+			};
+			return;
+		}
+		if (block.opcode === 'jsonVmSetList') {
+			Scratch.__instance[block.opcode] = function (args) {
+				var values = __tmcJsonListValues(__tmcNameArg(args ? args.json : undefined));
+				if (values !== null) {
+					__tmcSetList(__tmcNameArg(args ? args.list : undefined), JSON.stringify(values));
+				}
+				// 命令积木返回 undefined：VM 不会把它当 Promise 去等
+				return undefined;
+			};
+			return;
 		}
 		Scratch.__instance[block.opcode] = function (args, util) {
 			// 聊天类的两个报告器优先读「线程自带的副本」，理由见 __tmcThreadChat。

@@ -28,6 +28,8 @@ public final class ParamLabels {
 			case "operator" -> 0xFF3F8F3A;
 			case "data" -> 0xFFB85A2C;
 			case "list" -> 0xFF2E8B8B;
+			// JSON 用玫红：既有分类里没有同色系（fn 的紫红更深），白字对比度也够
+			case "json" -> 0xFFC25A85;
 			case "world" -> 0xFF2E64B0;
 			case "sensing" -> 0xFF2E8FB0;
 			case "action" -> 0xFF6F45B0;

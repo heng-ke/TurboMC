@@ -1,20 +1,44 @@
 /*
- * JSON 积木的浏览器端实现（远程模式用）。
+ * JSON 积木的唯一实现（浏览器编辑器与游戏内 Rhino 共用同一份源码）。
  *
- * 对拍目标：Java 侧 JsonActions / JsonText。两份实现必须逐条等价——
- * reporter 在 Scratch 里是同步求值，浏览器不可能为了一次读数去等 RPC，
- * 所以这批纯计算积木只能在浏览器里再实现一份。
+ * <p><b>为什么是 ES5</b>：这份文件有两个宿主——TurboWarp 浏览器（V8，什么语法都吃）
+ * 与内嵌 Rhino 1.7.15（{@code optimizationLevel=-1} 纯解释执行）。Rhino 1.7.15 不支持
+ * {@code class}，{@code const} 在同一函数内重复声明还会直接报错，所以这里只写 ES5：
+ * 浏览器跑 ES5 没有任何问题，反过来 Rhino 跑 ES6 会直接起不来。</p>
  *
- * 防漂移靠对拍：tools/json-parity-cases.json 同一批用例分别喂给两边，
- * Java 侧输出 build/json-parity-java.json，tools/check-json-parity.js 逐条比对。
+ * <p><b>为什么不再有 Java 副本</b>：reporter 在 Scratch 里是同步求值，浏览器不可能为了一次读数
+ * 去等 RPC，所以这批纯计算积木只能在 JS 里实现；两处各写一份就是两份实现、两份维护。
+ * 现在只保留这一份：编辑器直接调用，游戏内由 vm-bootstrap 装到扩展对象上。
+ * 与 Java 的历史基线仍可用 tools/json-parity-cases.json 逐条核对（{@code build/json-parity-java.json}
+ * 是迁移前生成的 golden，用来证明改写没有改变行为）。</p>
  *
- * 由 tools/build-extension.js 拼进编辑器产物；运行时副本（游戏内）不包含本文件。
+ * <p>由 tools/build-extension.js 拼进编辑器产物，并原样复制为运行时副本
+ * {@code assets/turbomc/vm/json-core.es5.js}。</p>
  */
 function createJsonLite() {
 	'use strict';
 
-	/** 与 Java 侧 MAX_DEPTH 一致：递归下降不设上限会被深层输入打穿栈。 */
-	const MAX_DEPTH = 256;
+	/** 与历史 Java 侧 MAX_DEPTH 一致：递归下降不设上限会被深层输入打穿栈。 */
+	var MAX_DEPTH = 256;
+
+	// ES5 没有 Number.isNaN / isFinite / isInteger / Math.trunc，统一在这里补。
+	// 入参都已是 number，所以全局 isNaN / isFinite 的隐式转换不影响语义。
+	function isNaNValue(value) {
+		return value !== value;
+	}
+
+	function isFiniteValue(value) {
+		return typeof value === 'number' && isFinite(value);
+	}
+
+	function isIntegerValue(value) {
+		return isFinite(value) && Math.floor(value) === value;
+	}
+
+	/** Math.trunc 的 ES5 等价；只在这里用于切片下标，入参已是 number。 */
+	function truncate(value) {
+		return value < 0 ? Math.ceil(value) : Math.floor(value);
+	}
 
 	// ---- Scratch 值转换（对齐 ScratchCast） ----
 
@@ -39,11 +63,11 @@ function createJsonLite() {
 		if (value === null || value === undefined) {
 			return 0;
 		}
-		const text = String(value).trim();
+		var text = String(value).trim();
 		if (text === '') {
 			return 0;
 		}
-		const lower = text.toLowerCase();
+		var lower = text.toLowerCase();
 		if (lower === 'infinity' || text === '+Infinity') {
 			return Infinity;
 		}
@@ -53,18 +77,19 @@ function createJsonLite() {
 		if (lower === 'nan') {
 			return NaN;
 		}
+		var hexadecimal;
 		if (/^0[xX]/.test(text)) {
-			const parsed = Number.parseInt(text.slice(2), 16);
-			return Number.isNaN(parsed) ? NaN : parsed;
+			hexadecimal = parseInt(text.slice(2), 16);
+			return isNaNValue(hexadecimal) ? NaN : hexadecimal;
 		}
-		const parsed = Number(text);
-		return Number.isNaN(parsed) ? NaN : parsed;
+		var parsed = Number(text);
+		return isNaNValue(parsed) ? NaN : parsed;
 	}
 
 	/** 对齐 ScratchCast.toNumber：NaN 归 0。 */
 	function toNum(value) {
-		const number = rawNumber(value);
-		return Number.isNaN(number) ? 0 : number;
+		var number = rawNumber(value);
+		return isNaNValue(number) ? 0 : number;
 	}
 
 	function isBlankText(value) {
@@ -76,286 +101,281 @@ function createJsonLite() {
 
 	/** 对齐 ScratchCast.compare：两边都能当数字比数值，否则不分大小写比字典序。 */
 	function castCompare(left, right) {
-		let a = rawNumber(left);
-		let b = rawNumber(right);
+		var a = rawNumber(left);
+		var b = rawNumber(right);
 		if (a === 0 && isBlankText(left)) {
 			a = NaN;
 		} else if (b === 0 && isBlankText(right)) {
 			b = NaN;
 		}
-		if (Number.isNaN(a) || Number.isNaN(b)) {
-			const la = toStr(left).toLowerCase();
-			const lb = toStr(right).toLowerCase();
+		if (isNaNValue(a) || isNaNValue(b)) {
+			var la = toStr(left).toLowerCase();
+			var lb = toStr(right).toLowerCase();
 			return la < lb ? -1 : (la > lb ? 1 : 0);
 		}
 		if ((a === Infinity && b === Infinity) || (a === -Infinity && b === -Infinity)) {
 			return 0;
 		}
-		const diff = a - b;
+		var diff = a - b;
 		return diff < 0 ? -1 : (diff > 0 ? 1 : 0);
 	}
 
-	// ---- 严格 JSON 解析（逐条对齐 JsonText.Parser） ----
+	// ---- 严格 JSON 解析（逐条对齐原 JsonText.Parser 的行为） ----
 	//
 	// 不用 JSON.parse 的原因只有一个：错误信息要逐字一致。
-	// 「是不是合法 JSON」这块积木的返回值是给人看的，两边不同就等于两块不同的积木。
+	// 「是不是合法 JSON」这块积木的返回值是给人看的，报错文案必须固定。
 
-	class ParserError {
-		constructor(message, position) {
-			this.message = message;
-			this.position = position;
-		}
+	function ParserError(message, position) {
+		this.message = message;
+		this.position = position;
 	}
 
-	class Parser {
-		constructor(text) {
-			this.text = text;
-			this.pos = 0;
-		}
+	function Parser(text) {
+		this.text = text;
+		this.pos = 0;
+	}
 
-		error(message) {
-			return new ParserError(message, this.pos);
-		}
+	Parser.prototype.error = function (message) {
+		return new ParserError(message, this.pos);
+	};
 
-		atEnd() {
-			return this.pos >= this.text.length;
-		}
+	Parser.prototype.atEnd = function () {
+		return this.pos >= this.text.length;
+	};
 
-		skipWhitespace() {
-			while (this.pos < this.text.length) {
-				const c = this.text[this.pos];
-				if (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
-					this.pos++;
-				} else {
-					break;
-				}
+	Parser.prototype.skipWhitespace = function () {
+		while (this.pos < this.text.length) {
+			var c = this.text.charAt(this.pos);
+			if (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+				this.pos++;
+			} else {
+				break;
 			}
 		}
+	};
 
-		readValue(depth) {
-			if (depth > MAX_DEPTH) {
-				throw this.error('JSON 嵌套过深');
+	Parser.prototype.readValue = function (depth) {
+		if (depth > MAX_DEPTH) {
+			throw this.error('JSON 嵌套过深');
+		}
+		this.skipWhitespace();
+		if (this.atEnd()) {
+			throw this.error('JSON 提前结束');
+		}
+		var c = this.text.charAt(this.pos);
+		switch (c) {
+			case '{':
+				return this.readObject(depth);
+			case '[':
+				return this.readArray(depth);
+			case '"':
+				return this.readString();
+			case 't':
+				return this.readLiteral('true', true);
+			case 'f':
+				return this.readLiteral('false', false);
+			case 'n':
+				return this.readLiteral('null', null);
+			default:
+				return this.readNumber();
+		}
+	};
+
+	Parser.prototype.readLiteral = function (literal, value) {
+		if (this.text.substr(this.pos, literal.length) !== literal) {
+			throw this.error('非法字面量');
+		}
+		this.pos += literal.length;
+		return value;
+	};
+
+	Parser.prototype.readObject = function (depth) {
+		var object = {};
+		this.pos++;
+		this.skipWhitespace();
+		if (!this.atEnd() && this.text.charAt(this.pos) === '}') {
+			this.pos++;
+			return object;
+		}
+		while (true) {
+			this.skipWhitespace();
+			if (this.atEnd() || this.text.charAt(this.pos) !== '"') {
+				throw this.error('键必须是双引号字符串');
 			}
+			var key = this.readString();
+			this.skipWhitespace();
+			if (this.atEnd() || this.text.charAt(this.pos) !== ':') {
+				throw this.error('缺少冒号');
+			}
+			this.pos++;
+			// 重复键以最后一次为准，与 JSON.parse 一致
+			object[key] = this.readValue(depth + 1);
 			this.skipWhitespace();
 			if (this.atEnd()) {
-				throw this.error('JSON 提前结束');
+				throw this.error('对象未闭合');
 			}
-			const c = this.text[this.pos];
-			switch (c) {
-				case '{':
-					return this.readObject(depth);
-				case '[':
-					return this.readArray(depth);
-				case '"':
-					return this.readString();
-				case 't':
-					return this.readLiteral('true', true);
-				case 'f':
-					return this.readLiteral('false', false);
-				case 'n':
-					return this.readLiteral('null', null);
-				default:
-					return this.readNumber();
+			var c = this.text.charAt(this.pos);
+			if (c === ',') {
+				this.pos++;
+				this.skipWhitespace();
+				if (!this.atEnd() && this.text.charAt(this.pos) === '}') {
+					throw this.error('不允许尾随逗号');
+				}
+				continue;
 			}
-		}
-
-		readLiteral(literal, value) {
-			if (this.text.substr(this.pos, literal.length) !== literal) {
-				throw this.error('非法字面量');
-			}
-			this.pos += literal.length;
-			return value;
-		}
-
-		readObject(depth) {
-			const object = {};
-			this.pos++;
-			this.skipWhitespace();
-			if (!this.atEnd() && this.text[this.pos] === '}') {
+			if (c === '}') {
 				this.pos++;
 				return object;
 			}
-			while (true) {
-				this.skipWhitespace();
-				if (this.atEnd() || this.text[this.pos] !== '"') {
-					throw this.error('键必须是双引号字符串');
-				}
-				const key = this.readString();
-				this.skipWhitespace();
-				if (this.atEnd() || this.text[this.pos] !== ':') {
-					throw this.error('缺少冒号');
-				}
-				this.pos++;
-				// 重复键以最后一次为准，与 JSON.parse 一致
-				object[key] = this.readValue(depth + 1);
-				this.skipWhitespace();
-				if (this.atEnd()) {
-					throw this.error('对象未闭合');
-				}
-				const c = this.text[this.pos];
-				if (c === ',') {
-					this.pos++;
-					this.skipWhitespace();
-					if (!this.atEnd() && this.text[this.pos] === '}') {
-						throw this.error('不允许尾随逗号');
-					}
-					continue;
-				}
-				if (c === '}') {
-					this.pos++;
-					return object;
-				}
-				throw this.error('对象中出现非法字符');
-			}
+			throw this.error('对象中出现非法字符');
 		}
+	};
 
-		readArray(depth) {
-			const array = [];
+	Parser.prototype.readArray = function (depth) {
+		var array = [];
+		this.pos++;
+		this.skipWhitespace();
+		if (!this.atEnd() && this.text.charAt(this.pos) === ']') {
 			this.pos++;
+			return array;
+		}
+		while (true) {
+			array.push(this.readValue(depth + 1));
 			this.skipWhitespace();
-			if (!this.atEnd() && this.text[this.pos] === ']') {
+			if (this.atEnd()) {
+				throw this.error('数组未闭合');
+			}
+			var c = this.text.charAt(this.pos);
+			if (c === ',') {
+				this.pos++;
+				this.skipWhitespace();
+				if (!this.atEnd() && this.text.charAt(this.pos) === ']') {
+					throw this.error('不允许尾随逗号');
+				}
+				continue;
+			}
+			if (c === ']') {
 				this.pos++;
 				return array;
 			}
-			while (true) {
-				array.push(this.readValue(depth + 1));
-				this.skipWhitespace();
-				if (this.atEnd()) {
-					throw this.error('数组未闭合');
-				}
-				const c = this.text[this.pos];
-				if (c === ',') {
-					this.pos++;
-					this.skipWhitespace();
-					if (!this.atEnd() && this.text[this.pos] === ']') {
-						throw this.error('不允许尾随逗号');
-					}
-					continue;
-				}
-				if (c === ']') {
-					this.pos++;
-					return array;
-				}
-				throw this.error('数组中出现非法字符');
-			}
+			throw this.error('数组中出现非法字符');
 		}
+	};
 
-		readString() {
-			this.pos++;
-			let out = '';
-			while (true) {
-				if (this.atEnd()) {
-					throw this.error('字符串未闭合');
-				}
-				const c = this.text[this.pos++];
-				if (c === '"') {
-					return out;
-				}
-				if (c.charCodeAt(0) < 0x20) {
-					throw this.error('字符串里有未转义的控制字符');
-				}
-				if (c !== '\\') {
-					out += c;
-					continue;
-				}
-				if (this.atEnd()) {
-					throw this.error('转义未完成');
-				}
-				const escape = this.text[this.pos++];
-				switch (escape) {
-					case '"':
-						out += '"';
-						break;
-					case '\\':
-						out += '\\';
-						break;
-					case '/':
-						out += '/';
-						break;
-					case 'b':
-						out += '\b';
-						break;
-					case 'f':
-						out += '\f';
-						break;
-					case 'n':
-						out += '\n';
-						break;
-					case 'r':
-						out += '\r';
-						break;
-					case 't':
-						out += '\t';
-						break;
-					case 'u': {
-						if (this.pos + 4 > this.text.length) {
-							throw this.error('\\u 转义不完整');
-						}
-						const hex = this.text.substr(this.pos, 4);
-						this.pos += 4;
-						if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-							throw this.error('\\u 转义非法');
-						}
-						out += String.fromCharCode(Number.parseInt(hex, 16));
-						break;
-					}
-					default:
-						throw this.error('非法转义');
-				}
+	Parser.prototype.readString = function () {
+		this.pos++;
+		var out = '';
+		while (true) {
+			if (this.atEnd()) {
+				throw this.error('字符串未闭合');
 			}
-		}
-
-		readNumber() {
-			const start = this.pos;
-			if (!this.atEnd() && this.text[this.pos] === '-') {
-				this.pos++;
+			var c = this.text.charAt(this.pos++);
+			if (c === '"') {
+				return out;
+			}
+			if (c.charCodeAt(0) < 0x20) {
+				throw this.error('字符串里有未转义的控制字符');
+			}
+			if (c !== '\\') {
+				out += c;
+				continue;
 			}
 			if (this.atEnd()) {
-				throw this.error('数字不完整');
+				throw this.error('转义未完成');
 			}
-			const first = this.text[this.pos];
-			if (first === '0') {
-				this.pos++;
-			} else if (first >= '1' && first <= '9') {
-				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
-					this.pos++;
-				}
-			} else {
-				throw this.error('非法数字');
+			var escape = this.text.charAt(this.pos++);
+			switch (escape) {
+				case '"':
+					out += '"';
+					break;
+				case '\\':
+					out += '\\';
+					break;
+				case '/':
+					out += '/';
+					break;
+				case 'b':
+					out += '\b';
+					break;
+				case 'f':
+					out += '\f';
+					break;
+				case 'n':
+					out += '\n';
+					break;
+				case 'r':
+					out += '\r';
+					break;
+				case 't':
+					out += '\t';
+					break;
+				case 'u':
+					if (this.pos + 4 > this.text.length) {
+						throw this.error('\\u 转义不完整');
+					}
+					var hex = this.text.substr(this.pos, 4);
+					this.pos += 4;
+					if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+						throw this.error('\\u 转义非法');
+					}
+					out += String.fromCharCode(parseInt(hex, 16));
+					break;
+				default:
+					throw this.error('非法转义');
 			}
-			if (!this.atEnd() && this.text[this.pos] === '.') {
-				this.pos++;
-				if (this.atEnd() || !(this.text[this.pos] >= '0' && this.text[this.pos] <= '9')) {
-					throw this.error('小数点后必须有数字');
-				}
-				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
-					this.pos++;
-				}
-			}
-			if (!this.atEnd() && (this.text[this.pos] === 'e' || this.text[this.pos] === 'E')) {
-				this.pos++;
-				if (!this.atEnd() && (this.text[this.pos] === '+' || this.text[this.pos] === '-')) {
-					this.pos++;
-				}
-				if (this.atEnd() || !(this.text[this.pos] >= '0' && this.text[this.pos] <= '9')) {
-					throw this.error('指数必须有数字');
-				}
-				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
-					this.pos++;
-				}
-			}
-			return Number(this.text.slice(start, this.pos));
 		}
-	}
+	};
 
-	/** 解析结果：{ok, value}。失败与 JSON 字面量 null 都算「没有值」，与 Java 一致。 */
+	Parser.prototype.readNumber = function () {
+		var start = this.pos;
+		if (!this.atEnd() && this.text.charAt(this.pos) === '-') {
+			this.pos++;
+		}
+		if (this.atEnd()) {
+			throw this.error('数字不完整');
+		}
+		var first = this.text.charAt(this.pos);
+		if (first === '0') {
+			this.pos++;
+		} else if (first >= '1' && first <= '9') {
+			while (!this.atEnd() && this.text.charAt(this.pos) >= '0' && this.text.charAt(this.pos) <= '9') {
+				this.pos++;
+			}
+		} else {
+			throw this.error('非法数字');
+		}
+		if (!this.atEnd() && this.text.charAt(this.pos) === '.') {
+			this.pos++;
+			if (this.atEnd() || !(this.text.charAt(this.pos) >= '0' && this.text.charAt(this.pos) <= '9')) {
+				throw this.error('小数点后必须有数字');
+			}
+			while (!this.atEnd() && this.text.charAt(this.pos) >= '0' && this.text.charAt(this.pos) <= '9') {
+				this.pos++;
+			}
+		}
+		if (!this.atEnd() && (this.text.charAt(this.pos) === 'e' || this.text.charAt(this.pos) === 'E')) {
+			this.pos++;
+			if (!this.atEnd() && (this.text.charAt(this.pos) === '+' || this.text.charAt(this.pos) === '-')) {
+				this.pos++;
+			}
+			if (this.atEnd() || !(this.text.charAt(this.pos) >= '0' && this.text.charAt(this.pos) <= '9')) {
+				throw this.error('指数必须有数字');
+			}
+			while (!this.atEnd() && this.text.charAt(this.pos) >= '0' && this.text.charAt(this.pos) <= '9') {
+				this.pos++;
+			}
+		}
+		return Number(this.text.slice(start, this.pos));
+	};
+
+	/** 解析结果：{ok, value}。失败与 JSON 字面量 null 都算「没有值」。 */
 	function parse(text) {
 		if (text === null || text === undefined) {
 			return {ok: false, value: undefined};
 		}
 		try {
-			const parser = new Parser(text);
-			const value = parser.readValue(0);
+			var parser = new Parser(text);
+			var value = parser.readValue(0);
 			parser.skipWhitespace();
 			if (!parser.atEnd()) {
 				return {ok: false, value: undefined};
@@ -363,7 +383,7 @@ function createJsonLite() {
 			if (value === null) {
 				return {ok: false, value: undefined};
 			}
-			return {ok: true, value};
+			return {ok: true, value: value};
 		} catch (e) {
 			return {ok: false, value: undefined};
 		}
@@ -374,7 +394,7 @@ function createJsonLite() {
 			return '';
 		}
 		try {
-			const parser = new Parser(text);
+			var parser = new Parser(text);
 			parser.readValue(0);
 			parser.skipWhitespace();
 			if (!parser.atEnd()) {
@@ -396,12 +416,12 @@ function createJsonLite() {
 		if (text === null || text === undefined) {
 			return false;
 		}
-		const body = String(text).trim();
+		var body = String(text).trim();
 		if (body.length < 2) {
 			return false;
 		}
-		const first = body[0];
-		const last = body[body.length - 1];
+		var first = body.charAt(0);
+		var last = body.charAt(body.length - 1);
 		return (first === '[' && last === ']') || (first === '{' && last === '}');
 	}
 
@@ -425,9 +445,9 @@ function createJsonLite() {
 	}
 
 	function toWriteValue(raw) {
-		const text = toStr(raw);
+		var text = toStr(raw);
 		if (looksLikeContainer(text)) {
-			const parsed = parse(text);
+			var parsed = parse(text);
 			if (parsed.ok) {
 				return parsed.value;
 			}
@@ -437,11 +457,11 @@ function createJsonLite() {
 
 	/** Scratch 风格下标 → 0 基：1 是首项，-1 是末项，0 与越界给 -1。 */
 	function arrayIndex(raw, size) {
-		const number = toNum(raw);
-		if (!Number.isFinite(number) || number !== Math.round(number) || number === 0) {
+		var number = toNum(raw);
+		if (!isFiniteValue(number) || number !== Math.round(number) || number === 0) {
 			return -1;
 		}
-		let index = number;
+		var index = number;
 		if (index > 0) {
 			index--;
 		} else {
@@ -459,7 +479,7 @@ function createJsonLite() {
 	}
 
 	function jsSliceIndex(raw, size) {
-		let index = Math.trunc(raw);
+		var index = truncate(raw);
 		if (index < 0) {
 			index = Math.max(size + index, 0);
 		}
@@ -485,8 +505,8 @@ function createJsonLite() {
 
 	/** 写入用的数组位置：1 基，允许越界；非整数或小于 1 给 -1。 */
 	function writeSlot(raw) {
-		const number = toNum(raw);
-		if (!Number.isFinite(number) || number !== Math.round(number) || number < 1) {
+		var number = toNum(raw);
+		if (!isFiniteValue(number) || number !== Math.round(number) || number < 1) {
 			return -1;
 		}
 		return number - 1;
@@ -504,20 +524,16 @@ function createJsonLite() {
 	}
 
 	function parseArray(text) {
-		const parsed = parse(text);
+		var parsed = parse(text);
 		return parsed.ok && Array.isArray(parsed.value) ? parsed.value : null;
-	}
-
-	function safeEntryValue(value) {
-		return value === null || value === undefined ? '' : value;
 	}
 
 	// ---- 积木实现 ----
 
-	const BLOCKS = {};
+	var BLOCKS = {};
 
-	BLOCKS.jsonNew = (a) => {
-		const kind = toStr(a[0]);
+	BLOCKS.jsonNew = function (a) {
+		var kind = toStr(a[0]);
 		if (kind === 'Object') {
 			return '{}';
 		}
@@ -527,8 +543,8 @@ function createJsonLite() {
 		return '';
 	};
 
-	BLOCKS.jsonLength = (a) => {
-		const parsed = parse(toStr(a[0]));
+	BLOCKS.jsonLength = function (a) {
+		var parsed = parse(toStr(a[0]));
 		if (!parsed.ok) {
 			return '';
 		}
@@ -541,14 +557,14 @@ function createJsonLite() {
 		return '';
 	};
 
-	BLOCKS.jsonGet = (a) => {
-		const parsed = parse(toStr(a[0]));
-		const item = toStr(a[1]);
+	BLOCKS.jsonGet = function (a) {
+		var parsed = parse(toStr(a[0]));
+		var item = toStr(a[1]);
 		if (!parsed.ok) {
 			return '';
 		}
 		if (Array.isArray(parsed.value)) {
-			const index = arrayIndex(item, parsed.value.length);
+			var index = arrayIndex(item, parsed.value.length);
 			return index < 0 ? '' : toScratch(parsed.value[index]);
 		}
 		if (typeof parsed.value === 'object') {
@@ -558,15 +574,15 @@ function createJsonLite() {
 		return '';
 	};
 
-	BLOCKS.jsonSet = (a) => {
-		const parsed = parse(toStr(a[0]));
-		const item = toStr(a[1]);
-		const value = toWriteValue(a[2]);
+	BLOCKS.jsonSet = function (a) {
+		var parsed = parse(toStr(a[0]));
+		var item = toStr(a[1]);
+		var value = toWriteValue(a[2]);
 		if (!parsed.ok) {
 			return '';
 		}
 		if (Array.isArray(parsed.value)) {
-			const slot = writeSlot(item);
+			var slot = writeSlot(item);
 			if (slot >= 0) {
 				setArraySlot(parsed.value, slot, value);
 			}
@@ -579,14 +595,14 @@ function createJsonLite() {
 		return '';
 	};
 
-	BLOCKS.jsonDelete = (a) => {
-		const parsed = parse(toStr(a[0]));
-		const item = toStr(a[1]);
+	BLOCKS.jsonDelete = function (a) {
+		var parsed = parse(toStr(a[0]));
+		var item = toStr(a[1]);
 		if (!parsed.ok) {
 			return '';
 		}
 		if (Array.isArray(parsed.value)) {
-			const index = arrayIndex(item, parsed.value.length);
+			var index = arrayIndex(item, parsed.value.length);
 			if (index >= 0) {
 				// 照搬 delete arr[i]：长度不变，该位置变 null
 				parsed.value[index] = null;
@@ -600,24 +616,24 @@ function createJsonLite() {
 		return '';
 	};
 
-	BLOCKS.jsonIs = (a) => {
-		// 与 Java 一致：只有字符串才可能「是合法 JSON」——数字 1 不是 JSON
+	BLOCKS.jsonIs = function (a) {
+		// 只有字符串才可能「是合法 JSON」——数字 1 不是 JSON
 		if (typeof a[0] !== 'string') {
 			return false;
 		}
-		const text = a[0];
-		const check = toStr(a[1]);
+		var text = a[0];
+		var check = toStr(a[1]);
 		if (check === 'valid') {
 			return looksLikeContainer(text) && parse(text).ok;
 		}
 		if (!looksLikeContainer(text)) {
 			return false;
 		}
-		const parsed = parse(text);
+		var parsed = parse(text);
 		if (!parsed.ok) {
 			return false;
 		}
-		const array = Array.isArray(parsed.value);
+		var array = Array.isArray(parsed.value);
 		if (check === 'Object') {
 			return !array;
 		}
@@ -627,12 +643,12 @@ function createJsonLite() {
 		return false;
 	};
 
-	BLOCKS.jsonHasKey = (a) => {
-		const parsed = parse(toStr(a[0]));
+	BLOCKS.jsonHasKey = function (a) {
+		var parsed = parse(toStr(a[0]));
 		if (!parsed.ok || !isContainer(parsed.value)) {
 			return false;
 		}
-		const key = keyText(toWriteValue(a[1]));
+		var key = keyText(toWriteValue(a[1]));
 		if (Array.isArray(parsed.value)) {
 			if (key === 'length') {
 				return false;
@@ -642,22 +658,23 @@ function createJsonLite() {
 		return Object.prototype.hasOwnProperty.call(parsed.value, key);
 	};
 
-	BLOCKS.jsonGetPath = (a) => {
-		const root = parse(toStr(a[0]));
-		const path = parse(toStr(a[1]));
+	BLOCKS.jsonGetPath = function (a) {
+		var root = parse(toStr(a[0]));
+		var path = parse(toStr(a[1]));
 		if (!root.ok || !path.ok || !Array.isArray(path.value)) {
 			return '';
 		}
-		let current = root.value;
-		for (const segment of path.value) {
+		var current = root.value;
+		for (var i = 0; i < path.value.length; i++) {
+			var segment = path.value[i];
 			if (Array.isArray(current)) {
-				const index = arrayIndex(toScratch(segment), current.length);
+				var index = arrayIndex(toScratch(segment), current.length);
 				if (index < 0) {
 					return '';
 				}
 				current = current[index];
 			} else if (isContainer(current)) {
-				const key = keyText(segment);
+				var key = keyText(segment);
 				if (!Object.prototype.hasOwnProperty.call(current, key)) {
 					return '';
 				}
@@ -669,23 +686,23 @@ function createJsonLite() {
 		return toScratch(current);
 	};
 
-	BLOCKS.jsonSetPath = (a) => {
-		const root = parse(toStr(a[0]));
-		const path = parse(toStr(a[1]));
+	BLOCKS.jsonSetPath = function (a) {
+		var root = parse(toStr(a[0]));
+		var path = parse(toStr(a[1]));
 		if (!root.ok || !path.ok || !Array.isArray(path.value)) {
 			return '';
 		}
-		const segments = path.value;
+		var segments = path.value;
 		if (segments.length === 0) {
 			return stringify(root.value);
 		}
-		const data = toWriteValue(a[2]);
-		let current = root.value;
-		for (let i = 0; i < segments.length; i++) {
-			const segment = segments[i];
-			const last = i === segments.length - 1;
+		var data = toWriteValue(a[2]);
+		var current = root.value;
+		for (var i = 0; i < segments.length; i++) {
+			var segment = segments[i];
+			var last = i === segments.length - 1;
 			if (Array.isArray(current)) {
-				const index = arrayIndex(toScratch(segment), current.length);
+				var index = arrayIndex(toScratch(segment), current.length);
 				if (index < 0) {
 					return '';
 				}
@@ -695,7 +712,7 @@ function createJsonLite() {
 					current = current[index];
 				}
 			} else if (isContainer(current)) {
-				const key = keyText(segment);
+				var key = keyText(segment);
 				if (last) {
 					current[key] = data;
 				} else {
@@ -711,25 +728,27 @@ function createJsonLite() {
 		return stringify(root.value);
 	};
 
-	BLOCKS.jsonMinify = (a) => {
-		const parsed = parse(toStr(a[0]));
+	BLOCKS.jsonMinify = function (a) {
+		var parsed = parse(toStr(a[0]));
 		return parsed.ok ? stringify(parsed.value) : '';
 	};
 
-	BLOCKS.jsonErrMsg = (a) => errorMessage(toStr(a[0]));
+	BLOCKS.jsonErrMsg = function (a) {
+		return errorMessage(toStr(a[0]));
+	};
 
-	BLOCKS.jsonGetAll = (a) => {
-		const parsed = parse(toStr(a[0]));
+	BLOCKS.jsonGetAll = function (a) {
+		var parsed = parse(toStr(a[0]));
 		if (!parsed.ok || !isContainer(parsed.value)) {
 			return '';
 		}
-		const kind = toStr(a[1]);
+		var kind = toStr(a[1]);
 		if (kind !== 'keys' && kind !== 'values' && kind !== 'datas') {
 			return '';
 		}
-		const out = [];
-		const add = (key, value) => {
-			const safe = value === null || value === undefined ? '' : value;
+		var out = [];
+		var add = function (key, value) {
+			var safe = value === null || value === undefined ? '' : value;
 			if (kind === 'keys') {
 				out.push(key);
 			} else if (kind === 'values') {
@@ -739,15 +758,19 @@ function createJsonLite() {
 			}
 		};
 		if (Array.isArray(parsed.value)) {
-			parsed.value.forEach((value, index) => add(String(index), value));
+			parsed.value.forEach(function (value, index) {
+				add(String(index), value);
+			});
 		} else {
-			Object.keys(parsed.value).forEach((key) => add(key, parsed.value[key]));
+			Object.keys(parsed.value).forEach(function (key) {
+				add(key, parsed.value[key]);
+			});
 		}
 		return stringify(out);
 	};
 
-	BLOCKS.jsonArrayPush = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayPush = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
@@ -755,47 +778,47 @@ function createJsonLite() {
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArraySet = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArraySet = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const index = toNum(a[1]) - 1;
-		if (Number.isInteger(index) && index >= 0) {
+		var index = toNum(a[1]) - 1;
+		if (isIntegerValue(index) && index >= 0) {
 			setArraySlot(array, index, toWriteValue(a[2]));
 		}
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArrayInsert = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayInsert = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const at = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		var at = jsSliceIndex(toNum(a[1]) - 1, array.length);
 		array.splice(at, 0, toWriteValue(a[2]));
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArrayDelete = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayDelete = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const at = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		var at = jsSliceIndex(toNum(a[1]) - 1, array.length);
 		if (at < array.length) {
 			array.splice(at, 1);
 		}
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArrayRemoveAll = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayRemoveAll = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const target = toWriteValue(a[1]);
-		for (let i = array.length - 1; i >= 0; i--) {
+		var target = toWriteValue(a[1]);
+		for (var i = array.length - 1; i >= 0; i--) {
 			if (strictEquals(array[i], target)) {
 				array.splice(i, 1);
 			}
@@ -803,13 +826,13 @@ function createJsonLite() {
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArrayItemNum = (a) => {
-		const array = parseArray(toStr(a[1]));
+	BLOCKS.jsonArrayItemNum = function (a) {
+		var array = parseArray(toStr(a[1]));
 		if (array === null) {
 			return '';
 		}
-		const target = toWriteValue(a[0]);
-		for (let i = 0; i < array.length; i++) {
+		var target = toWriteValue(a[0]);
+		for (var i = 0; i < array.length; i++) {
 			if (strictEquals(array[i], target)) {
 				return i + 1;
 			}
@@ -817,53 +840,53 @@ function createJsonLite() {
 		return 0;
 	};
 
-	BLOCKS.jsonArrayFromTo = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayFromTo = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const start = jsSliceIndex(toNum(a[1]) - 1, array.length);
-		let end = jsSliceIndex(toNum(a[2]), array.length);
+		var start = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		var end = jsSliceIndex(toNum(a[2]), array.length);
 		if (end < start) {
 			end = start;
 		}
 		return stringify(array.slice(start, end));
 	};
 
-	BLOCKS.jsonArrayConcat = (a) => {
-		const left = parseArray(toStr(a[0]));
-		const right = parseArray(toStr(a[1]));
+	BLOCKS.jsonArrayConcat = function (a) {
+		var left = parseArray(toStr(a[0]));
+		var right = parseArray(toStr(a[1]));
 		if (left === null || right === null) {
 			return '';
 		}
 		return stringify(left.concat(right));
 	};
 
-	BLOCKS.jsonArrayMapField = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayMapField = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const key = toStr(a[1]);
-		return stringify(array.map((element) => (
-			isContainer(element) && !Array.isArray(element)
+		var key = toStr(a[1]);
+		return stringify(array.map(function (element) {
+			return isContainer(element) && !Array.isArray(element)
 				&& Object.prototype.hasOwnProperty.call(element, key)
-				? element[key] : null
-		)));
+				? element[key] : null;
+		}));
 	};
 
-	BLOCKS.jsonArraySetLen = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArraySetLen = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const raw = toNum(a[1]);
-		if (!Number.isInteger(raw) || raw < 0) {
+		var raw = toNum(a[1]);
+		if (!isIntegerValue(raw) || raw < 0) {
 			return '';
 		}
 		array.length = raw;
 		// 变大时 JS 留下空洞，序列化后是 null——这里显式补 null，避免空洞让 stringify 写成 null 之外的东西
-		for (let i = 0; i < raw; i++) {
+		for (var i = 0; i < raw; i++) {
 			if (array[i] === undefined) {
 				array[i] = null;
 			}
@@ -871,33 +894,35 @@ function createJsonLite() {
 		return stringify(array);
 	};
 
-	BLOCKS.jsonArrayCreate = (a) => {
-		const delimiter = toStr(a[0]);
-		const text = toStr(a[1]);
+	BLOCKS.jsonArrayCreate = function (a) {
+		var delimiter = toStr(a[0]);
+		var text = toStr(a[1]);
 		if (delimiter === '') {
-			return stringify(Array.from(text));
+			// 按 UTF-16 代码单元拆，与原 Java 的 charAt 循环一致（Array.from 会按码点拆，反而不一致）
+			return stringify(text.split(''));
 		}
 		return stringify(text.split(delimiter));
 	};
 
-	BLOCKS.jsonArrayJoin = (a) => {
-		const delimiter = toStr(a[0]);
-		const array = parseArray(toStr(a[1]));
+	BLOCKS.jsonArrayJoin = function (a) {
+		var delimiter = toStr(a[0]);
+		var array = parseArray(toStr(a[1]));
 		if (array === null) {
 			return '';
 		}
-		return array.map((element) => (element === null || element === undefined ? '' : keyText(element)))
-			.join(delimiter);
+		return array.map(function (element) {
+			return element === null || element === undefined ? '' : keyText(element);
+		}).join(delimiter);
 	};
 
-	BLOCKS.jsonArraySort = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArraySort = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return '';
 		}
-		const items = array.slice();
+		var items = array.slice();
 		// 参与比较的取值：对象/数组退化为文本，null 当 0
-		const compareValue = (element) => {
+		var compareValue = function (element) {
 			if (element === null || element === undefined) {
 				return 0;
 			}
@@ -906,28 +931,30 @@ function createJsonLite() {
 			}
 			return element;
 		};
-		items.sort((left, right) => castCompare(compareValue(left), compareValue(right)));
+		items.sort(function (left, right) {
+			return castCompare(compareValue(left), compareValue(right));
+		});
 		if (toStr(a[1]) === 'descending') {
 			items.reverse();
 		}
 		return stringify(items);
 	};
 
-	BLOCKS.jsonArrayTextFilter = (a) => {
-		const root = parse(toStr(a[0]));
+	BLOCKS.jsonArrayTextFilter = function (a) {
+		var root = parse(toStr(a[0]));
 		if (!root.ok || !isContainer(root.value)) {
 			return '';
 		}
-		const option = toStr(a[1]);
-		const needle = toStr(a[2]);
-		const shape = toStr(a[3]);
-		const asObject = shape === 'Object';
+		var option = toStr(a[1]);
+		var needle = toStr(a[2]);
+		var shape = toStr(a[3]);
+		var asObject = shape === 'Object';
 		if (!asObject && shape !== 'Array') {
 			return '';
 		}
-		const values = [];
-		const mapped = {};
-		const matches = (element) => {
+		var values = [];
+		var mapped = {};
+		var matches = function (element) {
 			if (typeof element !== 'string') {
 				return false;
 			}
@@ -944,15 +971,15 @@ function createJsonLite() {
 			return false;
 		};
 		if (Array.isArray(root.value)) {
-			root.value.forEach((element, index) => {
+			root.value.forEach(function (element, index) {
 				if (matches(element)) {
 					values.push(element);
 					mapped[String(index + 1)] = element;
 				}
 			});
 		} else {
-			Object.keys(root.value).forEach((key) => {
-				const element = root.value[key];
+			Object.keys(root.value).forEach(function (key) {
+				var element = root.value[key];
 				if (matches(element)) {
 					values.push(element);
 					mapped[key] = element;
@@ -962,29 +989,34 @@ function createJsonLite() {
 		return stringify(asObject ? mapped : values);
 	};
 
-	BLOCKS.jsonArrayAnalysis = (a) => {
-		const array = parseArray(toStr(a[0]));
+	BLOCKS.jsonArrayAnalysis = function (a) {
+		var array = parseArray(toStr(a[0]));
 		if (array === null) {
 			return 0;
 		}
-		const kind = toStr(a[1]);
-		const values = array.map((element) => toNum(toScratch(element)));
-		const sum = values.reduce((total, value) => total + value, 0);
+		var kind = toStr(a[1]);
+		var values = array.map(function (element) {
+			return toNum(toScratch(element));
+		});
+		var sum = values.reduce(function (total, value) {
+			return total + value;
+		}, 0);
+		var i;
 		switch (kind) {
 			case 'maximum': {
-				let max = -Infinity;
-				for (const value of values) {
-					if (value > max) {
-						max = value;
+				var max = -Infinity;
+				for (i = 0; i < values.length; i++) {
+					if (values[i] > max) {
+						max = values[i];
 					}
 				}
 				return max;
 			}
 			case 'minimum': {
-				let min = Infinity;
-				for (const value of values) {
-					if (value < min) {
-						min = value;
+				var min = Infinity;
+				for (i = 0; i < values.length; i++) {
+					if (values[i] < min) {
+						min = values[i];
 					}
 				}
 				return min;
@@ -997,20 +1029,24 @@ function createJsonLite() {
 				if (values.length === 0) {
 					return NaN;
 				}
-				const sorted = values.slice().sort((x, y) => (x < y ? -1 : (x > y ? 1 : 0)));
-				const middle = Math.floor(sorted.length / 2);
+				var sorted = values.slice().sort(function (x, y) {
+					return x < y ? -1 : (x > y ? 1 : 0);
+				});
+				var middle = Math.floor(sorted.length / 2);
 				return sorted.length % 2 === 0
 					? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 			}
 			case 'mode': {
-				const counts = new Map();
-				let mode = 0;
-				let best = 0;
-				for (const value of values) {
-					// -0 与 0 算同一个键（SameValueZero）；NaN 也归一到同一个键
-					const key = value === 0 ? 0 : value;
-					const count = (counts.get(key) || 0) + 1;
-					counts.set(key, count);
+				// 键统一加前缀：数字转字符串后不会撞上 Object 原型上的名字。
+				// -0 与 0 算同一个键（SameValueZero）；NaN 也归一到同一个键。
+				var counts = {};
+				var mode = 0;
+				var best = 0;
+				for (i = 0; i < values.length; i++) {
+					var value = values[i];
+					var key = '#' + String(value === 0 ? 0 : value);
+					var count = (counts[key] || 0) + 1;
+					counts[key] = count;
 					if (count > best) {
 						best = count;
 						mode = value;
@@ -1019,10 +1055,10 @@ function createJsonLite() {
 				return mode;
 			}
 			case 'variance': {
-				const average = sum / values.length;
-				let total = 0;
-				for (const value of values) {
-					const delta = value - average;
+				var average = sum / values.length;
+				var total = 0;
+				for (i = 0; i < values.length; i++) {
+					var delta = values[i] - average;
 					total += delta * delta;
 				}
 				return total / values.length;
@@ -1035,8 +1071,8 @@ function createJsonLite() {
 	return {
 		blocks: BLOCKS,
 		/** 供对拍脚本直接调用：返回与 Java 侧同级的字符串化结果。 */
-		run: (opcode, args) => {
-			const fn = BLOCKS[opcode];
+		run: function (opcode, args) {
+			var fn = BLOCKS[opcode];
 			return fn ? fn(args) : '';
 		},
 		toScratchString: toStr

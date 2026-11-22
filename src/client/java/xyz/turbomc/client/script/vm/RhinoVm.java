@@ -60,6 +60,8 @@ public final class RhinoVm {
 			"vm.es5.js",
 			"scratch-globals.js",
 			"turbomc-extension.es5.js",
+			// JSON 积木的唯一实现：bootstrap 装积木时直接取用，必须在它之前加载
+			"json-core.es5.js",
 			"vm-bootstrap.js"
 	};
 
@@ -149,9 +151,6 @@ public final class RhinoVm {
 			// WORK_TIME 计算为 0，整帧静默空转且不报错（阶段 0 踩过的坑）。
 			call(cx, "__tmcSetBudget", new Object[]{budgetNanos / 1_000_000d});
 			ready = true;
-			// 列表读写两块积木的实现在 vm 包（需要 VM 内部状态），注册点放这里，
-			// 保证「action → vm」不会多出一条新依赖边。重复注册是幂等的。
-			VmListActions.registerAll();
 			// 扩展产物与映射表必须一一对应：对不上时积木会静默失效——扩展旧了是新积木
 			// 拖不出来，模组旧了是积木点下去没反应。结论交给 HUD 常驻显示（见 §6.3）
 			try {

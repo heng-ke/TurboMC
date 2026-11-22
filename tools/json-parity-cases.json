@@ -32,6 +32,7 @@
   {"id": "del-obj", "op": "jsonDelete", "args": ["{\"a\":1,\"b\":2}", "a"]},
   {"id": "del-arr", "op": "jsonDelete", "args": ["[1,2,3]", "2"]},
   {"id": "del-arr-zero", "op": "jsonDelete", "args": ["[1,2,3]", "0"]},
+  {"id": "del-bad-json", "op": "jsonDelete", "args": ["{\"a\":", "a"]},
 
   {"id": "is-valid-obj", "op": "jsonIs", "args": ["{\"a\":1}", "valid"]},
   {"id": "is-valid-bad", "op": "jsonIs", "args": ["{a:1}", "valid"]},
@@ -47,17 +48,20 @@
   {"id": "has-arr-yes", "op": "jsonHasKey", "args": ["[1,2,3]", "2"]},
   {"id": "has-arr-length", "op": "jsonHasKey", "args": ["[1,2,3]", "length"]},
   {"id": "has-arr-zero", "op": "jsonHasKey", "args": ["[1,2,3]", "0"]},
+  {"id": "has-bad-json", "op": "jsonHasKey", "args": ["{a:1}", "a"]},
 
   {"id": "getpath-nested", "op": "jsonGetPath", "args": ["{\"a\":{\"b\":[10,20]}}", "[\"a\",\"b\",2]"]},
   {"id": "getpath-missing", "op": "jsonGetPath", "args": ["{\"a\":1}", "[\"z\"]"]},
   {"id": "getpath-empty", "op": "jsonGetPath", "args": ["{\"a\":1}", "[]"]},
   {"id": "getpath-bad-path", "op": "jsonGetPath", "args": ["{\"a\":1}", "\"a\""]},
+  {"id": "getpath-bad-json", "op": "jsonGetPath", "args": ["{\"a\":1", "[0]"]},
 
   {"id": "setpath-replace", "op": "jsonSetPath", "args": ["{\"a\":{\"b\":1}}", "[\"a\",\"b\"]", "2"]},
   {"id": "setpath-newkey", "op": "jsonSetPath", "args": ["{\"a\":{}}", "[\"a\",\"c\"]", "3"]},
   {"id": "setpath-missing-mid", "op": "jsonSetPath", "args": ["{\"a\":{}}", "[\"z\",\"c\"]", "3"]},
   {"id": "setpath-empty", "op": "jsonSetPath", "args": ["{\"a\":1}", "[]", "9"]},
   {"id": "setpath-arr", "op": "jsonSetPath", "args": ["{\"a\":[1,2]}", "[\"a\",1]", "9"]},
+  {"id": "setpath-bad-json", "op": "jsonSetPath", "args": ["[1,2", "[0]", "9"]},
 
   {"id": "minify", "op": "jsonMinify", "args": ["  { \"a\" : [1, 2] }  "]},
   {"id": "minify-bad", "op": "jsonMinify", "args": ["{a:1}"]},
@@ -76,6 +80,7 @@
   {"id": "getall-datas", "op": "jsonGetAll", "args": ["{\"a\":1}", "datas"]},
   {"id": "getall-arr-keys", "op": "jsonGetAll", "args": ["[7,8]", "keys"]},
   {"id": "getall-bad-kind", "op": "jsonGetAll", "args": ["[7]", "x"]},
+  {"id": "getall-bad-json", "op": "jsonGetAll", "args": ["[1,2", "datas"]},
 
   {"id": "push", "op": "jsonArrayPush", "args": ["[1,2]", "3"]},
   {"id": "push-container", "op": "jsonArrayPush", "args": ["[]", "{\"x\":1}"]},
@@ -84,33 +89,40 @@
   {"id": "aset-2", "op": "jsonArraySet", "args": ["[1,2,3]", "2", "99"]},
   {"id": "aset-extend", "op": "jsonArraySet", "args": ["[1]", "3", "9"]},
   {"id": "aset-zero", "op": "jsonArraySet", "args": ["[1,2]", "0", "9"]},
+  {"id": "aset-bad-json", "op": "jsonArraySet", "args": ["{oops}", "1", "9"]},
 
   {"id": "ainsert-1", "op": "jsonArrayInsert", "args": ["[1,2]", "1", "9"]},
   {"id": "ainsert-2", "op": "jsonArrayInsert", "args": ["[1,2]", "2", "9"]},
   {"id": "ainsert-over", "op": "jsonArrayInsert", "args": ["[1,2]", "9", "9"]},
+  {"id": "ainsert-bad-json", "op": "jsonArrayInsert", "args": ["{\"a\":1}", "1", "9"]},
 
   {"id": "adel-1", "op": "jsonArrayDelete", "args": ["[1,2,3]", "1"]},
   {"id": "adel-2", "op": "jsonArrayDelete", "args": ["[1,2,3]", "2"]},
   {"id": "adel-zero", "op": "jsonArrayDelete", "args": ["[1,2,3]", "0"]},
   {"id": "adel-over", "op": "jsonArrayDelete", "args": ["[1,2,3]", "9"]},
+  {"id": "adel-bad-json", "op": "jsonArrayDelete", "args": ["[1,2,", "1"]},
 
   {"id": "aremoveall", "op": "jsonArrayRemoveAll", "args": ["[1,2,1,3]", "1"]},
   {"id": "aremoveall-str", "op": "jsonArrayRemoveAll", "args": ["[1,\"1\",2]", "1"]},
   {"id": "aremoveall-obj", "op": "jsonArrayRemoveAll", "args": ["[{\"a\":1}]", "{\"a\":1}"]},
+  {"id": "aremoveall-bad-json", "op": "jsonArrayRemoveAll", "args": ["{\"a\":1}", "1"]},
 
   {"id": "anum-found", "op": "jsonArrayItemNum", "args": ["2", "[1,2,3]"]},
   {"id": "anum-miss", "op": "jsonArrayItemNum", "args": ["9", "[1,2,3]"]},
   {"id": "anum-type", "op": "jsonArrayItemNum", "args": ["1", "[\"1\"]"]},
+  {"id": "anum-bad-json", "op": "jsonArrayItemNum", "args": ["1", "[1,2"]},
 
   {"id": "afromto", "op": "jsonArrayFromTo", "args": ["[1,2,3,4]", "1", "2"]},
   {"id": "afromto-tail", "op": "jsonArrayFromTo", "args": ["[1,2,3,4]", "-2", "4"]},
   {"id": "afromto-rev", "op": "jsonArrayFromTo", "args": ["[1,2,3]", "3", "1"]},
+  {"id": "afromto-bad-json", "op": "jsonArrayFromTo", "args": ["[1,2", "1", "2"]},
 
   {"id": "aconcat", "op": "jsonArrayConcat", "args": ["[1,2]", "[3]"]},
   {"id": "aconcat-bad", "op": "jsonArrayConcat", "args": ["[1]", "{}"]},
 
   {"id": "amap", "op": "jsonArrayMapField", "args": ["[{\"k\":1},{\"j\":2}]", "k"]},
   {"id": "amap-mixed", "op": "jsonArrayMapField", "args": ["[{\"k\":1},3]", "k"]},
+  {"id": "amap-bad-json", "op": "jsonArrayMapField", "args": ["{\"k\":1}", "k"]},
 
   {"id": "asetlen-shrink", "op": "jsonArraySetLen", "args": ["[1,2,3,4]", "2"]},
   {"id": "asetlen-grow", "op": "jsonArraySetLen", "args": ["[1]", "3"]},
@@ -122,15 +134,18 @@
 
   {"id": "ajoin", "op": "jsonArrayJoin", "args": ["-", "[1,2,3]"]},
   {"id": "ajoin-null", "op": "jsonArrayJoin", "args": [",", "[1,null,3]"]},
+  {"id": "ajoin-bad-json", "op": "jsonArrayJoin", "args": [",", "not json"]},
 
   {"id": "asort-num", "op": "jsonArraySort", "args": ["[3,1,2]", "ascending"]},
   {"id": "asort-text", "op": "jsonArraySort", "args": ["[\"b\",\"A\",\"c\"]", "ascending"]},
   {"id": "asort-desc", "op": "jsonArraySort", "args": ["[1,3,2]", "descending"]},
   {"id": "asort-mixed", "op": "jsonArraySort", "args": ["[10,9,\"a\"]", "ascending"]},
+  {"id": "asort-bad-json", "op": "jsonArraySort", "args": ["{\"a\":1}", "ascending"]},
 
   {"id": "afilter-inc", "op": "jsonArrayTextFilter", "args": ["[\"apple\",\"banana\",1]", "includes", "an", "Array"]},
   {"id": "afilter-start", "op": "jsonArrayTextFilter", "args": ["[\"apple\",\"avocado\"]", "starts with", "ap", "Object"]},
   {"id": "afilter-bad-shape", "op": "jsonArrayTextFilter", "args": ["[\"a\"]", "includes", "a", "x"]},
+  {"id": "afilter-bad-json", "op": "jsonArrayTextFilter", "args": ["not json", "includes", "a", "Array"]},
 
   {"id": "aanalysis-max", "op": "jsonArrayAnalysis", "args": ["[1,5,3]", "maximum"]},
   {"id": "aanalysis-min", "op": "jsonArrayAnalysis", "args": ["[1,5,3]", "minimum"]},
@@ -142,5 +157,6 @@
   {"id": "aanalysis-variance", "op": "jsonArrayAnalysis", "args": ["[1,2,3,4]", "variance"]},
   {"id": "aanalysis-empty-max", "op": "jsonArrayAnalysis", "args": ["[]", "maximum"]},
   {"id": "aanalysis-empty-avg", "op": "jsonArrayAnalysis", "args": ["[]", "average"]},
-  {"id": "aanalysis-string-nums", "op": "jsonArrayAnalysis", "args": ["[\"1\",\"2\"]", "sum"]}
+  {"id": "aanalysis-string-nums", "op": "jsonArrayAnalysis", "args": ["[\"1\",\"2\"]", "sum"]},
+  {"id": "aanalysis-bad-json", "op": "jsonArrayAnalysis", "args": ["[1,", "sum"]}
 ]

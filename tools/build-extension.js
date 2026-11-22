@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 /*
- * 从单一数据源渲染 TurboMC 扩展的两份产物：
+ * 从单一数据源渲染 TurboMC 扩展的产物：
  *
  *   turbowarp/src/blocks.data.js  +  turbowarp/src/items.data.js
  *            │
  *            ├─▶ turbowarp/turbomc-extension.js                    （编辑器副本，ES6，带占位方法与分组标题）
  *            └─▶ src/client/resources/assets/turbomc/vm/turbomc-extension.es5.js （运行时副本，ES5，无占位方法与标题）
  *
- * 两份产物的差异只有四处，其它内容必须逐字一致：
+ *   turbowarp/src/json-lite.js
+ *            ├─▶ 内联进编辑器副本（JSON 积木在浏览器本地求值）
+ *            └─▶ 原样复制为 src/client/resources/assets/turbomc/vm/json-core.es5.js（游戏内同一份实现）
+ *
+ * 两份扩展产物的差异只有四处，其它内容必须逐字一致：
  *   1. 语法：编辑器是 class，运行时是普通对象（Rhino 里不需要 class，也就省掉 Babel 中间层）；
  *   2. 分组标题：只有编辑器渲染（内嵌 vm.es5.js 不支持 label）；
  *   3. 菜单 items：编辑器内联数组（Worker 要结构化克隆），运行时用函数引用（省 1.6 秒初始化）；
  *   4. 占位方法：只有编辑器生成（游戏内由 vm-bootstrap 注入真实调用）。
  *
  * 用法：
- *   node tools/build-extension.js           写入两份产物
+ *   node tools/build-extension.js           写入产物
  *   node tools/build-extension.js --check   只校验产物是否过期（CI 用，过期退出非零）
  */
 
@@ -27,9 +31,11 @@ const ITEMS = require(path.join(ROOT, 'turbowarp/src/items.data.js'));
 /** 远程客户端：真实源文件，构建时拼进编辑器产物（见下方 installRemote 调用）。 */
 const REMOTE_CLIENT = fs.readFileSync(path.join(ROOT, 'turbowarp/src/remote-client.js'), 'utf8').trim();
 /**
- * JSON 积木的浏览器端实现。reporter 是同步求值，浏览器不可能为了一次读数等 RPC，
- * 所以这批纯计算积木必须有一份本地实现；与 Java 侧的等价性由 json-parity 对拍保证。
- * 只进编辑器产物——游戏内仍然走 Java。
+ * JSON 积木的唯一实现（ES5，浏览器与 Rhino 共用）。
+ *
+ * <p>reporter 是同步求值，浏览器不可能为了一次读数等 RPC；游戏内则直接在本机解释执行。
+ * 两个宿主用同一份源码：编辑器产物内联，运行时原样复制为 json-core.es5.js。
+ * 行为基线由 tools/json-parity-golden.json 锁住（见 check-json-parity.js）。</p>
  */
 const JSON_LITE = fs.readFileSync(path.join(ROOT, 'turbowarp/src/json-lite.js'), 'utf8').trim();
 /**
@@ -42,6 +48,12 @@ const OUTPUTS = {
 	editor: path.join(ROOT, 'turbowarp/turbomc-extension.js'),
 	runtime: path.join(ROOT, 'src/client/resources/assets/turbomc/vm/turbomc-extension.es5.js'),
 };
+
+/**
+ * JSON 核心的运行时副本。源码本身就是 ES5，原样复制即可；
+ * 单独成文件是因为它先于 vm-bootstrap.js 加载，且浏览器产物里是内联的同一段文本。
+ */
+const JSON_RUNTIME = path.join(ROOT, 'src/client/resources/assets/turbomc/vm/json-core.es5.js');
 
 const ARG_TYPES = {
 	string: 'STRING',
@@ -365,6 +377,26 @@ function main() {
 		}
 		fs.writeFileSync(file, next);
 		console.log('[build-extension] 写入 ' + path.relative(ROOT, file) + '（' + next.split('\n').length + ' 行）');
+	}
+
+	// JSON 核心：单一源码，运行时原样复制。
+	{
+		const next = JSON_LITE + '\n';
+		const exists = fs.existsSync(JSON_RUNTIME);
+		const current = exists ? fs.readFileSync(JSON_RUNTIME, 'utf8') : '';
+		if (current === next) {
+			console.log('[build-extension] json-core 已是最新');
+		} else {
+			stale++;
+			if (check) {
+				console.error('[build-extension] ✗ ' + path.relative(ROOT, JSON_RUNTIME)
+					+ ' 与 turbowarp/src/json-lite.js 不一致，运行 node tools/build-extension.js 重新生成');
+			} else {
+				fs.writeFileSync(JSON_RUNTIME, next);
+				console.log('[build-extension] 写入 ' + path.relative(ROOT, JSON_RUNTIME)
+					+ '（' + next.split('\n').length + ' 行）');
+			}
+		}
 	}
 
 	if (check && stale > 0) {
