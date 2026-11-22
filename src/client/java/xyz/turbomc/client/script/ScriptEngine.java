@@ -2,6 +2,7 @@ package xyz.turbomc.client.script;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
+import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.config.TurboMCConfig;
@@ -22,6 +23,7 @@ import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.sb3.ProjectSanity;
 import xyz.turbomc.client.script.sb3.Sb3Importer;
 import xyz.turbomc.client.script.render.FrameOverlay;
+import xyz.turbomc.client.script.remote.RemoteBridge;
 import xyz.turbomc.client.script.store.PackStore;
 import xyz.turbomc.client.script.store.ScriptDefinition;
 import xyz.turbomc.client.script.store.ScriptPack;
@@ -62,6 +64,10 @@ public final class ScriptEngine {
 	private int scriptCount;
 	/** 当前运行的包文件名，供面板显示。 */
 	private String activeName = "";
+	/** 热重载提示：下一次 {@link #start()} 成功后并进状态原因，只提示一次。 */
+	private Text reloadNotice;
+	/** 上一次检查 imports/ 的时刻（毫秒）。 */
+	private long lastReloadCheckMs;
 
 	private ScriptEngine() {
 	}
@@ -83,6 +89,10 @@ public final class ScriptEngine {
 	}
 
 	public void tick(MinecraftClient client) {
+		// 聊天队列必须最先推进，且不受任何分支影响。
+		// 它曾经只在 vm.tick 之后调一次，于是「引擎没开」「远程会话中」「停止全部」三种情况下
+		// 冷却永远不减：第一条消息发出去了，后续全部卡在队列里，表现为「说了一次就再也不说」。
+		GameActions.tickChat();
 		if (!healthy) {
 			// 工程读不出来 / 脚本跑崩时 VM 不再推进：先把会话与按键收干净，否则角色会带着
 			// 上一份工程按下的前进键一直往前走。状态与原因保留，交给界面显示。
@@ -96,8 +106,9 @@ public final class ScriptEngine {
 			halted = false;
 			if (running) {
 				stop(Status.NO_WORLD, null);
-			} else if (status != Status.OFF_WORLD_EXIT) {
-				// 标题界面也要把话说清楚：这不是「引擎坏了」，只是还没进世界
+			} else if (status != Status.OFF_WORLD_EXIT && status != Status.REMOTE) {
+				// 远程会话可能是在标题界面建立的（面板先连、后进世界），
+				// 这里若写成 NO_WORLD，进世界后就会把内 VM 拉起来跟浏览器抢同一份工程
 				setStatus(Status.NO_WORLD, null);
 			}
 			// 标题界面/加载界面期间把 VM 备好，进世界就不用再付那 0.6 秒
@@ -107,6 +118,14 @@ public final class ScriptEngine {
 		TurboMCConfig config = TurboMCConfig.get();
 		// 脚本按下的键需要按 tick 计数松手，与引擎是否运行无关
 		ScriptKeys.tick();
+		// 放在引擎开关判断之前：用户可能先丢文件再按 F6，包列表要能先更新
+		pollAutoReload();
+		// 远程会话期间内 VM 一律不推进：浏览器那侧是主 VM，同一份工程跑两遍会互相踩坐标。
+		// 本分支必须在开关判断之前——否则玩家一按 F6 就会把 REMOTE 改写成 OFF，
+		// HUD 上「远程调试中」自己消失，而浏览器那侧还在驱动。
+		if (status == Status.REMOTE) {
+			return;
+		}
 		if (!config.masterEnabled || !config.scriptEngineEnabled) {
 			halted = false;
 			if (running || status == Status.RUNNING || status == Status.HALTED) {
@@ -152,8 +171,6 @@ public final class ScriptEngine {
 			return;
 		}
 
-		// 聊天队列按 tick 推进：超长回复被切成多段，段间要拉开间隔
-		GameActions.tickChat();
 		// 「停止全部」是 VM 内部事件，Java 侧只有主动查询才看得见。
 		// 不查的话线程已经清空，「走向」会话却还会按着前进键再走满 MAX_TICKS。
 		if (vm.takeProjectStops() > 0) {
@@ -261,7 +278,10 @@ public final class ScriptEngine {
 			scriptCount = countScripts(pack);
 			cachedTriggerKeys = collectKeys(pack);
 			PerfProbe.end("project.start", perf);
-			setStatus(Status.RUNNING, null);
+			// 热重载提示只显示一次：取走即清，避免每次普通启动都挂着「已自动重载」
+			Text notice = reloadNotice;
+			reloadNotice = null;
+			setStatus(Status.RUNNING, notice);
 			LOG.info("[script] 已启动 {}：{} 个脚本，线程 {} 个，监听按键 {} 个",
 					pack.fileName, scriptCount, vm.threadCount(), cachedTriggerKeys.size());
 		} catch (RuntimeException e) {
@@ -299,6 +319,87 @@ public final class ScriptEngine {
 	}
 
 	/** 停止并记录原因：界面靠 {@link #statusText()} 区分「没开」「包坏了」「跑崩了」。 */
+	/**
+	 * 远程会话建立：内 VM 让位给浏览器那侧。
+	 *
+	 * <p>做法是复用 {@link #stop}——一次 {@code teardown} 把键表、寻路、转向、聊天队列、
+	 * 监视器、画框全部收干净，与玩家手动关引擎走同一条路，不新增一套收尾逻辑。</p>
+	 *
+	 * <p><b>必须由主线程调用</b>：握手回调在 WebSocket I/O 线程上。</p>
+	 */
+	public void suspendForRemote(String detail) {
+		if (status == Status.REMOTE) {
+			return;
+		}
+		stop(Status.REMOTE, detail == null || detail.isBlank() ? Text.empty() : Text.literal(detail));
+		// teardown 会把键表清空，而远程会话恰恰要靠它做按键边沿检测
+		refreshRemoteContext();
+		LOG.info("[script] 远程会话建立，内 VM 让位");
+	}
+
+	/**
+	 * 远程会话内的「停止全部」：只收手，不结束会话。
+	 *
+	 * <p>浏览器点红停止时线程在浏览器侧已经清空，但游戏侧的动作没人收——按住的键、
+	 * 寻路会话、待发的聊天段落、脚本画的框都还在，人物会一直往前走。</p>
+	 */
+	public void abortForRemote(String reason) {
+		if (status != Status.REMOTE) {
+			return;
+		}
+		teardown();
+		// 收手同样会清键表，不清回来后续的「当按下 W」就再也不触发了
+		refreshRemoteContext();
+		LOG.info("[script] 远程会话内停止全部：{}", reason == null ? "" : reason);
+	}
+
+	/**
+	 * 只算「这个工程有哪些触发键」，不载入工程、不跑绿旗。
+	 *
+	 * <p>远程会话里内 VM 是停的，走不了 {@link #start()}；但按键边沿检测需要键表，
+	 * 否则「当按下 W」在远程模式下永远不会触发。</p>
+	 */
+	private void refreshRemoteContext() {
+		ScriptPack pack = PackStore.get().activePack();
+		if (pack == null) {
+			activeName = "";
+			scriptCount = 0;
+			cachedTriggerKeys = Set.of();
+			return;
+		}
+		try {
+			activeName = pack.fileName;
+			scriptCount = countScripts(pack);
+			cachedTriggerKeys = collectKeys(pack);
+			// 按键帽子在远程模式下靠这份键表做边沿检测：为 0 就说明「按了没反应」不是 VM 的问题
+			LOG.info("[script] 远程会话：监听按键 {} 个{}", cachedTriggerKeys.size(),
+					cachedTriggerKeys.isEmpty() ? "（工程里没有「当按下」帽子）" : "：" + cachedTriggerKeys);
+		} catch (RuntimeException e) {
+			// 工程本身有问题时不要连累远程会话：没有键表就只是按键帽子不触发
+			cachedTriggerKeys = Set.of();
+			LOG.warn("[script] 远程会话读取触发键失败：{}", e.toString());
+		}
+	}
+
+	/**
+	 * 远程会话结束：内 VM 保持关闭，等玩家按 F6 重新开启。
+	 *
+	 * <p>会把配置里的引擎开关一起关掉。不关的话下一 tick 的 {@code if (!running) start()}
+	 * 会自己把脚本拉起来——玩家刚在浏览器里调完，游戏里突然开始跑，是最坏的那种意外。</p>
+	 */
+	public void endRemoteSession() {
+		if (status != Status.REMOTE) {
+			return;
+		}
+		TurboMCConfig config = TurboMCConfig.get();
+		if (config.scriptEngineEnabled) {
+			config.scriptEngineEnabled = false;
+			TurboMCConfig.save();
+		}
+		stop(Status.OFF, null);
+		LOG.info("[script] 远程会话结束，脚本引擎保持关闭");
+	}
+
 	private void stop(Status status, Text detail) {
 		teardown();
 		setStatus(status, detail);
@@ -371,12 +472,34 @@ public final class ScriptEngine {
 	}
 
 	/**
+	 * 触发是否应当派发：游戏内引擎在跑，或远程会话接管中。
+	 *
+	 * <p>远程会话的内 VM 是停的，{@link #active()} 恒为 false；若触发源仍只看
+	 * {@code active()}，「当按下 W」「当受伤」在远程模式下永远不触发——帽子表下发得再全
+	 * 也没人喂它。</p>
+	 */
+	public boolean acceptsTriggers() {
+		return active() || status == Status.REMOTE;
+	}
+
+	/**
 	 * 分发一次触发事件。
 	 *
 	 * <p>{@code matcher} 参数已不参与过滤——过滤发生在 VM 内部（字段匹配）或由宿主
 	 * 直接调用 {@link #fireKey}。保留该参数是为了不改动既有调用点。</p>
 	 */
 	public void fire(String trigger, Predicate<BlockNode> matcher) {
+		if (status == Status.REMOTE) {
+			// 远程会话：内 VM 是停的，帽子由浏览器那侧按 §7.5 的帽子表起
+			switch (trigger) {
+				case "event.damage" -> RemoteBridge.get().publishEvent("damage", null);
+				case "event.death" -> RemoteBridge.get().publishEvent("death", null);
+				// event.chat 走 fireChat（要带文本），event.start / event.tick 由绿旗与 VM 自己负责
+				default -> {
+				}
+			}
+			return;
+		}
 		if (!active()) {
 			return;
 		}
@@ -411,7 +534,16 @@ public final class ScriptEngine {
 	 * 「打开箱子就执行」这类脚本原本只能靠轮询，而它本质上是事件。</p>
 	 */
 	public void fireScreen(String kind) {
-		if (!active() || kind == null || kind.isBlank()) {
+		if (kind == null || kind.isBlank()) {
+			return;
+		}
+		if (status == Status.REMOTE) {
+			JsonObject data = new JsonObject();
+			data.addProperty("screen", kind);
+			RemoteBridge.get().publishEvent("screen_open", data);
+			return;
+		}
+		if (!active()) {
 			return;
 		}
 		int started = RhinoVm.get().startHat("turbomc_whenScreenOpen", "SCREEN", kind);
@@ -426,7 +558,16 @@ public final class ScriptEngine {
 	}
 
 	public void fireKey(String key) {
-		if (!active() || key == null || key.isBlank()) {
+		if (key == null || key.isBlank()) {
+			return;
+		}
+		if (status == Status.REMOTE) {
+			JsonObject data = new JsonObject();
+			data.addProperty("key", key);
+			RemoteBridge.get().publishEvent("key", data);
+			return;
+		}
+		if (!active()) {
 			return;
 		}
 		int started = RhinoVm.get().startHat("event_whenkeypressed", "KEY_OPTION", key);
@@ -443,7 +584,19 @@ public final class ScriptEngine {
 	 * <p>关键词为空视为无条件匹配；消息为 null 时同样全部触发。</p>
 	 */
 	public void fireChat(String message) {
-		if (!active() || message == null) {
+		if (message == null) {
+			return;
+		}
+		if (status == Status.REMOTE) {
+			// 回声过滤沿用游戏内规则：脚本自己发的消息不能被自己再触发一次
+			if (!SelfChatEcho.isEcho(message)) {
+				JsonObject data = new JsonObject();
+				data.addProperty("text", message);
+				RemoteBridge.get().publishEvent("chat", data);
+			}
+			return;
+		}
+		if (!active()) {
 			return;
 		}
 		// 脚本自己发的聊天会被服务端回传，若照常触发就会「自己触发自己」
@@ -470,7 +623,21 @@ public final class ScriptEngine {
 	 * 先记录、再派发，脚本读到的就是触发它的那句话。</p>
 	 */
 	public void fireServerChat(String message) {
-		if (!active() || message == null || message.isEmpty()) {
+		if (message == null || message.isEmpty()) {
+			return;
+		}
+		if (status == Status.REMOTE) {
+			// 远程侧只有一种聊天匹配器（空关键词即全匹配），表达不了 chatServerAnyMatch=false
+			// 那套「只起有关键词的帽子」的规则，这里按普通聊天转发，差异记在 §7.5
+			if (!SelfChatEcho.isEcho(message)) {
+				JsonObject data = new JsonObject();
+				data.addProperty("text", message);
+				data.addProperty("server", true);
+				RemoteBridge.get().publishEvent("chat", data);
+			}
+			return;
+		}
+		if (!active()) {
 			return;
 		}
 		if (SelfChatEcho.isEcho(message)) {
@@ -507,8 +674,10 @@ public final class ScriptEngine {
 		NO_WORLD,
 		/** 正在运行。 */
 		RUNNING,
-		/** 脚本里执行了「停止全部」，需按 F6 重开。 */
+		/** 停止全部，需按 F6 重开。 */
 		HALTED,
+		/** 浏览器远程会话进行中：内 VM 让位，由浏览器那侧驱动。 */
+		REMOTE,
 		/** 工程读取 / 启动失败。 */
 		LOAD_FAILED,
 		/** 运行期异常，VM 已停止。 */
@@ -541,6 +710,7 @@ public final class ScriptEngine {
 					? Text.translatable("status.turbomc.no_pack")
 					: Text.translatable("status.turbomc.running", activeName);
 			case HALTED -> Text.translatable("status.turbomc.halted");
+			case REMOTE -> Text.translatable("status.turbomc.remote");
 			case LOAD_FAILED -> Text.translatable("status.turbomc.load_failed");
 			case RUNTIME_ERROR -> Text.translatable("status.turbomc.runtime_error");
 		};
@@ -563,6 +733,7 @@ public final class ScriptEngine {
 		return switch (status) {
 			case RUNNING -> 0xFF55FF55;
 			case HALTED -> 0xFFFFD54F;
+			case REMOTE -> 0xFF55DDFF;
 			case LOAD_FAILED, RUNTIME_ERROR -> 0xFFFF5555;
 			default -> 0xFF9A9A9A;
 		};
@@ -583,6 +754,49 @@ public final class ScriptEngine {
 			return text;
 		}
 		return text.substring(0, text.offsetByCodePoints(0, limit)) + "…";
+	}
+
+	/**
+	 * 热重载：按配置间隔检查 {@code imports/}，变化则同步；启用中的包被更新时重启引擎。
+	 *
+	 * <p>这是「Ctrl+S 就生效」的实现。三个刻意的取舍：</p>
+	 *
+	 * <ul>
+	 *   <li><b>按间隔轮询，不注册文件监听</b>：WatchService 在 Windows 上对「整体覆盖」
+	 *       常报 ENTRY_MODIFY 多次、偶尔漏报，且要额外线程；每 2 秒扫一个只有几个文件的
+	 *       目录，成本远低于维护一个监听器的坑。</li>
+	 *   <li><b>指纹不取目录 mtime</b>：Windows 上覆盖同名文件不更新父目录时间，会永远不触发。</li>
+	 *   <li><b>只在启用中的包被更新时重启</b>：导入一个新包不该打断正在跑的脚本。</li>
+	 * </ul>
+	 */
+	private void pollAutoReload() {
+		TurboMCConfig config = TurboMCConfig.get();
+		if (!config.shouldAutoReload()) {
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (now - lastReloadCheckMs < config.reloadIntervalMsValue()) {
+			return;
+		}
+		lastReloadCheckMs = now;
+
+		PackStore.SyncResult result = PackStore.get().pollImports();
+		if (result == null || (result.added() == 0 && result.updated() == 0)) {
+			return;
+		}
+		if (!result.activeUpdated()) {
+			LOG.info("[script] 热重载：新增 {}，更新 {}", result.added(), result.updated());
+			return;
+		}
+		if (!running) {
+			// 引擎没在跑：包已更新，但没人会看到提示。下次按 F6 自然加载新版本。
+			LOG.info("[script] 热重载：启用中的包已更新（引擎未运行）");
+			return;
+		}
+		// 提示留到下一次 start() 成功后再显示：此刻 restart 会把状态重置成 NO_WORLD
+		reloadNotice = Text.translatable("status.turbomc.reloaded");
+		LOG.info("[script] 热重载：启用中的包已更新，重启引擎");
+		restart();
 	}
 
 	/** 重启：下次 tick 重新载入当前启用的包。 */

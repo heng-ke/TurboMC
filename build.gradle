@@ -9,6 +9,7 @@ repositories {
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
+	mavenCentral() // 加上这一行！
 	maven { url = "https://maven.terraformersmc.com/releases/" } // Mod Menu
 	maven { url = "https://maven.shedaniel.me/" }               // Cloth Config
 	maven { url = "https://maven.nucleoid.xyz/" }               // Text Placeholder API (Mod Menu 前置)
@@ -52,6 +53,11 @@ dependencies {
 	// Rhino：在客户端内嵌 JS 运行时，承载 scratch-vm（见 vm 包）。
 	// 用独立配置打包进 mod jar，避免把 Minecraft / Fabric 一起卷进来。
 	embed "org.mozilla:rhino:1.7.15"
+
+	// Java-WebSocket：远程开发桥的服务端（见 script/remote 包）。
+	// 选它而不是 MC 自带的 Netty：不跟 1.21.11 的 Netty 版本耦合，只依赖 slf4j（MC 已有）。
+	// 备选 Netty 要赌 netty-codec-http 在编译 classpath 上，升级易碎；手写要自己处理掩码与分片。
+	embed "org.java-websocket:Java-WebSocket:1.6.0"
 
 	// JUnit：只用于单元测试，不进发布 jar（test 配置本就不参与 jar 打包）。
 	// 覆盖纯逻辑层——类型转换、聊天去重、平滑转向——这些最容易悄悄回归。

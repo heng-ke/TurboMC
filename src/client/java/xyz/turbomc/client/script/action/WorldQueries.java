@@ -1,5 +1,7 @@
 package xyz.turbomc.client.script.action;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
@@ -586,9 +588,18 @@ public final class WorldQueries {
 
 	/** 玩家快照。无玩家时给 {@code {}}：空串会让下游 {@code json.get_path} 直接失败。 */
 	private static Object playerJson(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
+		return JsonText.stringify(playerSnapshot(client(ctx)));
+	}
+
+	/**
+	 * 玩家快照对象；无客户端/无玩家时给空对象。
+	 *
+	 * <p>{@code public} 是给远程桥的快照用的：远程与游戏内共用同一份拼装，
+	 * 免得两边的键名或 1 基/0 基约定悄悄分叉。</p>
+	 */
+	public static JsonObject playerSnapshot(MinecraftClient client) {
 		if (client == null || client.player == null) {
-			return "{}";
+			return new JsonObject();
 		}
 		ClientPlayerEntity player = client.player;
 		List<Snapshots.Effect> effects = new ArrayList<>();
@@ -602,7 +613,7 @@ public final class WorldQueries {
 				? "" : client.interactionManager.getCurrentGameMode().getId();
 		String dimension = client.world == null
 				? "" : client.world.getRegistryKey().getValue().toString();
-		return Snapshots.player(new Snapshots.Player(
+		return Snapshots.playerObject(new Snapshots.Player(
 				player.getGameProfile().name(),
 				player.getUuidAsString(),
 				player.getHealth(),
@@ -719,15 +730,33 @@ public final class WorldQueries {
 		if (client == null || client.player == null) {
 			return "[]";
 		}
+		return JsonText.stringify(inventoryArray(client));
+	}
+
+	/**
+	 * 背包条目：只列非空槽位，槽位号是 inventory 索引 0–40。
+	 *
+	 * <p>{@code public} 是给远程桥的快照用的：同一份取值给游戏内与远程两条链路，
+	 * 免得「背包里有什么」在两处各自实现、各自算错边界。</p>
+	 */
+	public static java.util.List<Snapshots.Item> inventoryItems(MinecraftClient client) {
+		java.util.List<Snapshots.Item> items = new ArrayList<>();
+		if (client == null || client.player == null) {
+			return items;
+		}
 		PlayerInventory inventory = client.player.getInventory();
-		List<Snapshots.Item> items = new ArrayList<>();
 		for (int i = 0; i < inventory.size(); i++) {
 			ItemStack stack = inventory.getStack(i);
 			if (!stack.isEmpty()) {
 				items.add(itemOf(i, stack));
 			}
 		}
-		return Snapshots.inventory(items);
+		return items;
+	}
+
+	/** 背包快照的 JSON 数组形态（远程桥直接塞进快照，不经过字符串）。 */
+	public static JsonArray inventoryArray(MinecraftClient client) {
+		return Snapshots.inventoryArray(inventoryItems(client));
 	}
 
 	/**
@@ -738,12 +767,29 @@ public final class WorldQueries {
 	 */
 	private static Object screenJson(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
+		JsonObject snapshot = screenSnapshot(client);
+		return snapshot == null ? "{}" : JsonText.stringify(snapshot);
+	}
+
+	/**
+	 * 界面快照对象；没有可装槽位的界面时返回 {@code null}。
+	 *
+	 * <p>{@code public} 同样是给远程桥用的：远程与游戏内必须给出**同一份**槽位编号，
+	 * 否则「点击槽位 [n]」在两处指的不是同一个格子。</p>
+	 */
+	public static JsonObject screenSnapshot(MinecraftClient client) {
 		if (client == null || client.player == null || client.currentScreen == null) {
-			return "{}";
+			return null;
 		}
-		ScreenHandler handler = client.player.currentScreenHandler;
+		// 必须与 ContainerActions.handler() 同一判据：只有带槽位的界面才算「打开了容器」。
+		// 用 player.currentScreenHandler 顶替的话，暂停菜单/聊天界面也会被当成 46 格的背包界面，
+		// 「界面槽位数」与「点击槽位」的编号就全错了
+		if (!(client.currentScreen instanceof net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider<?> provider)) {
+			return null;
+		}
+		ScreenHandler handler = provider.getScreenHandler();
 		if (handler == null) {
-			return "{}";
+			return null;
 		}
 		String type = screenType(client.currentScreen, handler);
 		int total = handler.slots.size();
@@ -757,19 +803,23 @@ public final class WorldQueries {
 			// player_slot：点之前要能判断这格是自己的背包还是容器，避免把自己的东西搬进箱子
 			items.add(new Snapshots.ScreenItem(itemOf(i, stack), slot.inventory instanceof PlayerInventory));
 		}
-		return Snapshots.screen(type, total, items);
+		return Snapshots.screenObject(type, total, items);
 	}
 
 	/** 世界快照：时间、天数、月相、天气、维度、群系、光照。 */
 	private static Object worldJson(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
+		return JsonText.stringify(worldSnapshot(client(ctx)));
+	}
+
+	/** 世界快照对象；没有世界时给空对象。 */
+	public static JsonObject worldSnapshot(MinecraftClient client) {
 		if (client == null || client.world == null) {
-			return "{}";
+			return new JsonObject();
 		}
 		long timeOfDay = client.world.getTimeOfDay();
 		long days = Math.floorDiv(timeOfDay, 24000L);
 		BlockPos pos = client.player == null ? BlockPos.ORIGIN : client.player.getBlockPos();
-		return Snapshots.world(new Snapshots.WorldFacts(
+		return Snapshots.worldObject(new Snapshots.WorldFacts(
 				Math.floorMod(timeOfDay, 24000L),
 				// 1 基天数与 F3 的 Day 一致：第 0 天在界面上显示为第 1 天
 				(int) (days + 1),
@@ -794,9 +844,13 @@ public final class WorldQueries {
 
 	/** 在线玩家快照：uuid / 名称 / 延迟 / 游戏模式。顺序由服务端给出（tab 列表顺序）。 */
 	private static Object playersJson(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
+		return JsonText.stringify(playersSnapshot(client(ctx)));
+	}
+
+	/** 在线玩家快照的数组形态；顺序即 tab 列表顺序，不重排。 */
+	public static JsonArray playersSnapshot(MinecraftClient client) {
 		if (client == null || client.getNetworkHandler() == null) {
-			return "[]";
+			return new JsonArray();
 		}
 		List<Snapshots.PlayerEntry> out = new ArrayList<>();
 		for (PlayerListEntry entry : client.getNetworkHandler().getPlayerList()) {
@@ -808,7 +862,7 @@ public final class WorldQueries {
 					// 单人/旁观等场景可能没有模式信息，给空串而不是 null
 					entry.getGameMode() == null ? "" : entry.getGameMode().getId()));
 		}
-		return Snapshots.players(out);
+		return Snapshots.playersArray(out);
 	}
 
 	/**
@@ -1004,6 +1058,27 @@ public final class WorldQueries {
 
 	private static Snapshots.Vec position(Entity entity) {
 		return new Snapshots.Vec(entity.getX(), entity.getY(), entity.getZ());
+	}
+
+	/**
+	 * 远程快照用的实体条目（含到玩家的距离）。
+	 *
+	 * <p>与 {@code buildEntitiesJson} 用同一份字段拼装，只是把「遍历 + 排序 + 截断」
+	 * 交给快照侧统一做——远程每秒 20 份，重复遍历没有意义。</p>
+	 */
+	public static Snapshots.Entity entityEntry(ClientPlayerEntity player, Entity entity) {
+		return new Snapshots.Entity(
+				Registries.ENTITY_TYPE.getId(entity.getType()).toString(),
+				entity.getType().getName().getString(),
+				entity.getCustomName() == null ? "" : entity.getCustomName().getString(),
+				entity.getUuidAsString(),
+				(double) player.distanceTo(entity),
+				position(entity),
+				motion(entity),
+				(double) healthOf(entity),
+				(double) maxHealthOf(entity),
+				entity instanceof LivingEntity living && living.isBaby(),
+				entity.isOnGround());
 	}
 
 	/**

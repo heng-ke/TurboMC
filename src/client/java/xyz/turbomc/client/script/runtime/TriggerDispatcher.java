@@ -46,7 +46,7 @@ public final class TriggerDispatcher {
 		// 界面只决定「能不能触发帽子」，不决定「要不要记录按键状态」。
 		// 界面里按下的键照样更新边沿状态，否则关掉界面时仍按着的 W 会被当成新按下，
 		// 重复触发一次「当按下 W」。引擎没在跑时同理：只记账，不派发。
-		dispatchKeys(client, ScriptEngine.get().active() && client.currentScreen == null);
+		dispatchKeys(client, ScriptEngine.get().acceptsTriggers() && client.currentScreen == null);
 		// 界面打开是独立事件：它恰好发生在按键被拦截的时候，所以不能挂在上面的判断里
 		dispatchScreen(client);
 	}
@@ -101,8 +101,11 @@ public final class TriggerDispatcher {
 	/**
 	 * 界面归类。{@code ScreenHandlerProvider} 表示「带容器槽位的界面」，
 	 * 其中玩家自己的背包单独算一类：整理背包与整理箱子是两种脚本。
+	 *
+	 * <p>{@code public} 是为了让远程桥的快照复用同一套判定——两边各写一份的话，
+	 * 「当打开界面」在游戏内与远程模式会给出不同的 {@code screen} 值。</p>
 	 */
-	private static String screenKind(Screen screen) {
+	public static String screenKind(Screen screen) {
 		if (!(screen instanceof ScreenHandlerProvider<?>)) {
 			return "other";
 		}

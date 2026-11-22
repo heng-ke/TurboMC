@@ -204,8 +204,13 @@ public final class Snapshots {
 
 	/** 玩家快照；{@code null} 表示当前没有玩家（无客户端），返回空对象而不是空串——空串解析会失败。 */
 	public static String player(Player p) {
+		return JsonText.stringify(playerObject(p));
+	}
+
+	/** 玩家快照对象；远程桥直接挂进快照，游戏内再序列化。 */
+	public static JsonObject playerObject(Player p) {
 		if (p == null) {
-			return "{}";
+			return new JsonObject();
 		}
 		JsonObject o = new JsonObject();
 		o.addProperty("name", p.name());
@@ -242,7 +247,7 @@ public final class Snapshots {
 			effects.add(e);
 		}
 		o.add("effects", effects);
-		return JsonText.stringify(o);
+		return o;
 	}
 
 	// ---- 实体 ----
@@ -269,7 +274,8 @@ public final class Snapshots {
 		return JsonText.stringify(array);
 	}
 
-	private static JsonObject entityObject(Entity e) {
+	/** 单个实体的对象形态；远程桥直接挂进快照，与游戏内 `实体快照` 键序一致。 */
+	public static JsonObject entityObject(Entity e) {
 		JsonObject o = new JsonObject();
 		o.addProperty("type", e.type());
 		o.addProperty("name", e.name());
@@ -299,13 +305,23 @@ public final class Snapshots {
 	 * 与游戏内 inventory 索引一致。</p>
 	 */
 	public static String inventory(List<Item> items) {
+		return JsonText.stringify(inventoryArray(items));
+	}
+
+	/**
+	 * 背包快照的数组形态。
+	 *
+	 * <p>远程桥直接把它挂进每 tick 的快照里（而不是再套一层字符串），
+	 * 避免「JSON 里的 JSON」带来的转义开销与二次解析。</p>
+	 */
+	public static JsonArray inventoryArray(List<Item> items) {
 		JsonArray array = new JsonArray();
 		if (items != null) {
 			for (Item item : items) {
 				array.add(itemObject(item));
 			}
 		}
-		return JsonText.stringify(array);
+		return array;
 	}
 
 	/**
@@ -316,6 +332,11 @@ public final class Snapshots {
 	 * {@code slots} 是界面槽位总数，{@code items} 只列非空格，两者相减得空格数。</p>
 	 */
 	public static String screen(String type, int slots, List<ScreenItem> items) {
+		return JsonText.stringify(screenObject(type, slots, items));
+	}
+
+	/** 界面快照的对象形态；远程桥直接挂进快照，游戏内再序列化成字符串。 */
+	public static JsonObject screenObject(String type, int slots, List<ScreenItem> items) {
 		JsonObject o = new JsonObject();
 		o.addProperty("type", type);
 		o.addProperty("slots", slots);
@@ -328,15 +349,20 @@ public final class Snapshots {
 			}
 		}
 		o.add("items", array);
-		return JsonText.stringify(o);
+		return o;
 	}
 
 	// ---- 世界 ----
 
 	/** 世界快照；{@code null} 表示没有世界，返回空对象。 */
 	public static String world(WorldFacts facts) {
+		return JsonText.stringify(worldObject(facts));
+	}
+
+	/** 世界快照对象；{@code null} 表示没有世界，返回空对象。 */
+	public static JsonObject worldObject(WorldFacts facts) {
 		if (facts == null) {
-			return "{}";
+			return new JsonObject();
 		}
 		JsonObject o = new JsonObject();
 		o.addProperty("time", facts.time());
@@ -347,7 +373,7 @@ public final class Snapshots {
 		o.addProperty("dimension", facts.dimension());
 		o.addProperty("biome", facts.biome());
 		o.addProperty("light", facts.light());
-		return JsonText.stringify(o);
+		return o;
 	}
 
 	/** 物品条目的共用形状：背包、界面、方块实体三处一致，脚本写一次取值逻辑够用。 */
@@ -373,6 +399,11 @@ public final class Snapshots {
 
 	/** 在线玩家快照：裸数组，顺序由服务端给出（即 tab 列表顺序），不做重排。 */
 	public static String players(List<PlayerEntry> list) {
+		return JsonText.stringify(playersArray(list));
+	}
+
+	/** 在线玩家快照的数组形态；远程桥直接挂进快照。 */
+	public static JsonArray playersArray(List<PlayerEntry> list) {
 		JsonArray array = new JsonArray();
 		if (list != null) {
 			for (PlayerEntry entry : list) {
@@ -384,7 +415,7 @@ public final class Snapshots {
 				array.add(o);
 			}
 		}
-		return JsonText.stringify(array);
+		return array;
 	}
 
 	/** 字符串裸数组：聊天历史与「快照字段」共用。 */

@@ -263,6 +263,28 @@ public final class AiService {
 		}
 	}
 
+	/**
+	 * 各会话的最后一条回复：{@code session → reply}，只含有回复的会话。
+	 *
+	 * <p>远程模式下 {@code aiReply} 是同步 reporter，只能读快照；把整张表带出去，
+	 * 客户端按会话名查表，与游戏内 {@link #reply} 同一份数据。</p>
+	 */
+	public java.util.Map<String, String> replies() {
+		java.util.Map<String, String> out = new java.util.HashMap<>();
+		for (java.util.Map.Entry<String, Session> entry : sessions.entrySet()) {
+			Session session = entry.getValue();
+			if (session == null) {
+				continue;
+			}
+			synchronized (session) {
+				if (session.last != null && !session.last.isEmpty()) {
+					out.put(entry.getKey(), session.last);
+				}
+			}
+		}
+		return out;
+	}
+
 	/** 清空历史与最近回复，保留 system 提示。 */
 	public void reset(String sessionKey) {
 		String key = normalize(sessionKey);

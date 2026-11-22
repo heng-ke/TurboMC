@@ -95,6 +95,30 @@ public final class TurboMCConfig {
 	public int monitorListItems = 5;
 
 	/**
+	 * 热重载：{@code imports/} 里的 sb3 一有变化就自动同步，启用中的包再自动重启。
+	 *
+	 * <p>把「导出 → 放进 imports → 点导入 → 按 F6」压成一次 Ctrl+S。
+	 * 默认开；关掉后仍走手动「导入」。{@code null} 按开处理，与默认值一致。</p>
+	 */
+	public Boolean autoReload = true;
+
+	/** 热重载的检查间隔（毫秒）。空值或越界按 2000 处理。 */
+	public int reloadIntervalMs = 2000;
+
+	/**
+	 * 平时（不连远程时）窗口失焦也不暂停单人世界。
+	 *
+	 * <p>原版在窗口失去焦点时会弹出暂停菜单、把单人世界冻住。开发脚本时经常要切到
+	 * 浏览器或编辑器，一失焦脚本就停在原地，看起来像「积木没生效」。打开这项后，
+	 * 只在「失焦 + 因失焦弹出的暂停界面」这一种组合下自动关掉菜单，玩家自己按 ESC
+	 * 的暂停不受影响。</p>
+	 *
+	 * <p>默认关：它改了原版行为，不该在玩家没要求时生效。远程会话期间无论这项
+	 * 开不开，都会临时压住失焦暂停（见 {@code TurboMCClient}）。</p>
+	 */
+	public Boolean keepRunningWhenUnfocused = false;
+
+	/**
 	 * HUD 上同时显示几句「说 / 思考」气泡（1～6）。空值按 3 处理。
 	 *
 	 * <p>气泡是叠在画面上的，条数越多挡得越多。超出这个数的气泡不逐个画，
@@ -112,6 +136,57 @@ public final class TurboMCConfig {
 	public int hudBubbleLimit() {
 		Integer value = hudMaxBubbles;
 		return value == null ? 3 : Math.max(1, Math.min(6, value));
+	}
+
+	/** 热重载开关的有效值（空值按开）。 */
+	public boolean shouldAutoReload() {
+		return autoReload == null || autoReload;
+	}
+
+	/** 失焦不暂停开关的有效值（空值按关）。 */
+	public boolean shouldKeepRunningWhenUnfocused() {
+		return Boolean.TRUE.equals(keepRunningWhenUnfocused);
+	}
+
+	/** 热重载间隔的有效值：钳到 0.5–30 秒，避免配成 0 时每 tick 扫目录。 */
+	public int reloadIntervalMsValue() {
+		return Math.max(500, Math.min(30_000, reloadIntervalMs));
+	}
+
+	// ---- 远程开发桥（dev 段） ----
+
+	/** 是否监听远程桥。默认关。 */
+	public boolean remoteEnabled() {
+		return dev != null && Boolean.TRUE.equals(dev.enabled);
+	}
+
+	/**
+	 * 端口：{@code 0} 表示自动；其余钳到 1–65535。
+	 *
+	 * <p>越界值不静默改成 0——那会让「我填了 70000」变成"自动分配"，
+	 * 用户从 HUD 看到一个陌生端口会以为配置没生效。</p>
+	 */
+	public int remotePort() {
+		Integer value = dev == null ? null : dev.port;
+		if (value == null || value == 0) {
+			return 0;
+		}
+		return Math.max(1, Math.min(65535, value));
+	}
+
+	/** 实例名；空则返回空串，由调用方回退到 gameDir 目录名。 */
+	public String remoteInstanceName() {
+		String value = dev == null ? null : dev.instanceName;
+		return value == null ? "" : value.trim();
+	}
+
+	/** 生效的 Origin 白名单：配置非空就用配置，否则用内置默认值。 */
+	public List<String> remoteAllowedOrigins() {
+		List<String> configured = dev == null ? null : dev.allowedOrigins;
+		if (configured == null || configured.isEmpty()) {
+			return DEFAULT_DEV_ORIGINS;
+		}
+		return configured;
 	}
 
 	/**
@@ -197,6 +272,13 @@ public final class TurboMCConfig {
 	public Ai ai = new Ai();
 
 	/**
+	 * 配置段 {@code dev}：远程开发桥（见 {@code script/remote}）。
+	 *
+	 * <p>默认关闭。开发环境与正式实例都不监听，普通玩家完全不受影响。</p>
+	 */
+	public Dev dev = new Dev();
+
+	/**
 	 * 配置段 {@code ai}。
 	 *
 	 * <p>字段全用包装类型：缺失与 0 必须能区分——{@code temperature = 0} 是合法值
@@ -223,6 +305,33 @@ public final class TurboMCConfig {
 		/** HUD 上回复预览的字数上限；完整内容在运行面板里看。 */
 		public Integer hudReplyChars = 24;
 	}
+
+	/**
+	 * 配置段 {@code dev}。
+	 *
+	 * <p>字段用包装类型：缺字段时能分辨「没配过」与「配成默认值」，并在 getter 里回退。</p>
+	 */
+	public static final class Dev {
+		/** 是否监听远程桥。默认关：正式实例不该开一个本机端口。 */
+		public Boolean enabled = false;
+		/** 端口；{@code 0} 表示从 35671 起顺序找空闲，非 0 表示固定端口（被占则报错不监听）。 */
+		public Integer port = 0;
+		/** 实例名，多开窗口时用于区分；空表示取 gameDir 的目录名。 */
+		public String instanceName = "";
+		/** Origin 白名单；空表示用 {@link TurboMCConfig#DEFAULT_DEV_ORIGINS}。 */
+		public List<String> allowedOrigins = new ArrayList<>();
+	}
+
+	/** 远程桥默认放行的 Origin。含实测到的三种形态，见 ARCHITECTURE.md §7.9。 */
+	public static final List<String> DEFAULT_DEV_ORIGINS = List.of(
+			"https://turbowarp.org",
+			"https://zzj.hengke.xyz",
+			"http://localhost:*",
+			"http://127.0.0.1:*",
+			"tw-editor://.",
+			"tw-editor://./",
+			"null"
+	);
 
 	private TurboMCConfig() {
 	}

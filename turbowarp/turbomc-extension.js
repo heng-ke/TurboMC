@@ -1552,6 +1552,8 @@ const ITEM_TABLE = [
 				name: T('TurboMC', 'TurboMC'),
 				color1: '#6F45B0',
 				blocks: [
+					// 远程调试入口：点一下打开连接面板（地址 / 端口 / 连接 / 断开）
+					{blockType: Scratch.BlockType.BUTTON, text: T('Remote debug', '远程调试'), func: 'openRemotePanel'},
 					{blockType: Scratch.BlockType.LABEL, text: T('Events', '事件')},
 					{
 						opcode: 'whenDamaged',
@@ -2766,104 +2768,2774 @@ const ITEM_TABLE = [
 		}
 
 		// ---- 浏览器占位实现：只打印，不做任何事；游戏内会被整体替换 ----
-		moveToward(args) { this.preview('moveToward ' + args.X + ',' + args.Y + ',' + args.Z); }
-		look(args) { this.preview('look ' + args.YAW + ',' + args.PITCH); }
-		lookAt(args) { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }
-		lookSmooth(args) { this.preview('lookSmooth ' + args.YAW + ',' + args.PITCH); }
-		lookAtSmooth(args) { this.preview('lookAtSmooth ' + args.X + ',' + args.Y + ',' + args.Z); }
-		stop() { this.preview('stop'); }
-		key(args) { this.preview('key ' + args.KEY + ' ' + args.STATE); }
-		click(args) { this.preview('click ' + args.BUTTON); }
-		tap(args) { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }
-		mouseDown() { return false; }
-		breakWait() { this.preview('breakWait'); }
-		isMining() { return false; }
-		miningProgress() { return 0; }
-		openContainerAt() { this.preview('openContainerAt'); }
-		containerSlots() { return 0; }
-		slotField() { return ''; }
-		screenJson() { return '{}'; }
-		firstSlotOf() { return -1; }
-		clickSlot() { this.preview('clickSlot'); }
-		quickMoveSlot() { this.preview('quickMoveSlot'); }
-		closeContainer() { this.preview('closeContainer'); }
-		health() { return 20; }
-		food() { return 20; }
-		xpLevel() { return 0; }
-		onGround() { this.preview('onGround'); return true; }
-		pos() { return 0; }
-		selectedSlot() { return 1; }
-		heldItemField() { return ''; }
-		inventoryJson() { return '[]'; }
-		inventoryFull() { return false; }
-		playerJson() { return '{"name":"","uuid":"","health":0,"max_health":20,"absorption":0,"food":20,"saturation":5,"xp_level":0,"xp_progress":0,"armor":0,"air":300,"gamemode":"","dimension":"","x":0,"y":0,"z":0,"motion_x":0,"motion_y":0,"motion_z":0,"yaw":0,"pitch":0,"on_ground":false,"in_water":false,"in_lava":false,"selected_slot":1,"effects":[]}'; }
-		itemCount() { return 0; }
-		respawn() { this.preview('respawn'); }
-		isDay() { return true; }
-		dimension() { return 'minecraft:overworld'; }
-		biome() { return 'minecraft:plains'; }
-		inWater() { return false; }
-		inLava() { return false; }
-		blockInFront() { this.preview('blockInFront'); return false; }
-		blockBelow() { return 'minecraft:grass_block'; }
-		blockAt(args) { this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z); return 'minecraft:air'; }
-		blockJson() { return '{"id":"","x":0,"y":0,"z":0,"state":{},"hardness":0,"is_air":false,"is_solid":false,"is_fluid":false,"light":0,"biome":"","block_entity":{"type":"","items":[],"items_total":0,"nbt":{},"text_front":"","text_back":""}}'; }
-		playersJson() { return '[]'; }
-		scanJson() { return '{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}'; }
-		snapshotKeys() { return '[]'; }
-		worldJson() { return '{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}'; }
-		frontBlock() { return 'minecraft:air'; }
-		aimPos() { return 0; }
-		ping() { return 0; }
-		nearestEntityField() { return 0; }
-		entityCount() { return 0; }
-		entitiesJson() { return '[]'; }
-		drawFrame(args) { this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1 + ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR); }
-		clearFrames() { this.preview('clearFrames'); }
-		log(args) { console.log('[turbomc]', args.TEXT); }
-		chat(args) { this.preview('chat ' + args.TEXT); }
-		command(args) { this.preview('command ' + args.COMMAND); }
-		lastChat() { this.preview('lastChat'); return ''; }
-		chatHistory() { return '[]'; }
-		triggerChat() { this.preview('triggerChat'); return ''; }
-		aiAsk(args) { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }
-		aiReply() { this.preview('aiReply'); return ''; }
-		aiReset() { this.preview('aiReset'); }
-		aiSystem() { this.preview('aiSystem'); }
-		jsonIs(args) { this.preview('jsonIs ' + args.check); return true; }
-		jsonNew(args) { this.preview('jsonNew ' + args.json); return '{}'; }
-		jsonLength() { this.preview('jsonLength'); return 0; }
-		jsonHasKey(args) { this.preview('jsonHasKey ' + args.key); return true; }
-		jsonGetAll(args) { this.preview('jsonGetAll ' + args.Stype); return '[]'; }
-		jsonErrMsg() { this.preview('jsonErrMsg'); return ''; }
-		jsonMinify(args) { this.preview('jsonMinify'); return args.json; }
-		jsonGet(args) { this.preview('jsonGet ' + args.item); return ''; }
-		jsonSet(args) { this.preview('jsonSet ' + args.item); return args.json; }
-		jsonDelete(args) { this.preview('jsonDelete ' + args.item); return args.json; }
-		jsonGetPath() { this.preview('jsonGetPath'); return ''; }
-		jsonSetPath(args) { this.preview('jsonSetPath'); return args.json; }
-		jsonArrayPush(args) { this.preview('jsonArrayPush'); return args.json; }
-		jsonArraySet(args) { this.preview('jsonArraySet ' + args.pos); return args.json; }
-		jsonArrayInsert(args) { this.preview('jsonArrayInsert ' + args.pos); return args.json; }
-		jsonArrayDelete(args) { this.preview('jsonArrayDelete ' + args.item); return args.json; }
-		jsonArrayRemoveAll(args) { this.preview('jsonArrayRemoveAll'); return args.json; }
-		jsonArrayItemNum() { this.preview('jsonArrayItemNum'); return 0; }
-		jsonArrayFromTo() { this.preview('jsonArrayFromTo'); return '[]'; }
-		jsonArraySetLen(args) { this.preview('jsonArraySetLen ' + args.len); return args.json; }
-		jsonArrayConcat() { this.preview('jsonArrayConcat'); return '[]'; }
-		jsonArrayMapField() { this.preview('jsonArrayMapField'); return '[]'; }
-		jsonArrayCreate() { this.preview('jsonArrayCreate'); return '[]'; }
-		jsonArrayJoin() { this.preview('jsonArrayJoin'); return ''; }
-		jsonArraySort(args) { this.preview('jsonArraySort ' + args.order); return args.list; }
-		jsonArrayTextFilter() { this.preview('jsonArrayTextFilter'); return '[]'; }
-		jsonArrayAnalysis(args) { this.preview('jsonArrayAnalysis ' + args.analysis); return 0; }
-		jsonVmGetList(args) { this.preview('jsonVmGetList ' + args.list); return '[]'; }
-		jsonVmSetList(args) { this.preview('jsonVmSetList ' + args.list); }
+		whenDamaged() { return true; }
+		whenDeath() { return true; }
+		whenScreenOpen() { return true; }
+		whenChat() { return true; }
+		moveToward(args, util) { return this.__tmc('turbomc_moveToward', [args.X, args.Y, args.Z], 'command', function () { this.preview('moveToward ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
+		look(args, util) { return this.__tmc('turbomc_look', [args.YAW, args.PITCH], 'command', function () { this.preview('look ' + args.YAW + ',' + args.PITCH); }, util); }
+		lookAt(args, util) { return this.__tmc('turbomc_lookAt', [args.X, args.Y, args.Z], 'command', function () { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
+		lookSmooth(args, util) { return this.__tmc('turbomc_lookSmooth', [args.YAW, args.PITCH], 'command', function () { this.preview('lookSmooth ' + args.YAW + ',' + args.PITCH); }, util); }
+		lookAtSmooth(args, util) { return this.__tmc('turbomc_lookAtSmooth', [args.X, args.Y, args.Z], 'command', function () { this.preview('lookAtSmooth ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
+		stop(args, util) { return this.__tmc('turbomc_stop', [], 'command', function () { this.preview('stop'); }, util); }
+		key(args, util) { return this.__tmc('turbomc_key', [args.KEY, args.STATE], 'command', function () { this.preview('key ' + args.KEY + ' ' + args.STATE); }, util); }
+		click(args, util) { return this.__tmc('turbomc_click', [args.BUTTON], 'command', function () { this.preview('click ' + args.BUTTON); }, util); }
+		tap(args, util) { return this.__tmc('turbomc_tap', [args.KEY, args.HOLD], 'command', function () { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }, util); }
+		mouseDown(args, util) { return this.__tmc('turbomc_mouseDown', [args.BUTTON], 'boolean', function () { return false; }, util); }
+		breakWait(args, util) { return this.__tmc('turbomc_breakWait', [], 'command', function () { this.preview('breakWait'); }, util); }
+		isMining(args, util) { return this.__tmc('turbomc_isMining', [], 'boolean', function () { return false; }, util); }
+		miningProgress(args, util) { return this.__tmc('turbomc_miningProgress', [], 'reporter', function () { return 0; }, util); }
+		openContainerAt(args, util) { return this.__tmc('turbomc_openContainerAt', [args.X, args.Y, args.Z], 'command', function () { this.preview('openContainerAt'); }, util); }
+		containerSlots(args, util) { return this.__tmc('turbomc_containerSlots', [], 'reporter', function () { return 0; }, util); }
+		slotField(args, util) { return this.__tmc('turbomc_slotField', [args.INDEX, args.FIELD], 'reporter', function () { return ''; }, util); }
+		screenJson(args, util) { return this.__tmc('turbomc_screenJson', [], 'reporter', function () { return '{}'; }, util); }
+		firstSlotOf(args, util) { return this.__tmc('turbomc_firstSlotOf', [args.ITEM], 'reporter', function () { return -1; }, util); }
+		clickSlot(args, util) { return this.__tmc('turbomc_clickSlot', [args.INDEX, args.BUTTON], 'command', function () { this.preview('clickSlot'); }, util); }
+		quickMoveSlot(args, util) { return this.__tmc('turbomc_quickMoveSlot', [args.INDEX], 'command', function () { this.preview('quickMoveSlot'); }, util); }
+		closeContainer(args, util) { return this.__tmc('turbomc_closeContainer', [], 'command', function () { this.preview('closeContainer'); }, util); }
+		health(args, util) { return this.__tmc('turbomc_health', [], 'reporter', function () { return 20; }, util); }
+		food(args, util) { return this.__tmc('turbomc_food', [], 'reporter', function () { return 20; }, util); }
+		xpLevel(args, util) { return this.__tmc('turbomc_xpLevel', [], 'reporter', function () { return 0; }, util); }
+		onGround(args, util) { return this.__tmc('turbomc_onGround', [], 'boolean', function () { this.preview('onGround'); return true; }, util); }
+		pos(args, util) { return this.__tmc('turbomc_pos', [args.AXIS], 'reporter', function () { return 0; }, util); }
+		selectedSlot(args, util) { return this.__tmc('turbomc_selectedSlot', [], 'reporter', function () { return 1; }, util); }
+		heldItemField(args, util) { return this.__tmc('turbomc_heldItemField', [args.FIELD], 'reporter', function () { return ''; }, util); }
+		inventoryJson(args, util) { return this.__tmc('turbomc_inventoryJson', [], 'reporter', function () { return '[]'; }, util); }
+		inventoryFull(args, util) { return this.__tmc('turbomc_inventoryFull', [], 'boolean', function () { return false; }, util); }
+		playerJson(args, util) { return this.__tmc('turbomc_playerJson', [], 'reporter', function () { return '{"name":"","uuid":"","health":0,"max_health":20,"absorption":0,"food":20,"saturation":5,"xp_level":0,"xp_progress":0,"armor":0,"air":300,"gamemode":"","dimension":"","x":0,"y":0,"z":0,"motion_x":0,"motion_y":0,"motion_z":0,"yaw":0,"pitch":0,"on_ground":false,"in_water":false,"in_lava":false,"selected_slot":1,"effects":[]}'; }, util); }
+		itemCount(args, util) { return this.__tmc('turbomc_itemCount', [args.ITEM], 'reporter', function () { return 0; }, util); }
+		respawn(args, util) { return this.__tmc('turbomc_respawn', [], 'command', function () { this.preview('respawn'); }, util); }
+		isDay(args, util) { return this.__tmc('turbomc_isDay', [], 'boolean', function () { return true; }, util); }
+		dimension(args, util) { return this.__tmc('turbomc_dimension', [], 'reporter', function () { return 'minecraft:overworld'; }, util); }
+		biome(args, util) { return this.__tmc('turbomc_biome', [], 'reporter', function () { return 'minecraft:plains'; }, util); }
+		inWater(args, util) { return this.__tmc('turbomc_inWater', [], 'boolean', function () { return false; }, util); }
+		inLava(args, util) { return this.__tmc('turbomc_inLava', [], 'boolean', function () { return false; }, util); }
+		blockInFront(args, util) { return this.__tmc('turbomc_blockInFront', [], 'boolean', function () { this.preview('blockInFront'); return false; }, util); }
+		blockBelow(args, util) { return this.__tmc('turbomc_blockBelow', [], 'reporter', function () { return 'minecraft:grass_block'; }, util); }
+		blockAt(args, util) { return this.__tmc('turbomc_blockAt', [args.X, args.Y, args.Z], 'reporter', function () { this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z); return 'minecraft:air'; }, util); }
+		blockJson(args, util) { return this.__tmc('turbomc_blockJson', [args.X, args.Y, args.Z], 'reporter', function () { return '{"id":"","x":0,"y":0,"z":0,"state":{},"hardness":0,"is_air":false,"is_solid":false,"is_fluid":false,"light":0,"biome":"","block_entity":{"type":"","items":[],"items_total":0,"nbt":{},"text_front":"","text_back":""}}'; }, util); }
+		playersJson(args, util) { return this.__tmc('turbomc_playersJson', [], 'reporter', function () { return '[]'; }, util); }
+		scanJson(args, util) { return this.__tmc('turbomc_scanJson', [args.X1, args.Y1, args.Z1, args.X2, args.Y2, args.Z2, args.LIMIT], 'reporter', function () { return '{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}'; }, util); }
+		snapshotKeys(args, util) { return this.__tmc('turbomc_snapshotKeys', [args.KIND], 'reporter', function () { return '[]'; }, util); }
+		worldJson(args, util) { return this.__tmc('turbomc_worldJson', [], 'reporter', function () { return '{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}'; }, util); }
+		frontBlock(args, util) { return this.__tmc('turbomc_frontBlock', [], 'reporter', function () { return 'minecraft:air'; }, util); }
+		aimPos(args, util) { return this.__tmc('turbomc_aimPos', [args.AXIS], 'reporter', function () { return 0; }, util); }
+		ping(args, util) { return this.__tmc('turbomc_ping', [], 'reporter', function () { return 0; }, util); }
+		nearestEntityField(args, util) { return this.__tmc('turbomc_nearestEntityField', [args.TYPE, args.FIELD], 'reporter', function () { return 0; }, util); }
+		entityCount(args, util) { return this.__tmc('turbomc_entityCount', [args.TYPE], 'reporter', function () { return 0; }, util); }
+		entitiesJson(args, util) { return this.__tmc('turbomc_entitiesJson', [args.TYPE, args.RADIUS, args.LIMIT], 'reporter', function () { return '[]'; }, util); }
+		drawFrame(args, util) { return this.__tmc('turbomc_drawFrame', [args.X1, args.Y1, args.Z1, args.X2, args.Y2, args.Z2, args.COLOR], 'command', function () { this.preview('drawFrame ' + args.X1 + ',' + args.Y1 + ',' + args.Z1 + ' -> ' + args.X2 + ',' + args.Y2 + ',' + args.Z2 + ' ' + args.COLOR); }, util); }
+		clearFrames(args, util) { return this.__tmc('turbomc_clearFrames', [], 'command', function () { this.preview('clearFrames'); }, util); }
+		log(args, util) { return this.__tmc('turbomc_log', [args.TEXT], 'command', function () { console.log('[turbomc]', args.TEXT); }, util); }
+		chat(args, util) { return this.__tmc('turbomc_chat', [args.TEXT], 'command', function () { this.preview('chat ' + args.TEXT); }, util); }
+		command(args, util) { return this.__tmc('turbomc_command', [args.COMMAND], 'command', function () { this.preview('command ' + args.COMMAND); }, util); }
+		lastChat(args, util) { return this.__tmc('turbomc_lastChat', [], 'reporter', function () { this.preview('lastChat'); return ''; }, util); }
+		chatHistory(args, util) { return this.__tmc('turbomc_chatHistory', [args.COUNT], 'reporter', function () { return '[]'; }, util); }
+		triggerChat(args, util) { return this.__tmc('turbomc_triggerChat', [], 'reporter', function () { this.preview('triggerChat'); return ''; }, util); }
+		aiAsk(args, util) { return this.__tmc('turbomc_aiAsk', [args.SESSION, args.TEXT], 'command', function () { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }, util); }
+		aiReply(args, util) { return this.__tmc('turbomc_aiReply', [args.SESSION], 'reporter', function () { this.preview('aiReply'); return ''; }, util); }
+		aiReset(args, util) { return this.__tmc('turbomc_aiReset', [args.SESSION], 'command', function () { this.preview('aiReset'); }, util); }
+		aiSystem(args, util) { return this.__tmc('turbomc_aiSystem', [args.SESSION, args.TEXT], 'command', function () { this.preview('aiSystem'); }, util); }
+		jsonIs(args, util) { return this.__tmc('turbomc_jsonIs', [args.json, args.check], 'boolean', function () { this.preview('jsonIs ' + args.check); return true; }, util); }
+		jsonNew(args, util) { return this.__tmc('turbomc_jsonNew', [args.json], 'reporter', function () { this.preview('jsonNew ' + args.json); return '{}'; }, util); }
+		jsonLength(args, util) { return this.__tmc('turbomc_jsonLength', [args.json], 'reporter', function () { this.preview('jsonLength'); return 0; }, util); }
+		jsonHasKey(args, util) { return this.__tmc('turbomc_jsonHasKey', [args.json, args.key], 'boolean', function () { this.preview('jsonHasKey ' + args.key); return true; }, util); }
+		jsonGetAll(args, util) { return this.__tmc('turbomc_jsonGetAll', [args.json, args.Stype], 'reporter', function () { this.preview('jsonGetAll ' + args.Stype); return '[]'; }, util); }
+		jsonErrMsg(args, util) { return this.__tmc('turbomc_jsonErrMsg', [args.json], 'reporter', function () { this.preview('jsonErrMsg'); return ''; }, util); }
+		jsonMinify(args, util) { return this.__tmc('turbomc_jsonMinify', [args.json], 'reporter', function () { this.preview('jsonMinify'); return args.json; }, util); }
+		jsonGet(args, util) { return this.__tmc('turbomc_jsonGet', [args.json, args.item], 'reporter', function () { this.preview('jsonGet ' + args.item); return ''; }, util); }
+		jsonSet(args, util) { return this.__tmc('turbomc_jsonSet', [args.json, args.item, args.value], 'reporter', function () { this.preview('jsonSet ' + args.item); return args.json; }, util); }
+		jsonDelete(args, util) { return this.__tmc('turbomc_jsonDelete', [args.json, args.item], 'reporter', function () { this.preview('jsonDelete ' + args.item); return args.json; }, util); }
+		jsonGetPath(args, util) { return this.__tmc('turbomc_jsonGetPath', [args.json, args.path], 'reporter', function () { this.preview('jsonGetPath'); return ''; }, util); }
+		jsonSetPath(args, util) { return this.__tmc('turbomc_jsonSetPath', [args.json, args.path, args.data], 'reporter', function () { this.preview('jsonSetPath'); return args.json; }, util); }
+		jsonArrayPush(args, util) { return this.__tmc('turbomc_jsonArrayPush', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayPush'); return args.json; }, util); }
+		jsonArraySet(args, util) { return this.__tmc('turbomc_jsonArraySet', [args.json, args.pos, args.item], 'reporter', function () { this.preview('jsonArraySet ' + args.pos); return args.json; }, util); }
+		jsonArrayInsert(args, util) { return this.__tmc('turbomc_jsonArrayInsert', [args.json, args.pos, args.item], 'reporter', function () { this.preview('jsonArrayInsert ' + args.pos); return args.json; }, util); }
+		jsonArrayDelete(args, util) { return this.__tmc('turbomc_jsonArrayDelete', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayDelete ' + args.item); return args.json; }, util); }
+		jsonArrayRemoveAll(args, util) { return this.__tmc('turbomc_jsonArrayRemoveAll', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayRemoveAll'); return args.json; }, util); }
+		jsonArrayItemNum(args, util) { return this.__tmc('turbomc_jsonArrayItemNum', [args.item, args.json], 'reporter', function () { this.preview('jsonArrayItemNum'); return 0; }, util); }
+		jsonArrayFromTo(args, util) { return this.__tmc('turbomc_jsonArrayFromTo', [args.json, args.item, args.item2], 'reporter', function () { this.preview('jsonArrayFromTo'); return '[]'; }, util); }
+		jsonArraySetLen(args, util) { return this.__tmc('turbomc_jsonArraySetLen', [args.json, args.len], 'reporter', function () { this.preview('jsonArraySetLen ' + args.len); return args.json; }, util); }
+		jsonArrayConcat(args, util) { return this.__tmc('turbomc_jsonArrayConcat', [args.json, args.json2], 'reporter', function () { this.preview('jsonArrayConcat'); return '[]'; }, util); }
+		jsonArrayMapField(args, util) { return this.__tmc('turbomc_jsonArrayMapField', [args.json, args.key], 'reporter', function () { this.preview('jsonArrayMapField'); return '[]'; }, util); }
+		jsonArrayCreate(args, util) { return this.__tmc('turbomc_jsonArrayCreate', [args.d, args.text], 'reporter', function () { this.preview('jsonArrayCreate'); return '[]'; }, util); }
+		jsonArrayJoin(args, util) { return this.__tmc('turbomc_jsonArrayJoin', [args.d, args.json], 'reporter', function () { this.preview('jsonArrayJoin'); return ''; }, util); }
+		jsonArraySort(args, util) { return this.__tmc('turbomc_jsonArraySort', [args.list, args.order], 'reporter', function () { this.preview('jsonArraySort ' + args.order); return args.list; }, util); }
+		jsonArrayTextFilter(args, util) { return this.__tmc('turbomc_jsonArrayTextFilter', [args.list, args.options, args.text, args.type], 'reporter', function () { this.preview('jsonArrayTextFilter'); return '[]'; }, util); }
+		jsonArrayAnalysis(args, util) { return this.__tmc('turbomc_jsonArrayAnalysis', [args.list, args.analysis], 'reporter', function () { this.preview('jsonArrayAnalysis ' + args.analysis); return 0; }, util); }
+		jsonVmGetList(args, util) { return this.__tmc('turbomc_jsonVmGetList', [args.list], 'reporter', function () { this.preview('jsonVmGetList ' + args.list); return '[]'; }, util); }
+		jsonVmSetList(args, util) { return this.__tmc('turbomc_jsonVmSetList', [args.list, args.json], 'command', function () { this.preview('jsonVmSetList ' + args.list); }, util); }
 
 		preview(name) {
 			console.log('[turbomc] 预览模式（浏览器内无实际效果）:', name);
 		}
 	}
 
-	Scratch.extensions.register(new TurboMC());
+/*
+ * JSON 积木的浏览器端实现（远程模式用）。
+ *
+ * 对拍目标：Java 侧 JsonActions / JsonText。两份实现必须逐条等价——
+ * reporter 在 Scratch 里是同步求值，浏览器不可能为了一次读数去等 RPC，
+ * 所以这批纯计算积木只能在浏览器里再实现一份。
+ *
+ * 防漂移靠对拍：tools/json-parity-cases.json 同一批用例分别喂给两边，
+ * Java 侧输出 build/json-parity-java.json，tools/check-json-parity.js 逐条比对。
+ *
+ * 由 tools/build-extension.js 拼进编辑器产物；运行时副本（游戏内）不包含本文件。
+ */
+function createJsonLite() {
+	'use strict';
+
+	/** 与 Java 侧 MAX_DEPTH 一致：递归下降不设上限会被深层输入打穿栈。 */
+	const MAX_DEPTH = 256;
+
+	// ---- Scratch 值转换（对齐 ScratchCast） ----
+
+	function toStr(value) {
+		if (value === null || value === undefined) {
+			return '';
+		}
+		if (typeof value === 'boolean') {
+			return value ? 'true' : 'false';
+		}
+		return String(value);
+	}
+
+	/** 对齐 ScratchCast.rawNumber：解析不出给 NaN，不在这里归一成 0。 */
+	function rawNumber(value) {
+		if (typeof value === 'number') {
+			return value;
+		}
+		if (typeof value === 'boolean') {
+			return value ? 1 : 0;
+		}
+		if (value === null || value === undefined) {
+			return 0;
+		}
+		const text = String(value).trim();
+		if (text === '') {
+			return 0;
+		}
+		const lower = text.toLowerCase();
+		if (lower === 'infinity' || text === '+Infinity') {
+			return Infinity;
+		}
+		if (lower === '-infinity') {
+			return -Infinity;
+		}
+		if (lower === 'nan') {
+			return NaN;
+		}
+		if (/^0[xX]/.test(text)) {
+			const parsed = Number.parseInt(text.slice(2), 16);
+			return Number.isNaN(parsed) ? NaN : parsed;
+		}
+		const parsed = Number(text);
+		return Number.isNaN(parsed) ? NaN : parsed;
+	}
+
+	/** 对齐 ScratchCast.toNumber：NaN 归 0。 */
+	function toNum(value) {
+		const number = rawNumber(value);
+		return Number.isNaN(number) ? 0 : number;
+	}
+
+	function isBlankText(value) {
+		if (typeof value === 'number') {
+			return false;
+		}
+		return toStr(value).trim() === '';
+	}
+
+	/** 对齐 ScratchCast.compare：两边都能当数字比数值，否则不分大小写比字典序。 */
+	function castCompare(left, right) {
+		let a = rawNumber(left);
+		let b = rawNumber(right);
+		if (a === 0 && isBlankText(left)) {
+			a = NaN;
+		} else if (b === 0 && isBlankText(right)) {
+			b = NaN;
+		}
+		if (Number.isNaN(a) || Number.isNaN(b)) {
+			const la = toStr(left).toLowerCase();
+			const lb = toStr(right).toLowerCase();
+			return la < lb ? -1 : (la > lb ? 1 : 0);
+		}
+		if ((a === Infinity && b === Infinity) || (a === -Infinity && b === -Infinity)) {
+			return 0;
+		}
+		const diff = a - b;
+		return diff < 0 ? -1 : (diff > 0 ? 1 : 0);
+	}
+
+	// ---- 严格 JSON 解析（逐条对齐 JsonText.Parser） ----
+	//
+	// 不用 JSON.parse 的原因只有一个：错误信息要逐字一致。
+	// 「是不是合法 JSON」这块积木的返回值是给人看的，两边不同就等于两块不同的积木。
+
+	class ParserError {
+		constructor(message, position) {
+			this.message = message;
+			this.position = position;
+		}
+	}
+
+	class Parser {
+		constructor(text) {
+			this.text = text;
+			this.pos = 0;
+		}
+
+		error(message) {
+			return new ParserError(message, this.pos);
+		}
+
+		atEnd() {
+			return this.pos >= this.text.length;
+		}
+
+		skipWhitespace() {
+			while (this.pos < this.text.length) {
+				const c = this.text[this.pos];
+				if (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+					this.pos++;
+				} else {
+					break;
+				}
+			}
+		}
+
+		readValue(depth) {
+			if (depth > MAX_DEPTH) {
+				throw this.error('JSON 嵌套过深');
+			}
+			this.skipWhitespace();
+			if (this.atEnd()) {
+				throw this.error('JSON 提前结束');
+			}
+			const c = this.text[this.pos];
+			switch (c) {
+				case '{':
+					return this.readObject(depth);
+				case '[':
+					return this.readArray(depth);
+				case '"':
+					return this.readString();
+				case 't':
+					return this.readLiteral('true', true);
+				case 'f':
+					return this.readLiteral('false', false);
+				case 'n':
+					return this.readLiteral('null', null);
+				default:
+					return this.readNumber();
+			}
+		}
+
+		readLiteral(literal, value) {
+			if (this.text.substr(this.pos, literal.length) !== literal) {
+				throw this.error('非法字面量');
+			}
+			this.pos += literal.length;
+			return value;
+		}
+
+		readObject(depth) {
+			const object = {};
+			this.pos++;
+			this.skipWhitespace();
+			if (!this.atEnd() && this.text[this.pos] === '}') {
+				this.pos++;
+				return object;
+			}
+			while (true) {
+				this.skipWhitespace();
+				if (this.atEnd() || this.text[this.pos] !== '"') {
+					throw this.error('键必须是双引号字符串');
+				}
+				const key = this.readString();
+				this.skipWhitespace();
+				if (this.atEnd() || this.text[this.pos] !== ':') {
+					throw this.error('缺少冒号');
+				}
+				this.pos++;
+				// 重复键以最后一次为准，与 JSON.parse 一致
+				object[key] = this.readValue(depth + 1);
+				this.skipWhitespace();
+				if (this.atEnd()) {
+					throw this.error('对象未闭合');
+				}
+				const c = this.text[this.pos];
+				if (c === ',') {
+					this.pos++;
+					this.skipWhitespace();
+					if (!this.atEnd() && this.text[this.pos] === '}') {
+						throw this.error('不允许尾随逗号');
+					}
+					continue;
+				}
+				if (c === '}') {
+					this.pos++;
+					return object;
+				}
+				throw this.error('对象中出现非法字符');
+			}
+		}
+
+		readArray(depth) {
+			const array = [];
+			this.pos++;
+			this.skipWhitespace();
+			if (!this.atEnd() && this.text[this.pos] === ']') {
+				this.pos++;
+				return array;
+			}
+			while (true) {
+				array.push(this.readValue(depth + 1));
+				this.skipWhitespace();
+				if (this.atEnd()) {
+					throw this.error('数组未闭合');
+				}
+				const c = this.text[this.pos];
+				if (c === ',') {
+					this.pos++;
+					this.skipWhitespace();
+					if (!this.atEnd() && this.text[this.pos] === ']') {
+						throw this.error('不允许尾随逗号');
+					}
+					continue;
+				}
+				if (c === ']') {
+					this.pos++;
+					return array;
+				}
+				throw this.error('数组中出现非法字符');
+			}
+		}
+
+		readString() {
+			this.pos++;
+			let out = '';
+			while (true) {
+				if (this.atEnd()) {
+					throw this.error('字符串未闭合');
+				}
+				const c = this.text[this.pos++];
+				if (c === '"') {
+					return out;
+				}
+				if (c.charCodeAt(0) < 0x20) {
+					throw this.error('字符串里有未转义的控制字符');
+				}
+				if (c !== '\\') {
+					out += c;
+					continue;
+				}
+				if (this.atEnd()) {
+					throw this.error('转义未完成');
+				}
+				const escape = this.text[this.pos++];
+				switch (escape) {
+					case '"':
+						out += '"';
+						break;
+					case '\\':
+						out += '\\';
+						break;
+					case '/':
+						out += '/';
+						break;
+					case 'b':
+						out += '\b';
+						break;
+					case 'f':
+						out += '\f';
+						break;
+					case 'n':
+						out += '\n';
+						break;
+					case 'r':
+						out += '\r';
+						break;
+					case 't':
+						out += '\t';
+						break;
+					case 'u': {
+						if (this.pos + 4 > this.text.length) {
+							throw this.error('\\u 转义不完整');
+						}
+						const hex = this.text.substr(this.pos, 4);
+						this.pos += 4;
+						if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+							throw this.error('\\u 转义非法');
+						}
+						out += String.fromCharCode(Number.parseInt(hex, 16));
+						break;
+					}
+					default:
+						throw this.error('非法转义');
+				}
+			}
+		}
+
+		readNumber() {
+			const start = this.pos;
+			if (!this.atEnd() && this.text[this.pos] === '-') {
+				this.pos++;
+			}
+			if (this.atEnd()) {
+				throw this.error('数字不完整');
+			}
+			const first = this.text[this.pos];
+			if (first === '0') {
+				this.pos++;
+			} else if (first >= '1' && first <= '9') {
+				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
+					this.pos++;
+				}
+			} else {
+				throw this.error('非法数字');
+			}
+			if (!this.atEnd() && this.text[this.pos] === '.') {
+				this.pos++;
+				if (this.atEnd() || !(this.text[this.pos] >= '0' && this.text[this.pos] <= '9')) {
+					throw this.error('小数点后必须有数字');
+				}
+				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
+					this.pos++;
+				}
+			}
+			if (!this.atEnd() && (this.text[this.pos] === 'e' || this.text[this.pos] === 'E')) {
+				this.pos++;
+				if (!this.atEnd() && (this.text[this.pos] === '+' || this.text[this.pos] === '-')) {
+					this.pos++;
+				}
+				if (this.atEnd() || !(this.text[this.pos] >= '0' && this.text[this.pos] <= '9')) {
+					throw this.error('指数必须有数字');
+				}
+				while (!this.atEnd() && this.text[this.pos] >= '0' && this.text[this.pos] <= '9') {
+					this.pos++;
+				}
+			}
+			return Number(this.text.slice(start, this.pos));
+		}
+	}
+
+	/** 解析结果：{ok, value}。失败与 JSON 字面量 null 都算「没有值」，与 Java 一致。 */
+	function parse(text) {
+		if (text === null || text === undefined) {
+			return {ok: false, value: undefined};
+		}
+		try {
+			const parser = new Parser(text);
+			const value = parser.readValue(0);
+			parser.skipWhitespace();
+			if (!parser.atEnd()) {
+				return {ok: false, value: undefined};
+			}
+			if (value === null) {
+				return {ok: false, value: undefined};
+			}
+			return {ok: true, value};
+		} catch (e) {
+			return {ok: false, value: undefined};
+		}
+	}
+
+	function errorMessage(text) {
+		if (text === null || text === undefined) {
+			return '';
+		}
+		try {
+			const parser = new Parser(text);
+			parser.readValue(0);
+			parser.skipWhitespace();
+			if (!parser.atEnd()) {
+				return 'JSON 解析失败：值后面还有内容（位置 ' + parser.pos + '）';
+			}
+		} catch (e) {
+			if (e instanceof ParserError) {
+				return 'JSON 解析失败：' + e.message + '（位置 ' + e.position + '）';
+			}
+			return 'JSON 解析失败';
+		}
+		if (!looksLikeContainer(text)) {
+			return 'JSON 必须是对象或数组';
+		}
+		return '';
+	}
+
+	function looksLikeContainer(text) {
+		if (text === null || text === undefined) {
+			return false;
+		}
+		const body = String(text).trim();
+		if (body.length < 2) {
+			return false;
+		}
+		const first = body[0];
+		const last = body[body.length - 1];
+		return (first === '[' && last === ']') || (first === '{' && last === '}');
+	}
+
+	/** 等价 JSON.stringify（不缩进）；非有限数写成 null，与 JSON.stringify 一致。 */
+	function stringify(value) {
+		return JSON.stringify(value === undefined ? null : value);
+	}
+
+	function isContainer(value) {
+		return value !== null && typeof value === 'object';
+	}
+
+	function toScratch(value) {
+		if (value === null || value === undefined) {
+			return '';
+		}
+		if (isContainer(value)) {
+			return stringify(value);
+		}
+		return value;
+	}
+
+	function toWriteValue(raw) {
+		const text = toStr(raw);
+		if (looksLikeContainer(text)) {
+			const parsed = parse(text);
+			if (parsed.ok) {
+				return parsed.value;
+			}
+		}
+		return text;
+	}
+
+	/** Scratch 风格下标 → 0 基：1 是首项，-1 是末项，0 与越界给 -1。 */
+	function arrayIndex(raw, size) {
+		const number = toNum(raw);
+		if (!Number.isFinite(number) || number !== Math.round(number) || number === 0) {
+			return -1;
+		}
+		let index = number;
+		if (index > 0) {
+			index--;
+		} else {
+			index += size;
+		}
+		return index >= 0 && index < size ? index : -1;
+	}
+
+	/** JS 的 arr[i]=x：越界会把中间填成空洞，序列化后就是 null。 */
+	function setArraySlot(array, index, value) {
+		while (array.length <= index) {
+			array.push(null);
+		}
+		array[index] = value;
+	}
+
+	function jsSliceIndex(raw, size) {
+		let index = Math.trunc(raw);
+		if (index < 0) {
+			index = Math.max(size + index, 0);
+		}
+		return Math.min(index, size);
+	}
+
+	/** 对齐 keyText：数字按 ECMAScript 格式化，对象退化 [object Object]。 */
+	function keyText(value) {
+		if (value === null || value === undefined) {
+			return 'null';
+		}
+		if (Array.isArray(value)) {
+			return value.map(keyText).join(',');
+		}
+		if (typeof value === 'object') {
+			return '[object Object]';
+		}
+		if (typeof value === 'boolean') {
+			return value ? 'true' : 'false';
+		}
+		return String(value);
+	}
+
+	/** 写入用的数组位置：1 基，允许越界；非整数或小于 1 给 -1。 */
+	function writeSlot(raw) {
+		const number = toNum(raw);
+		if (!Number.isFinite(number) || number !== Math.round(number) || number < 1) {
+			return -1;
+		}
+		return number - 1;
+	}
+
+	/** JS ===：只有同类型标量相等；对象/数组按引用比，永远不相等。 */
+	function strictEquals(left, right) {
+		if (isContainer(left) || isContainer(right)) {
+			return false;
+		}
+		if (left === null || right === null || left === undefined || right === undefined) {
+			return false;
+		}
+		return typeof left === typeof right && left === right;
+	}
+
+	function parseArray(text) {
+		const parsed = parse(text);
+		return parsed.ok && Array.isArray(parsed.value) ? parsed.value : null;
+	}
+
+	function safeEntryValue(value) {
+		return value === null || value === undefined ? '' : value;
+	}
+
+	// ---- 积木实现 ----
+
+	const BLOCKS = {};
+
+	BLOCKS.jsonNew = (a) => {
+		const kind = toStr(a[0]);
+		if (kind === 'Object') {
+			return '{}';
+		}
+		if (kind === 'Array') {
+			return '[]';
+		}
+		return '';
+	};
+
+	BLOCKS.jsonLength = (a) => {
+		const parsed = parse(toStr(a[0]));
+		if (!parsed.ok) {
+			return '';
+		}
+		if (Array.isArray(parsed.value)) {
+			return parsed.value.length;
+		}
+		if (typeof parsed.value === 'object') {
+			return Object.keys(parsed.value).length;
+		}
+		return '';
+	};
+
+	BLOCKS.jsonGet = (a) => {
+		const parsed = parse(toStr(a[0]));
+		const item = toStr(a[1]);
+		if (!parsed.ok) {
+			return '';
+		}
+		if (Array.isArray(parsed.value)) {
+			const index = arrayIndex(item, parsed.value.length);
+			return index < 0 ? '' : toScratch(parsed.value[index]);
+		}
+		if (typeof parsed.value === 'object') {
+			return Object.prototype.hasOwnProperty.call(parsed.value, item)
+				? toScratch(parsed.value[item]) : '';
+		}
+		return '';
+	};
+
+	BLOCKS.jsonSet = (a) => {
+		const parsed = parse(toStr(a[0]));
+		const item = toStr(a[1]);
+		const value = toWriteValue(a[2]);
+		if (!parsed.ok) {
+			return '';
+		}
+		if (Array.isArray(parsed.value)) {
+			const slot = writeSlot(item);
+			if (slot >= 0) {
+				setArraySlot(parsed.value, slot, value);
+			}
+			return stringify(parsed.value);
+		}
+		if (typeof parsed.value === 'object') {
+			parsed.value[item] = value;
+			return stringify(parsed.value);
+		}
+		return '';
+	};
+
+	BLOCKS.jsonDelete = (a) => {
+		const parsed = parse(toStr(a[0]));
+		const item = toStr(a[1]);
+		if (!parsed.ok) {
+			return '';
+		}
+		if (Array.isArray(parsed.value)) {
+			const index = arrayIndex(item, parsed.value.length);
+			if (index >= 0) {
+				// 照搬 delete arr[i]：长度不变，该位置变 null
+				parsed.value[index] = null;
+			}
+			return stringify(parsed.value);
+		}
+		if (typeof parsed.value === 'object') {
+			delete parsed.value[item];
+			return stringify(parsed.value);
+		}
+		return '';
+	};
+
+	BLOCKS.jsonIs = (a) => {
+		// 与 Java 一致：只有字符串才可能「是合法 JSON」——数字 1 不是 JSON
+		if (typeof a[0] !== 'string') {
+			return false;
+		}
+		const text = a[0];
+		const check = toStr(a[1]);
+		if (check === 'valid') {
+			return looksLikeContainer(text) && parse(text).ok;
+		}
+		if (!looksLikeContainer(text)) {
+			return false;
+		}
+		const parsed = parse(text);
+		if (!parsed.ok) {
+			return false;
+		}
+		const array = Array.isArray(parsed.value);
+		if (check === 'Object') {
+			return !array;
+		}
+		if (check === 'Array') {
+			return array;
+		}
+		return false;
+	};
+
+	BLOCKS.jsonHasKey = (a) => {
+		const parsed = parse(toStr(a[0]));
+		if (!parsed.ok || !isContainer(parsed.value)) {
+			return false;
+		}
+		const key = keyText(toWriteValue(a[1]));
+		if (Array.isArray(parsed.value)) {
+			if (key === 'length') {
+				return false;
+			}
+			return arrayIndex(key, parsed.value.length) >= 0;
+		}
+		return Object.prototype.hasOwnProperty.call(parsed.value, key);
+	};
+
+	BLOCKS.jsonGetPath = (a) => {
+		const root = parse(toStr(a[0]));
+		const path = parse(toStr(a[1]));
+		if (!root.ok || !path.ok || !Array.isArray(path.value)) {
+			return '';
+		}
+		let current = root.value;
+		for (const segment of path.value) {
+			if (Array.isArray(current)) {
+				const index = arrayIndex(toScratch(segment), current.length);
+				if (index < 0) {
+					return '';
+				}
+				current = current[index];
+			} else if (isContainer(current)) {
+				const key = keyText(segment);
+				if (!Object.prototype.hasOwnProperty.call(current, key)) {
+					return '';
+				}
+				current = current[key];
+			} else {
+				return '';
+			}
+		}
+		return toScratch(current);
+	};
+
+	BLOCKS.jsonSetPath = (a) => {
+		const root = parse(toStr(a[0]));
+		const path = parse(toStr(a[1]));
+		if (!root.ok || !path.ok || !Array.isArray(path.value)) {
+			return '';
+		}
+		const segments = path.value;
+		if (segments.length === 0) {
+			return stringify(root.value);
+		}
+		const data = toWriteValue(a[2]);
+		let current = root.value;
+		for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i];
+			const last = i === segments.length - 1;
+			if (Array.isArray(current)) {
+				const index = arrayIndex(toScratch(segment), current.length);
+				if (index < 0) {
+					return '';
+				}
+				if (last) {
+					current[index] = data;
+				} else {
+					current = current[index];
+				}
+			} else if (isContainer(current)) {
+				const key = keyText(segment);
+				if (last) {
+					current[key] = data;
+				} else {
+					if (!Object.prototype.hasOwnProperty.call(current, key)) {
+						return '';
+					}
+					current = current[key];
+				}
+			} else {
+				return '';
+			}
+		}
+		return stringify(root.value);
+	};
+
+	BLOCKS.jsonMinify = (a) => {
+		const parsed = parse(toStr(a[0]));
+		return parsed.ok ? stringify(parsed.value) : '';
+	};
+
+	BLOCKS.jsonErrMsg = (a) => errorMessage(toStr(a[0]));
+
+	BLOCKS.jsonGetAll = (a) => {
+		const parsed = parse(toStr(a[0]));
+		if (!parsed.ok || !isContainer(parsed.value)) {
+			return '';
+		}
+		const kind = toStr(a[1]);
+		if (kind !== 'keys' && kind !== 'values' && kind !== 'datas') {
+			return '';
+		}
+		const out = [];
+		const add = (key, value) => {
+			const safe = value === null || value === undefined ? '' : value;
+			if (kind === 'keys') {
+				out.push(key);
+			} else if (kind === 'values') {
+				out.push(safe);
+			} else {
+				out.push([key, safe]);
+			}
+		};
+		if (Array.isArray(parsed.value)) {
+			parsed.value.forEach((value, index) => add(String(index), value));
+		} else {
+			Object.keys(parsed.value).forEach((key) => add(key, parsed.value[key]));
+		}
+		return stringify(out);
+	};
+
+	BLOCKS.jsonArrayPush = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		array.push(toWriteValue(a[1]));
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArraySet = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const index = toNum(a[1]) - 1;
+		if (Number.isInteger(index) && index >= 0) {
+			setArraySlot(array, index, toWriteValue(a[2]));
+		}
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArrayInsert = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const at = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		array.splice(at, 0, toWriteValue(a[2]));
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArrayDelete = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const at = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		if (at < array.length) {
+			array.splice(at, 1);
+		}
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArrayRemoveAll = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const target = toWriteValue(a[1]);
+		for (let i = array.length - 1; i >= 0; i--) {
+			if (strictEquals(array[i], target)) {
+				array.splice(i, 1);
+			}
+		}
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArrayItemNum = (a) => {
+		const array = parseArray(toStr(a[1]));
+		if (array === null) {
+			return '';
+		}
+		const target = toWriteValue(a[0]);
+		for (let i = 0; i < array.length; i++) {
+			if (strictEquals(array[i], target)) {
+				return i + 1;
+			}
+		}
+		return 0;
+	};
+
+	BLOCKS.jsonArrayFromTo = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const start = jsSliceIndex(toNum(a[1]) - 1, array.length);
+		let end = jsSliceIndex(toNum(a[2]), array.length);
+		if (end < start) {
+			end = start;
+		}
+		return stringify(array.slice(start, end));
+	};
+
+	BLOCKS.jsonArrayConcat = (a) => {
+		const left = parseArray(toStr(a[0]));
+		const right = parseArray(toStr(a[1]));
+		if (left === null || right === null) {
+			return '';
+		}
+		return stringify(left.concat(right));
+	};
+
+	BLOCKS.jsonArrayMapField = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const key = toStr(a[1]);
+		return stringify(array.map((element) => (
+			isContainer(element) && !Array.isArray(element)
+				&& Object.prototype.hasOwnProperty.call(element, key)
+				? element[key] : null
+		)));
+	};
+
+	BLOCKS.jsonArraySetLen = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const raw = toNum(a[1]);
+		if (!Number.isInteger(raw) || raw < 0) {
+			return '';
+		}
+		array.length = raw;
+		// 变大时 JS 留下空洞，序列化后是 null——这里显式补 null，避免空洞让 stringify 写成 null 之外的东西
+		for (let i = 0; i < raw; i++) {
+			if (array[i] === undefined) {
+				array[i] = null;
+			}
+		}
+		return stringify(array);
+	};
+
+	BLOCKS.jsonArrayCreate = (a) => {
+		const delimiter = toStr(a[0]);
+		const text = toStr(a[1]);
+		if (delimiter === '') {
+			return stringify(Array.from(text));
+		}
+		return stringify(text.split(delimiter));
+	};
+
+	BLOCKS.jsonArrayJoin = (a) => {
+		const delimiter = toStr(a[0]);
+		const array = parseArray(toStr(a[1]));
+		if (array === null) {
+			return '';
+		}
+		return array.map((element) => (element === null || element === undefined ? '' : keyText(element)))
+			.join(delimiter);
+	};
+
+	BLOCKS.jsonArraySort = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return '';
+		}
+		const items = array.slice();
+		// 参与比较的取值：对象/数组退化为文本，null 当 0
+		const compareValue = (element) => {
+			if (element === null || element === undefined) {
+				return 0;
+			}
+			if (isContainer(element)) {
+				return keyText(element);
+			}
+			return element;
+		};
+		items.sort((left, right) => castCompare(compareValue(left), compareValue(right)));
+		if (toStr(a[1]) === 'descending') {
+			items.reverse();
+		}
+		return stringify(items);
+	};
+
+	BLOCKS.jsonArrayTextFilter = (a) => {
+		const root = parse(toStr(a[0]));
+		if (!root.ok || !isContainer(root.value)) {
+			return '';
+		}
+		const option = toStr(a[1]);
+		const needle = toStr(a[2]);
+		const shape = toStr(a[3]);
+		const asObject = shape === 'Object';
+		if (!asObject && shape !== 'Array') {
+			return '';
+		}
+		const values = [];
+		const mapped = {};
+		const matches = (element) => {
+			if (typeof element !== 'string') {
+				return false;
+			}
+			if (option === 'includes') {
+				return element.indexOf(needle) >= 0;
+			}
+			if (option === 'starts with') {
+				return element.indexOf(needle) === 0;
+			}
+			if (option === 'ends with') {
+				return needle.length <= element.length
+					&& element.lastIndexOf(needle) === element.length - needle.length;
+			}
+			return false;
+		};
+		if (Array.isArray(root.value)) {
+			root.value.forEach((element, index) => {
+				if (matches(element)) {
+					values.push(element);
+					mapped[String(index + 1)] = element;
+				}
+			});
+		} else {
+			Object.keys(root.value).forEach((key) => {
+				const element = root.value[key];
+				if (matches(element)) {
+					values.push(element);
+					mapped[key] = element;
+				}
+			});
+		}
+		return stringify(asObject ? mapped : values);
+	};
+
+	BLOCKS.jsonArrayAnalysis = (a) => {
+		const array = parseArray(toStr(a[0]));
+		if (array === null) {
+			return 0;
+		}
+		const kind = toStr(a[1]);
+		const values = array.map((element) => toNum(toScratch(element)));
+		const sum = values.reduce((total, value) => total + value, 0);
+		switch (kind) {
+			case 'maximum': {
+				let max = -Infinity;
+				for (const value of values) {
+					if (value > max) {
+						max = value;
+					}
+				}
+				return max;
+			}
+			case 'minimum': {
+				let min = Infinity;
+				for (const value of values) {
+					if (value < min) {
+						min = value;
+					}
+				}
+				return min;
+			}
+			case 'sum':
+				return sum;
+			case 'average':
+				return sum / values.length;
+			case 'median': {
+				if (values.length === 0) {
+					return NaN;
+				}
+				const sorted = values.slice().sort((x, y) => (x < y ? -1 : (x > y ? 1 : 0)));
+				const middle = Math.floor(sorted.length / 2);
+				return sorted.length % 2 === 0
+					? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+			}
+			case 'mode': {
+				const counts = new Map();
+				let mode = 0;
+				let best = 0;
+				for (const value of values) {
+					// -0 与 0 算同一个键（SameValueZero）；NaN 也归一到同一个键
+					const key = value === 0 ? 0 : value;
+					const count = (counts.get(key) || 0) + 1;
+					counts.set(key, count);
+					if (count > best) {
+						best = count;
+						mode = value;
+					}
+				}
+				return mode;
+			}
+			case 'variance': {
+				const average = sum / values.length;
+				let total = 0;
+				for (const value of values) {
+					const delta = value - average;
+					total += delta * delta;
+				}
+				return total / values.length;
+			}
+			default:
+				return 0;
+		}
+	};
+
+	return {
+		blocks: BLOCKS,
+		/** 供对拍脚本直接调用：返回与 Java 侧同级的字符串化结果。 */
+		run: (opcode, args) => {
+			const fn = BLOCKS[opcode];
+			return fn ? fn(args) : '';
+		},
+		toScratchString: toStr
+	};
+}
+
+/*
+ * 远程调试的「画面」：浏览器原生屏幕/窗口捕获，覆盖在 TurboWarp 舞台上方。
+ *
+ * 为什么不用游戏端推流（FBO → JPEG → WebSocket）：同机开发时游戏窗口就在旁边，
+ * 推流是把眼前的东西搬进浏览器，却要付掉帧、带宽与一整套 1.21.11 渲染 API 的风险。
+ * `getDisplayMedia` 由系统合成器直接交给浏览器，游戏端零代码、零带宽（原方案见 ARCHITECTURE.md §7.8）。
+ *
+ * 由 tools/build-extension.js 拼进编辑器产物；运行时副本（游戏内）不包含本文件。
+ */
+function createStageView(Scratch) {
+	'use strict';
+
+	const STORAGE_KEY = 'turbomc.remote.view';
+	const MODE_VIDEO = 'video';
+	const MODE_STAGE = 'stage';
+
+	const state = {
+		/** @type {HTMLVideoElement|null} */
+		video: null,
+		/** @type {MediaStream|null} */
+		stream: null,
+		/** 覆盖层当前挂在哪个宿主元素下 */
+		host: null,
+		mode: loadMode(),
+		lastError: '',
+		/** 捕获源的原始分辨率，仅用于面板显示 */
+		source: null,
+		observer: null,
+		timer: null
+	};
+
+	function loadMode() {
+		try {
+			return localStorage.getItem(STORAGE_KEY) === MODE_STAGE ? MODE_STAGE : MODE_VIDEO;
+		} catch (e) {
+			return MODE_VIDEO;
+		}
+	}
+
+	function saveMode(mode) {
+		try {
+			localStorage.setItem(STORAGE_KEY, mode);
+		} catch (e) {
+			// 隐私模式写不进去：本次会话内仍然生效
+		}
+	}
+
+	// ---- 舞台定位 ----
+	// 与探针同一套：优先 runtime.renderer.canvas，拿不到再退回「页面最大画布」。
+	// 实测自建站与官方站都能拿到真实 DOM（renderer 不在 worker 里）。
+
+	function findStageCanvas() {
+		try {
+			const renderer = Scratch.vm && Scratch.vm.runtime ? Scratch.vm.runtime.renderer : null;
+			const canvas = renderer ? renderer.canvas : null;
+			if (canvas && typeof canvas.getBoundingClientRect === 'function' && canvas.width > 0) {
+				return canvas;
+			}
+		} catch (e) {
+			// 落到 DOM 兜底
+		}
+		const list = Array.prototype.slice.call(document.querySelectorAll('canvas'))
+			.filter((c) => c.width > 100 && c.height > 100);
+		list.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+		return list[0] || null;
+	}
+
+	/** 把 video 对齐到舞台画布；舞台找不到时固定一块区域，至少能看到画面。 */
+	function place() {
+		const video = state.video;
+		if (!video || !state.stream) {
+			return;
+		}
+		const canvas = findStageCanvas();
+		const style = video.style;
+		style.objectFit = 'contain';
+		style.background = '#000';
+		style.pointerEvents = 'none';
+		style.zIndex = '999';
+		style.display = state.mode === MODE_STAGE ? 'none' : 'block';
+
+		if (!canvas) {
+			if (video.parentElement !== document.body) {
+				document.body.appendChild(video);
+			}
+			state.host = document.body;
+			style.position = 'fixed';
+			style.left = '40px';
+			style.top = '40px';
+			style.width = '640px';
+			style.height = '360px';
+			return;
+		}
+
+		const host = canvas.parentElement || document.body;
+		if (state.host !== host) {
+			if (video.parentElement) {
+				video.parentElement.removeChild(video);
+			}
+			host.appendChild(video);
+			state.host = host;
+			// 绝对定位需要一个定位上下文；宿主是 static 时补上
+			if (getComputedStyle(host).position === 'static') {
+				host.style.position = 'relative';
+			}
+			watchStage(canvas);
+		}
+		const cr = canvas.getBoundingClientRect();
+		const pr = host.getBoundingClientRect();
+		style.position = 'absolute';
+		style.left = (cr.left - pr.left) + 'px';
+		style.top = (cr.top - pr.top) + 'px';
+		style.width = cr.width + 'px';
+		style.height = cr.height + 'px';
+	}
+
+	/**
+	 * 跟随布局变化。`ResizeObserver` 管画布尺寸，窗口 resize 管滚动与缩放；
+	 * 再加一个低频兜底，处理「面板开合导致舞台位移」这类观察不到的情况。
+	 */
+	function watchStage(canvas) {
+		if (state.observer) {
+			state.observer.disconnect();
+		}
+		if (typeof ResizeObserver === 'function') {
+			state.observer = new ResizeObserver(() => place());
+			state.observer.observe(canvas);
+		}
+		if (!state.timer) {
+			state.timer = setInterval(() => {
+				if (state.stream) {
+					place();
+				}
+			}, 500);
+		}
+	}
+
+	// ---- 捕获 ----
+
+	function describeError(error) {
+		if (!error) {
+			return '未知错误';
+		}
+		if (error.name === 'NotAllowedError') {
+			return '被拒绝或没有用户手势：再点一次按钮并允许共享';
+		}
+		if (error.name === 'NotSupportedError') {
+			return '此环境不支持屏幕捕获（Desktop 版没有实现 setDisplayMediaRequestHandler）';
+		}
+		return (error.name || 'Error') + ': ' + (error.message || String(error));
+	}
+
+	/**
+	 * 开始捕获。**必须由用户手势调用**（按钮点击），页面加载时自动调用会被浏览器拒绝。
+	 */
+	async function start() {
+		if (state.stream) {
+			return {ok: true, already: true};
+		}
+		if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+			state.lastError = '当前环境没有 getDisplayMedia';
+			return {ok: false, error: state.lastError};
+		}
+		state.lastError = '';
+		try {
+			// displaySurface: 'window' 只是偏好；用户仍可选整个屏幕
+			const stream = await navigator.mediaDevices.getDisplayMedia({
+				video: {frameRate: {ideal: 30, max: 60}, displaySurface: 'window'},
+				audio: false
+			});
+			state.stream = stream;
+
+			const video = document.createElement('video');
+			video.autoplay = true;
+			video.playsInline = true;
+			video.muted = true;
+			video.srcObject = stream;
+			state.video = video;
+
+			const track = stream.getVideoTracks()[0];
+			const settings = track && track.getSettings ? track.getSettings() : {};
+			state.source = {
+				width: settings.width || 0,
+				height: settings.height || 0,
+				frameRate: settings.frameRate || 0,
+				label: track && track.label ? track.label : ''
+			};
+
+			// 用户在浏览器原生「停止共享」里点了结束：跟着收尾
+			if (track) {
+				track.addEventListener('ended', () => stop());
+			}
+
+			state.mode = loadMode();
+			place();
+			try {
+				await video.play();
+			} catch (e) {
+				// 自动播放被拦：无声音的 video 一般在用户手势后可以播放，失败也不致命
+			}
+			return {ok: true};
+		} catch (error) {
+			state.lastError = describeError(error);
+			state.stream = null;
+			return {ok: false, error: state.lastError};
+		}
+	}
+
+	function stop() {
+		const stream = state.stream;
+		state.stream = null;
+		if (stream) {
+			stream.getTracks().forEach((track) => {
+				try {
+					track.stop();
+				} catch (e) {
+					// 已停止
+				}
+			});
+		}
+		if (state.video && state.video.parentElement) {
+			state.video.parentElement.removeChild(state.video);
+		}
+		if (state.observer) {
+			state.observer.disconnect();
+			state.observer = null;
+		}
+		if (state.timer) {
+			clearInterval(state.timer);
+			state.timer = null;
+		}
+		state.video = null;
+		state.host = null;
+		state.source = null;
+	}
+
+	/** 画面 ↔ 舞台。舞台模式下隐藏覆盖层，原生舞台与变量监视器完全可见。 */
+	function setMode(mode) {
+		state.mode = mode === MODE_STAGE ? MODE_STAGE : MODE_VIDEO;
+		saveMode(state.mode);
+		if (state.video) {
+			state.video.style.display = state.mode === MODE_STAGE ? 'none' : 'block';
+			if (state.mode === MODE_VIDEO) {
+				place();
+			}
+		}
+		return state.mode;
+	}
+
+	function toggleMode() {
+		return setMode(state.mode === MODE_STAGE ? MODE_VIDEO : MODE_STAGE);
+	}
+
+	return {
+		start: start,
+		stop: stop,
+		setMode: setMode,
+		toggleMode: toggleMode,
+		isCapturing: () => !!state.stream,
+		getMode: () => state.mode,
+		lastError: () => state.lastError,
+		source: () => state.source,
+		place: place
+	};
+}
+
+/*
+ * TurboMC 远程开发桥 —— 浏览器端实现。
+ *
+ * 本文件由 tools/build-extension.js 拼进编辑器产物（与积木声明同处一个 IIFE 内），
+ * 不在游戏内运行，也不进入运行时副本。
+ *
+ * 职责：
+ *   1. 连接面板：地址 / 端口 / 连接 / 断开 / 自动重连
+ *   2. __tmc：所有积木的统一入口（未连接时执行 fallback，连接后走 RPC 或快照）
+ *   3. 快照缓存与 tick 时钟：wait 与 poll 都由快照驱动（见 ARCHITECTURE.md §7.3）
+ *   4. 帽子派发：按服务端下发的 hats 表，实现三种通用匹配器（ARCHITECTURE.md §7.5）
+ *
+ * 只做这三件事之外的事都是错的方向——积木语义留在 Java，这里不做第二份判断。
+ */
+function installRemote(Scratch, ext, meta) {
+	'use strict';
+
+	if (!Scratch.extensions.unsandboxed) {
+		throw new Error('TurboMC 远程模式必须以 unsandboxed 方式加载扩展');
+	}
+
+	const STORAGE_KEY = 'turbomc.remote.v1';
+	const RECONNECT_MS = 3000;
+	/** 单个调用最长等待；动作自身的上限更短，这里是「绝不永挂」的兜底。 */
+	const CALL_TIMEOUT_MS = 60000;
+	/** 扩展期望的快照字段版本；与客户端 RemoteProtocol.SNAPSHOT_SCHEMA 必须一致。 */
+	const SNAP_SCHEMA = 6;
+	/**
+	 * JSON 积木的本地实现（json-lite.js，构建时拼在同一作用域里）。
+	 * 缺失时这些积木退回「返回空值」——不会抛错，也不会误走 RPC。
+	 */
+	const JSON_LITE = typeof createJsonLite === 'function' ? createJsonLite() : null;
+	/**
+	 * 画面：浏览器原生捕获（stage-view.js，构建时拼在同一作用域里）。
+	 * 缺失时面板不显示画面按钮，其余功能不受影响。
+	 */
+	const STAGE_VIEW = typeof createStageView === 'function' ? createStageView(Scratch) : null;
+
+	const S = {
+		ws: null,
+		connected: false,
+		welcome: null,
+		tick: 0,
+		seq: 0,
+		/** id → { resolve, value, tick0, wait, check, settled, pollTick } */
+		pending: new Map(),
+		snapshot: null,
+		lastSnapAt: 0,
+		reconnectTimer: null,
+		reconnectWanted: false,
+		panel: null,
+		panelBody: null,
+		/** 最近一次帽子派发的结论，显示在状态行最后一行（见 noteHat）。 */
+		lastHat: '',
+		/** 状态文字节点：快照只改这里的 textContent，不重建整个面板（见 refreshStatus）。 */
+		panelStatus: null,
+		/** 上一次渲染面板时的连接状态，用来判断要不要重建控件。 */
+		panelConnected: null,
+		missingReporters: new Set(),
+		/** 画面捕获的失败原因（面板上显示一行） */
+		viewError: '',
+		config: loadConfig()
+	};
+
+	// ---- 配置 ----
+
+	function loadConfig() {
+		const fallback = {address: '127.0.0.1', port: 35671, name: '', autoReconnect: true};
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			if (!raw) {
+				return fallback;
+			}
+			const parsed = JSON.parse(raw);
+			return {
+				address: parsed.address || fallback.address,
+				port: Number(parsed.port) || fallback.port,
+				name: parsed.name || '',
+				autoReconnect: parsed.autoReconnect !== false
+			};
+		} catch (e) {
+			return fallback;
+		}
+	}
+
+	function saveConfig() {
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(S.config));
+		} catch (e) {
+			// 隐私模式下写不进去，不影响本次会话
+		}
+	}
+
+	// ---- 面板 ----
+
+	function ensurePanel() {
+		if (S.panel) {
+			return S.panel;
+		}
+		const root = document.createElement('div');
+		root.style.cssText = [
+			'position:fixed', 'left:12px', 'bottom:12px', 'z-index:1000000',
+			'width:340px', 'border-radius:8px', 'overflow:hidden',
+			'background:rgba(18,18,22,0.96)', 'color:#e8e8ea',
+			'font:12px/1.5 ui-monospace,Consolas,monospace',
+			'box-shadow:0 6px 24px rgba(0,0,0,0.45)',
+			'border:1px solid rgba(255,255,255,0.14)'
+		].join(';');
+		root.style.display = 'none';
+
+		const head = document.createElement('div');
+		head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;'
+			+ 'padding:6px 10px;background:rgba(255,255,255,0.06);font-weight:600';
+		const title = document.createElement('span');
+		title.textContent = 'TurboMC 远程调试';
+		const close = document.createElement('button');
+		close.textContent = '×';
+		close.style.cssText = 'background:none;border:none;color:#e8e8ea;font-size:16px;'
+			+ 'line-height:1;cursor:pointer;padding:0 2px';
+		close.addEventListener('click', () => { root.style.display = 'none'; });
+		head.appendChild(title);
+		head.appendChild(close);
+
+		const body = document.createElement('div');
+		body.style.padding = '8px 10px';
+
+		root.appendChild(head);
+		root.appendChild(body);
+		document.body.appendChild(root);
+		S.panel = root;
+		S.panelBody = body;
+		renderPanel();
+		return root;
+	}
+
+	function field(label, value, onChange, type) {
+		const row = document.createElement('div');
+		row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+		const text = document.createElement('span');
+		text.textContent = label;
+		text.style.cssText = 'flex:0 0 48px;opacity:0.75';
+		const input = document.createElement('input');
+		input.type = type || 'text';
+		input.value = value;
+		input.style.cssText = 'flex:1 1 auto;min-width:0;background:rgba(255,255,255,0.08);'
+			+ 'border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e8e8ea;'
+			+ 'padding:2px 6px;font:inherit';
+		input.addEventListener('change', () => onChange(input.value));
+		row.appendChild(text);
+		row.appendChild(input);
+		return row;
+	}
+
+	function button(label, onClick) {
+		const b = document.createElement('button');
+		b.textContent = label;
+		b.style.cssText = 'background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);'
+			+ 'color:#e8e8ea;border-radius:4px;padding:3px 10px;cursor:pointer;font:inherit';
+		b.addEventListener('click', onClick);
+		return b;
+	}
+
+	function renderPanel() {
+		if (!S.panelBody) {
+			return;
+		}
+		const body = S.panelBody;
+		body.textContent = '';
+
+		body.appendChild(field('地址', S.config.address, (v) => {
+			S.config.address = v.trim() || '127.0.0.1';
+			saveConfig();
+		}));
+		body.appendChild(field('端口', String(S.config.port), (v) => {
+			const n = Number(v);
+			S.config.port = Number.isFinite(n) && n > 0 && n < 65536 ? Math.trunc(n) : 35671;
+			saveConfig();
+			renderPanel();
+		}, 'number'));
+
+		const row = document.createElement('div');
+		row.style.cssText = 'display:flex;gap:6px;margin:8px 0';
+		if (S.connected) {
+			row.appendChild(button('断开', () => disconnect(true)));
+		} else {
+			row.appendChild(button('连接', () => {
+				// 首次连接必须由用户手势触发：LNA 的权限请求要求这样
+				connect();
+			}));
+		}
+		row.appendChild(button('打开目录说明', () => {
+			window.alert('端口在游戏的 HUD 或 logs/latest.log 里（搜索「远程调试」）。\n'
+				+ '首次连接浏览器会询问是否允许访问本地网络，选「允许」。');
+		}));
+		body.appendChild(row);
+
+		// 画面：捕获的是系统窗口，与连接状态无关——断线后画面仍在，用户自己决定何时停
+		if (STAGE_VIEW) {
+			const viewRow = document.createElement('div');
+			viewRow.style.cssText = 'display:flex;gap:6px;margin:8px 0';
+			viewRow.appendChild(button(STAGE_VIEW.isCapturing() ? '停止捕获' : '开始捕获', async () => {
+				if (STAGE_VIEW.isCapturing()) {
+					STAGE_VIEW.stop();
+					S.viewError = '';
+				} else {
+					// 必须由用户手势触发：页面加载时自动调用会被浏览器拒绝
+					const result = await STAGE_VIEW.start();
+					S.viewError = result.ok ? '' : result.error;
+					if (!result.ok) {
+						console.warn('[turbomc] 画面捕获失败：' + result.error);
+					}
+				}
+				renderPanel();
+			}));
+			viewRow.appendChild(button(STAGE_VIEW.getMode() === 'video' ? '切到舞台' : '切到画面', () => {
+				STAGE_VIEW.toggleMode();
+				renderPanel();
+			}));
+			body.appendChild(viewRow);
+		}
+
+		const status = document.createElement('div');
+		status.style.cssText = 'white-space:pre-wrap;word-break:break-all;opacity:0.9';
+		status.textContent = statusText();
+		S.panelStatus = status;
+		S.panelConnected = S.connected;
+		body.appendChild(status);
+	}
+
+	function statusText() {
+		if (S.connected && S.welcome) {
+			return '● 已连接 ' + (S.welcome.instance || '?')
+				+ '\n  世界 ' + (S.welcome.world || '—')
+				+ ' · ' + S.tick + ' tick'
+				+ (S.snapshot ? '\n  (' + S.snapshot.x + ', ' + S.snapshot.y + ', ' + S.snapshot.z + ')' : '')
+				+ (S.schemaSeen !== undefined && S.schemaSeen !== SNAP_SCHEMA
+					? '\n  ⚠ 客户端快照版本旧（' + (S.schemaSeen || 0) + ' < ' + SNAP_SCHEMA
+						+ '）：请更新模组，否则新积木恒为空'
+					: '')
+				+ (S.lastHat ? '\n  ' + S.lastHat : '')
+				+ viewLine();
+		}
+		if (S.ws) {
+			return '○ 连接中…';
+		}
+		return '○ 未连接\n  端口见游戏 HUD 或 logs/latest.log';
+	}
+
+	/** 画面那一行：失败原因优先，其次显示捕获源分辨率。 */
+	function viewLine() {
+		if (!STAGE_VIEW) {
+			return '';
+		}
+		if (S.viewError) {
+			return '\n  画面：' + S.viewError;
+		}
+		if (!STAGE_VIEW.isCapturing()) {
+			return '';
+		}
+		const source = STAGE_VIEW.source();
+		const size = source && source.width
+			? source.width + '×' + source.height + '@' + Math.round(source.frameRate || 0)
+			: '已捕获';
+		return '\n  画面：' + size + (STAGE_VIEW.getMode() === 'stage' ? '（已切到舞台）' : '');
+	}
+
+	function refreshStatus() {		if (!S.panelBody || !S.panel || S.panel.style.display === 'none') {
+			return;
+		}
+		// 只有「连接状态变化」才重建控件。快照每秒到这里 20 次，若每次都重建，
+		// 按钮会在 mousedown 与 mouseup 之间被换掉——click 不触发，点「断开」就像没反应；
+		// 更糟的是按下时是「断开」、抬起时那个位置已经变成「连接」，于是反而连了回去。
+		// 输入框同理：每帧重建会让地址/端口根本敲不进去。
+		if (!S.panelStatus || S.panelConnected !== S.connected) {
+			renderPanel();
+			return;
+		}
+		S.panelStatus.textContent = statusText();
+	}
+
+	function togglePanel() {
+		const root = ensurePanel();
+		if (root.style.display === 'none') {
+			root.style.display = 'block';
+			renderPanel();
+		} else {
+			root.style.display = 'none';
+		}
+	}
+
+	// ---- 连接 ----
+
+	function connect() {
+		disconnect(false);
+		const url = 'ws://' + S.config.address + ':' + S.config.port;
+		let ws;
+		try {
+			ws = new WebSocket(url);
+		} catch (e) {
+			console.warn('[turbomc] 地址无效：' + url);
+			return;
+		}
+		S.ws = ws;
+		S.reconnectWanted = true;
+
+		ws.onopen = () => {
+			ws.send(JSON.stringify({t: 'hello', v: 1, client: 'turbowarp'}));
+		};
+		ws.onmessage = (event) => {
+			let message;
+			try {
+				message = JSON.parse(event.data);
+			} catch (e) {
+				return;
+			}
+			handleMessage(message);
+		};
+		ws.onerror = () => {
+			// 具体原因（LNA 未授权 / 端口未监听 / Origin 被拒）由浏览器控制台给出
+			console.warn('[turbomc] 连接失败：' + url + '（常见原因：本地网络未授权、端口不对、Origin 被拒）');
+		};
+		ws.onclose = () => {
+			const wasConnected = S.connected;
+			S.connected = false;
+			S.welcome = null;
+			S.ws = null;
+			rejectAllPending();
+			refreshStatus();
+			if (wasConnected) {
+				console.info('[turbomc] 连接已断开');
+			}
+			scheduleReconnect();
+		};
+		refreshStatus();
+	}
+
+	/**
+	 * @param {boolean} byUser 用户主动断开时为 true：不再自动重连
+	 */
+	function disconnect(byUser) {
+		if (byUser) {
+			S.reconnectWanted = false;
+		}
+		if (S.reconnectTimer) {
+			clearTimeout(S.reconnectTimer);
+			S.reconnectTimer = null;
+		}
+		const ws = S.ws;
+		S.ws = null;
+		S.connected = false;
+		S.welcome = null;
+		if (ws) {
+			try {
+				ws.onclose = null;
+				ws.close();
+			} catch (e) {
+				// 忽略
+			}
+		}
+		rejectAllPending();
+		refreshStatus();
+	}
+
+	// ---- 停止链路 ----
+
+	/**
+	 * 订阅 VM 的「停止全部」。
+	 *
+	 * <p>点红方块后，线程在浏览器侧清空；但游戏侧按住的键、寻路会话、待发聊天没人收，
+	 * 人物会继续往前走。必须主动通知服务端收手（ARCHITECTURE.md §7.1）。</p>
+	 *
+	 * <p>绿旗启动前 VM 自己也会 `stopAll`，这里同样上送——语义上没错：上一次运行的
+	 * 动作不该留到新一次运行里。</p>
+	 */
+	function hookStopAll() {
+		const runtime = Scratch.vm && Scratch.vm.runtime;
+		if (!runtime || typeof runtime.on !== 'function' || runtime.__tmcStopHooked) {
+			return;
+		}
+		runtime.__tmcStopHooked = true;
+		runtime.on('PROJECT_STOP_ALL', () => {
+			// 先清本地：挂起的 Promise 不结束，线程会永远停在 PROMISE_WAIT，
+			// 表现是「点了红停止，脚本还在转」
+			rejectAllPending();
+			if (!S.connected || !S.ws) {
+				return;
+			}
+			try {
+				S.ws.send(JSON.stringify({t: 'stop', reason: 'user'}));
+			} catch (e) {
+				// 连接恰好断了，忽略
+			}
+		});
+	}
+
+	function scheduleReconnect() {
+		if (!S.reconnectWanted || !S.config.autoReconnect || S.reconnectTimer) {
+			return;
+		}
+		S.reconnectTimer = setTimeout(() => {
+			S.reconnectTimer = null;
+			if (S.reconnectWanted && !S.connected) {
+				connect();
+			}
+		}, RECONNECT_MS);
+	}
+
+	// ---- 消息 ----
+
+	function handleMessage(message) {
+		switch (message.t) {
+			case 'welcome':
+				S.welcome = message;
+				S.connected = true;
+				// VM 可能比扩展晚就绪（沙箱/加载顺序），每次连上都补挂一次，函数内部幂等
+				hookStopAll();
+				checkCoverage(message);
+				refreshStatus();
+				return;
+			case 'snap':
+				S.snapshot = message;
+				S.tick = typeof message.tick === 'number' ? message.tick : S.tick + 1;
+				S.lastSnapAt = performance.now();
+				// 版本不一致 = 客户端是旧的。字段只增不减，所以不会报错，
+				// 只会让新积木恒为假/为空——不显式提示的话，看起来就是「积木坏了」
+				const schema = typeof message.schema === 'number' ? message.schema : 0;
+				if (schema !== SNAP_SCHEMA && S.schemaSeen !== schema) {
+					S.schemaSeen = schema;
+					console.warn('[turbomc] 快照版本不一致：客户端 schema=' + schema
+						+ '，扩展期望 ' + SNAP_SCHEMA + '——请更新模组客户端');
+				}
+				advancePending();
+				refreshStatus();
+				return;
+			case 'ret':
+				handleReturn(message);
+				return;
+			case 'event':
+				dispatchHat(message);
+				return;
+			case 'evicted':
+				// 被另一个标签页接管：停止重连，避免两边来回抢占
+				S.reconnectWanted = false;
+				console.warn('[turbomc] 已被其他标签页接管，停止自动重连');
+				return;
+			case 'stopped':
+				rejectAllPending();
+				return;
+			default:
+				return;
+		}
+	}
+
+	/** 版本自检：opcode 集合与服务端不一致时提示（与游戏内 HUD 同一套判断）。 */
+	function checkCoverage(welcome) {
+		if (!Array.isArray(welcome.opcodes)) {
+			return;
+		}
+		const expected = new Set(welcome.opcodes);
+		const actual = new Set(ext.getInfo().blocks
+			.filter((b) => b.opcode && b.blockType !== 'button')
+			.map((b) => meta.id + '_' + b.opcode));
+		const missing = [...expected].filter((op) => !actual.has(op));
+		const extra = [...actual].filter((op) => !expected.has(op));
+		if (missing.length || extra.length) {
+			console.warn('[turbomc] 版本不一致：缺少 ' + missing.length
+				+ ' 块（模组较新），多出 ' + extra.length + ' 块（扩展较新）');
+			if (missing.length) console.warn('[turbomc] 缺少的 opcode：', missing);
+			if (extra.length) console.warn('[turbomc] 多出的 opcode：', extra);
+		}
+	}
+
+	function handleReturn(message) {
+		const p = S.pending.get(message.id);
+		if (!p) {
+			return;
+		}
+		// poll 的回包只有 done
+		if (typeof message.done === 'boolean') {
+			if (message.done) {
+				finish(p, p.value);
+			}
+			return;
+		}
+		if (!message.ok) {
+			console.warn('[turbomc] 调用失败 ' + (message.code || '') + '：' + (message.err || ''));
+			finish(p, undefined);
+			return;
+		}
+		p.value = message.v === undefined ? null : message.v;
+		p.tick0 = S.tick;
+		p.wait = Number(message.wait) || 0;
+		p.check = message.check || '';
+		if (!p.wait && !p.check) {
+			finish(p, p.value);
+		}
+	}
+
+	/**
+	 * 每收到一帧快照推进一步等待。
+	 *
+	 * <p>这里就是 §7.3 的时钟：{@code wait} 按 tick 号推进，{@code check} 每帧发一次 poll。
+	 * 不用 setTimeout——它的实际间隔是 52–56ms，跑几分钟会明显漂移。</p>
+	 */
+	function advancePending() {
+		if (!S.pending.size || !S.ws) {
+			return;
+		}
+		for (const [id, p] of S.pending) {
+			if (p.wait > 0 && S.tick >= p.tick0 + p.wait) {
+				finish(p, p.value);
+				continue;
+			}
+			if (p.check && p.pollTick !== S.tick) {
+				p.pollTick = S.tick;
+				try {
+					S.ws.send(JSON.stringify({t: 'poll', id: id, key: p.check}));
+				} catch (e) {
+					finish(p, undefined);
+				}
+			}
+		}
+	}
+
+	function finish(p, value) {
+		if (p.settled) {
+			return;
+		}
+		p.settled = true;
+		S.pending.delete(p.id);
+		p.resolve(value);
+	}
+
+	function rejectAllPending() {
+		for (const [, p] of S.pending) {
+			if (!p.settled) {
+				p.settled = true;
+				p.resolve(undefined);
+			}
+		}
+		S.pending.clear();
+	}
+
+	// ---- 帽子派发 ----
+
+	/** 帽子字段名 → 事件里的数据字段。名字不同，必须显式映射，不能靠大小写猜。 */
+	const FIELD_SOURCE = {SCREEN: 'screen', KEY_OPTION: 'key', MATCH: 'text'};
+
+	function dispatchHat(event) {
+		const hats = S.welcome && S.welcome.hats;
+		const runtime = Scratch.vm && Scratch.vm.runtime;
+		if (!Array.isArray(hats) || !runtime) {
+			return;
+		}
+		const data = event.data || {};
+		for (const rule of hats) {
+			if (rule.ev !== event.name) {
+				continue;
+			}
+			if (!rule.match) {
+				pushHatsMatching(runtime, rule.op, null);
+				continue;
+			}
+			const parts = String(rule.match).split(':');
+			const kind = parts[0];
+			const name = parts[1];
+			const value = data[FIELD_SOURCE[name] || name.toLowerCase()];
+			if (kind === 'field') {
+				pushHatsMatching(runtime, rule.op, makeFields(name, value));
+				if (rule.alsoAny) {
+					pushHatsMatching(runtime, rule.op, makeFields(name, 'any'));
+				}
+			} else if (kind === 'input' && rule.contains) {
+				startInputMatches(runtime, rule.op, name, value);
+			}
+		}
+	}
+
+	function makeFields(name, value) {
+		const fields = {};
+		fields[name] = value === undefined || value === null ? '' : String(value);
+		return fields;
+	}
+
+	/**
+	 * 按字段匹配启动帽子。
+	 *
+	 * <p><b>为什么不直接用 {@code runtime.startHats}</b>：它会先 {@code stepThread} 再
+	 * {@code goToNextBlock}，而第一步就把帽子块当作普通积木执行了一次。扩展帽子没有实现体，
+	 * 返回 {@code undefined}，于是走 {@code n || retireThread(t)} 分支——线程当场退役。
+	 * 症状是「帽子亮了，后面的积木一块都不跑」，而且内置键帽（{@code event_whenkeypressed}
+	 * 是 edge-activated）不受影响，更加让人以为是自己的脚本写错了。</p>
+	 *
+	 * <p>所以这里自己遍历顶层块、匹配字段、{@code _pushThread} 之后立刻
+	 * {@code goToNextBlock()}，让线程第一步就落在帽子的下一块上。与游戏内
+	 * {@code __tmcStartHatField} 同一套做法。</p>
+	 */
+	function pushHatsMatching(runtime, opcode, fields) {
+		const started = [];
+		let matched = 0;
+		for (const target of runtime.targets) {
+			const blocks = target.blocks;
+			if (!blocks || !blocks._blocks) {
+				continue;
+			}
+			for (const id in blocks._blocks) {
+				const block = blocks._blocks[id];
+				if (!block || block.opcode !== opcode || !block.topLevel) {
+					continue;
+				}
+				if (fields && !fieldsMatch(block, fields)) {
+					continue;
+				}
+				matched++;
+				if (isBusy(runtime, target, id)) {
+					continue;
+				}
+				pushHatThread(runtime, target, id, started);
+			}
+		}
+		// 面板上留一行：命中几顶、起了几个线程。分不清「没匹配上」与「起了但没跑」时，
+		// 这行是唯一能在游戏画面外看到的信息
+		noteHat('帽子 ' + opcode.replace(/^turbomc_/, '') + '：命中 ' + matched
+			+ ' · 起线程 ' + started.length
+			+ ' · 当前线程 ' + (Array.isArray(runtime.threads) ? runtime.threads.length : '?')
+			+ (matched > started.length ? '（其余在跑或帽子是空的）' : ''));
+		return started;
+	}
+
+	/** 把最近一次帽子派发结果写进面板状态行。 */
+	function noteHat(text) {
+		S.lastHat = text;
+		refreshStatus();
+	}
+
+	/** 字段比较：沿用 {@code startHats} 的规则——两边都转大写再比。 */
+	function fieldsMatch(block, fields) {
+		for (const name in fields) {
+			const actual = blockField(block, name);
+			if (actual === null) {
+				return false;
+			}
+			if (actual.toUpperCase() !== String(fields[name]).toUpperCase()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** 读帽子字段：兼容运行期 {@code {name,value,id}} 与原始 JSON {@code [value, id]}。 */
+	function blockField(block, name) {
+		const field = block && block.fields ? block.fields[name] : null;
+		if (!field) {
+			return null;
+		}
+		if (typeof field === 'object' && field.value !== undefined) {
+			return String(field.value);
+		}
+		if (Array.isArray(field) && field.length >= 1) {
+			return String(field[0]);
+		}
+		return null;
+	}
+
+	/**
+	 * 起一个帽子线程，**直接把栈顶放在帽子的下一块**。
+	 *
+	 * <p>踩过两次的坑：用 {@code runtime.startHats} 或在帽子块上 {@code _pushThread}
+	 * 再 {@code goToNextBlock}，这份 VM 里都会先把帽子当普通积木执行一次。扩展帽子没有实现体，
+	 * 返回 {@code undefined}，于是 {@code retireThread}——现象是「帽子高亮了，后面的积木不动」。</p>
+	 *
+	 * <p>所以这里绕过帽子本身：找到它的 {@code next}，从那一块起线程。空帽子（只有帽子、
+	 * 下面没有积木）本来就没有可执行的东西，直接跳过。</p>
+	 */
+	function pushHatThread(runtime, target, blockId, out, chatText) {
+		const nextId = nextBlockId(target, blockId);
+		if (!nextId) {
+			return null;
+		}
+		const ret = runtime._pushThread(nextId, target);
+		// 兼容被包过一层的 _pushThread：可能不返回线程，取 threads 末尾那个
+		const thread = ret && typeof ret === 'object'
+			? ret
+			: (Array.isArray(runtime.threads) ? runtime.threads[runtime.threads.length - 1] : null);
+		// 聊天触发的线程带一份自己的消息副本：全局槽可能已经被后来的消息改写，
+		// 「触发我的聊天」读的必须是这一条（与游戏内 vm-bootstrap 同一做法）
+		if (thread && chatText !== undefined && chatText !== null) {
+			thread.tmcChat = chatText;
+		}
+		if (out) {
+			out.push(thread || true);
+		}
+		return thread;
+	}
+
+	/** 取帽子下面挂的第一块；没有则返回 null。 */
+	function nextBlockId(target, blockId) {
+		const blocks = target && target.blocks;
+		if (!blocks) {
+			return null;
+		}
+		if (typeof blocks.getNextBlock === 'function') {
+			return blocks.getNextBlock(blockId) || null;
+		}
+		const block = blocks._blocks ? blocks._blocks[blockId] : null;
+		return block && block.next ? block.next : null;
+	}
+
+	/**
+	 * 按输入内容过滤后启动帽子。
+	 *
+	 * <p>{@code startHats} 的字段匹配只认 field，而「当聊天包含」的关键词是 input，
+	 * 传 matchFields 会抛错。因此自行遍历顶层块、读输入、命中后 {@code _pushThread}。
+	 * 这段与游戏内 {@code vm-bootstrap.js} 的 {@code __tmcStartHatFiltered} 同一套做法。</p>
+	 */
+	function startInputMatches(runtime, opcode, inputName, text) {
+		const needle = text === undefined || text === null ? '' : String(text);
+		let matched = 0;
+		let started = 0;
+		for (const target of runtime.targets) {
+			const blocks = target.blocks;
+			if (!blocks || !blocks._blocks) {
+				continue;
+			}
+			for (const id in blocks._blocks) {
+				const block = blocks._blocks[id];
+				if (!block || block.opcode !== opcode || !block.topLevel) {
+					continue;
+				}
+				// 读不出关键词（接了表达式）或关键词为空：按「匹配全部」处理，
+				// 与玩家聊天通道的历史行为一致
+				const keyword = resolveKeyword(runtime, target, blocks, block, inputName);
+				if (keyword.known && keyword.value !== '' && needle.indexOf(keyword.value) < 0) {
+					continue;
+				}
+				matched++;
+				if (isBusy(runtime, target, id)) {
+					continue;
+				}
+				// 线程起在帽子下一块：留在帽子上会执行帽子本身并立刻退役
+				if (pushHatThread(runtime, target, id, null, needle)) {
+					started++;
+				}
+			}
+		}
+		noteHat('帽子 ' + opcode.replace(/^turbomc_/, '') + '：命中 ' + matched
+			+ ' · 起线程 ' + started
+			+ ' · 当前线程 ' + (Array.isArray(runtime.threads) ? runtime.threads.length : '?'));
+	}
+
+	/**
+	 * 读输入槽的字面量：读不出（接了变量/表达式）返回 {@code null}，空槽返回空串。
+	 *
+	 * <p><b>这是踩过的坑</b>：sb3 的字面量是嵌套形态 {@code [1, [10, "文字"]]}，
+	 * 只看 {@code input[1]} 是不是字符串，会把**所有字面量都判成"读不出来"**，
+	 * 于是关键词过滤形同虚设——「当聊天包含 你好」在任何一条聊天上都会触发。
+	 * 这里的三种形态与游戏内 {@code __tmcReadInput} 一一对应。</p>
+	 */
+	function readInput(blocks, block, name) {
+		const direct = fieldText(block, name);
+		if (direct !== null) {
+			return direct;
+		}
+		const input = block.inputs && block.inputs[name];
+		if (!input) {
+			return '';
+		}
+		// 运行期形态 {name, block, shadow}：block 与 shadow 不同说明槽里接了积木
+		if (input.block !== undefined) {
+			if (input.block !== input.shadow) {
+				return null;
+			}
+			return shadowText(blocks, input.block);
+		}
+		// 原始 JSON 形态 [1, [10, "文字"]] 或 [1, "blockId"]
+		const value = input[1];
+		if (typeof value === 'string') {
+			return shadowText(blocks, value);
+		}
+		if (value && value.length >= 2) {
+			return String(value[1] === null || value[1] === undefined ? '' : value[1]);
+		}
+		return null;
+	}
+
+	/** 字段文本：兼容运行期的 {name,value,id} 与原始 JSON 的 [value, id]。 */
+	function fieldText(block, name) {
+		const field = block && block.fields ? block.fields[name] : null;
+		if (!field) {
+			return null;
+		}
+		if (typeof field === 'object' && field.value !== undefined) {
+			return String(field.value);
+		}
+		if (Array.isArray(field) && field.length >= 1) {
+			return String(field[0]);
+		}
+		return null;
+	}
+
+	/** 替身积木（只有字段没有操作）里取第一段文本。 */
+	function shadowText(blocks, id) {
+		const shadow = id && blocks && blocks._blocks ? blocks._blocks[id] : null;
+		if (!shadow || !shadow.fields) {
+			return '';
+		}
+		for (const key in shadow.fields) {
+			const value = fieldText(shadow, key);
+			if (value !== null) {
+				return value;
+			}
+		}
+		return '';
+	}
+
+	/** 槽里接的那块积木（可能是变量/表达式 reporter）；只有替身时返回 null。 */
+	function reporterBlock(blocks, block, inputName) {
+		const input = block.inputs && block.inputs[inputName];
+		if (!input) {
+			return null;
+		}
+		let id = null;
+		if (input.block !== undefined) {
+			id = input.block;
+		} else if (typeof input[1] === 'string') {
+			id = input[1];
+		}
+		if (!id || !blocks || !blocks._blocks) {
+			return null;
+		}
+		return blocks._blocks[id] || null;
+	}
+
+	/** 读变量当前值；作用域先本角色再舞台（sb3 里变量通常定义在舞台上）。 */
+	function variableText(runtime, target, variableField) {
+		let id = null;
+		if (variableField && typeof variableField === 'object' && variableField.id !== undefined) {
+			id = variableField.id;
+		} else if (Array.isArray(variableField) && variableField.length >= 2) {
+			id = variableField[1];
+		}
+		if (!id) {
+			return null;
+		}
+		const lookup = (scope) => {
+			const bag = scope && scope.variables;
+			return bag && bag[id] !== undefined ? bag[id] : null;
+		};
+		let value = lookup(target);
+		if (value === null) {
+			const stage = (runtime.targets || []).find((t) => t.isStage);
+			value = lookup(stage);
+		}
+		return value === null ? null : String(value);
+	}
+
+	/** 关键词：字面量优先，其次变量；都读不出时 known=false（由调用方按「匹配全部」处理）。 */
+	function resolveKeyword(runtime, target, blocks, block, inputName) {
+		const literal = readInput(blocks, block, inputName);
+		if (literal !== null) {
+			return {known: true, value: literal};
+		}
+		const reporter = reporterBlock(blocks, block, inputName);
+		if (reporter && reporter.opcode === 'data_variable') {
+			const value = variableText(runtime, target, reporter.fields && reporter.fields.VARIABLE);
+			if (value !== null) {
+				return {known: true, value: value};
+			}
+		}
+		return {known: false, value: ''};
+	}
+
+	function isBusy(runtime, target, blockId) {
+		// 线程是从帽子的下一块起的，topBlock 记的是那一块——两个都要认，
+		// 否则同一顶帽子会被连发的聊天叠出好几份线程
+		const bodyId = nextBlockId(target, blockId);
+		for (const thread of runtime.threads) {
+			if (thread.target !== target) {
+				continue;
+			}
+			if (thread.topBlock !== blockId && thread.topBlock !== bodyId) {
+				continue;
+			}
+			if (thread.status !== 4) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// ---- 积木入口 ----
+
+	/** 能从快照直接同步回答的 reporter；不在表里的返回空并由调用方提示一次。 */
+	const READERS = {
+		'turbomc_pos': (s, a) => (s ? s[a[0]] : 0),
+		'turbomc_aimPos': (s, a) => (s && s.aim ? s.aim[a[0]] : 0),
+		'turbomc_health': (s) => (s ? s.hp : 0),
+		'turbomc_food': (s) => (s ? s.food : 0),
+		'turbomc_xpLevel': (s) => (s ? s.xpLevel : 0),
+		'turbomc_dimension': (s) => (s ? s.dim : ''),
+		'turbomc_selectedSlot': (s) => (s ? s.slot : 0),
+		'turbomc_heldItem': (s) => (s && s.hand ? s.hand.id : ''),
+
+		// ---- 状态类（快照直出）----
+		'turbomc_onGround': (s) => !!(s && s.onGround),
+		'turbomc_isDay': (s) => !!(s && s.isDay),
+		'turbomc_biome': (s) => (s ? s.biome : ''),
+		'turbomc_inWater': (s) => !!(s && s.inWater),
+		'turbomc_inLava': (s) => !!(s && s.inLava),
+		'turbomc_isMining': (s) => !!(s && s.mining && s.mining.active),
+		// 没在挖时是 -1，脚本才能区分「挖到 0%」和「还没开始」
+		'turbomc_miningProgress': (s) => (s && s.mining ? s.mining.progress : -1),
+		'turbomc_blockInFront': (s) => !!(s && s.aim && s.aim.has),
+		'turbomc_frontBlock': (s) => (s && s.aim ? s.aim.block : ''),
+		'turbomc_blockBelow': (s) => (s ? s.below : ''),
+		'turbomc_ping': (s) => (s ? s.ping : 0),
+		'turbomc_mouseDown': (s, a) => {
+			const button = String((a && a[0]) || 'left').trim().toLowerCase();
+			if (!s || !s.mouse) {
+				return false;
+			}
+			if (button === 'any') {
+				return !!(s.mouse.left || s.mouse.right || s.mouse.middle);
+			}
+			return !!s.mouse[button];
+		},
+		'turbomc_heldItemField': (s, a) => {
+			const field = String((a && a[0]) || 'id').trim().toLowerCase();
+			const hand = s && s.hand ? s.hand : {id: '', count: 0, maxDurability: 0, durability: 0};
+			if (field === 'count') {
+				return hand.count;
+			}
+			if (field === 'max_durability') {
+				return hand.maxDurability;
+			}
+			if (field === 'durability') {
+				return hand.durability;
+			}
+			return hand.id;
+		},
+
+		// ---- 背包与容器 ----
+		// 快照里的 inv / ui 就是游戏内 {@code Snapshots.inventoryArray} /
+		// {@code screenObject} 的原样形态，所以两个「快照」积木直接 stringify 就与游戏内逐字一致
+		'turbomc_inventoryJson': (s) => JSON.stringify(s && Array.isArray(s.inv) ? s.inv : []),
+		'turbomc_screenJson': (s) => (s && s.ui ? JSON.stringify(s.ui) : '{}'),
+		'turbomc_containerSlots': (s) => (s && s.ui ? s.ui.slots : 0),
+		'turbomc_itemCount': (s, a) => {
+			const want = itemKey(a && a[0]);
+			if (!want || !s || !Array.isArray(s.inv)) {
+				return 0;
+			}
+			let total = 0;
+			for (const item of s.inv) {
+				if (item.id === want) {
+					total += item.count;
+				}
+			}
+			return total;
+		},
+		'turbomc_inventoryFull': (s) => {
+			if (!s || !Array.isArray(s.inv)) {
+				return false;
+			}
+			// 只看主背包 36 格（0–35），与游戏内「背包已满」同一口径：盔甲与副手不算
+			const filled = new Set(s.inv.map((item) => item.slot));
+			for (let i = 0; i < 36; i++) {
+				if (!filled.has(i)) {
+					return false;
+				}
+			}
+			return true;
+		},
+		'turbomc_slotField': (s, a) => {
+			const index = Number((a && a[0]) === undefined ? 0 : a[0]);
+			const field = String((a && a[1]) || 'id').trim().toLowerCase();
+			const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
+			const item = items.find((entry) => entry.slot === index) || null;
+			if (field === 'amount') {
+				return item ? item.count : 0;
+			}
+			if (field === 'max_durability') {
+				return item ? item.max_damage : 0;
+			}
+			if (field === 'damage') {
+				return item ? item.damage : 0;
+			}
+			if (field === 'custom_name') {
+				return item ? item.custom_name : '';
+			}
+			return item ? item.id : '';
+		},
+		'turbomc_firstSlotOf': (s, a) => {
+			const want = itemKey(a && a[0]);
+			const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
+			if (!want) {
+				return -1;
+			}
+			const hit = items.find((entry) => entry.id === want);
+			return hit ? hit.slot : -1;
+		},
+
+		// ---- 整体快照与键清单 ----
+		// 三个快照同样由游戏侧的 Snapshots 拼好挂进快照，这里 stringify 即逐字一致
+		'turbomc_playerJson': (s) => JSON.stringify(s && s.me ? s.me : {}),
+		'turbomc_worldJson': (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}),
+		'turbomc_playersJson': (s) => JSON.stringify(s && Array.isArray(s.players) ? s.players : []),
+		'turbomc_snapshotKeys': (s, a) => {
+			// 键清单随握手下发（服务端 Snapshots 常量），扩展里不抄第二份
+			const kind = String((a && a[0]) || 'player').trim().toLowerCase();
+			const table = S.welcome && S.welcome.snapshotKeys ? S.welcome.snapshotKeys : null;
+			if (!table) {
+				return '[]';
+			}
+			return JSON.stringify(Array.isArray(table[kind]) ? table[kind] : []);
+		},
+
+		// ---- 聊天与 AI ----
+		'turbomc_lastChat': (s) => (s && s.chat ? s.chat.last : ''),
+		'turbomc_chatHistory': (s, a) => {
+			const count = Math.max(1, Math.min(32, Number((a && a[0]) === undefined ? 10 : a[0]) || 0));
+			const history = s && s.chat && Array.isArray(s.chat.history) ? s.chat.history : [];
+			// 旧的在前，取最近 count 条——与游戏内 ChatState.history 同一顺序
+			return JSON.stringify(history.slice(Math.max(0, history.length - count)));
+		},
+		'turbomc_triggerChat': (s, a, util) => {
+			// per-thread 私有副本优先；没有（非聊天触发的线程）就是空串
+			if (util && util.thread && util.thread.tmcChat !== undefined && util.thread.tmcChat !== null) {
+				return String(util.thread.tmcChat);
+			}
+			return '';
+		},
+		'turbomc_aiReply': (s, a) => {
+			const session = String((a && a[0]) || '').trim();
+			const table = s && s.ai ? s.ai : null;
+			if (!table) {
+				return '';
+			}
+			const key = session || 'default';
+			return table[key] === undefined || table[key] === null ? '' : String(table[key]);
+		},
+
+		// ---- 附近实体 ----
+		'turbomc_entityCount': (s, a) => countEntities(s, entityFilter(a && a[0])),
+		'turbomc_nearestEntityField': (s, a) => nearestEntityField(s, a),
+		'turbomc_entitiesJson': (s, a) => entitiesJson(s, a)
+	};
+
+	/** 与游戏内 {@code ENTITY_SEARCH_RANGE} 一致：两个统计积木的默认搜索半径。 */
+	const ENTITY_RANGE = 16;
+	/** 快照只带这么远的实体（服务端 {@code SnapshotPublisher.ENTITY_RADIUS}）。 */
+	const ENTITY_SNAPSHOT_RADIUS = 32;
+
+	/**
+	 * 实体过滤：{@code any} / {@code hostile} / {@code player} / 具体实体 id。
+	 *
+	 * <p>与游戏内 {@code EntityFilter.parse} 同一套判据；空串按「匹配不到」处理，
+	 * 不回退成 any——参数没送到时宁可判否，也不要安静地匹配全部。</p>
+	 */
+	function entityFilter(raw) {
+		const text = String(raw === undefined || raw === null ? '' : raw).trim().toLowerCase();
+		if (text === 'any') {
+			return {kind: 'any'};
+		}
+		if (text === 'hostile') {
+			return {kind: 'hostile'};
+		}
+		if (text === 'player') {
+			return {kind: 'player'};
+		}
+		return {kind: 'type', id: text.indexOf(':') >= 0 ? text : (text ? 'minecraft:' + text : '')};
+	}
+
+	function entityEntries(s) {
+		return s && Array.isArray(s.ents) ? s.ents : [];
+	}
+
+	/**
+	 * 是否在「盒范围」内。
+	 *
+	 * <p>游戏内是 {@code boundingBox.expand(r)} 的盒判定，不是球；这里用三轴分量还原，
+	 * 差别只出现在大体型实体贴边时，比按 {@code distance} 判球更接近原语义。</p>
+	 */
+	function inEntityBox(entry, s, range) {
+		const px = s && typeof s.x === 'number' ? s.x : 0;
+		const py = s && typeof s.y === 'number' ? s.y : 0;
+		const pz = s && typeof s.z === 'number' ? s.z : 0;
+		return Math.abs(entry.x - px) <= range
+			&& Math.abs(entry.y - py) <= range
+			&& Math.abs(entry.z - pz) <= range;
+	}
+
+	function entityMatches(entry, filter, s) {
+		if (filter.kind === 'any') {
+			return true;
+		}
+		if (filter.kind === 'player') {
+			return entry.type === 'minecraft:player';
+		}
+		if (filter.kind === 'hostile') {
+			// 「是不是主动怪」在快照里是单独的 uuid 表，不污染实体对象的键序
+			return Array.isArray(s && s.hostile) && s.hostile.indexOf(entry.uuid) >= 0;
+		}
+		return filter.id !== '' && entry.type === filter.id;
+	}
+
+	function countEntities(s, filter) {
+		let count = 0;
+		for (const entry of entityEntries(s)) {
+			if (inEntityBox(entry, s, ENTITY_RANGE) && entityMatches(entry, filter, s)) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	/** 最近实体：快照已按距离升序，第一个命中的就是答案。 */
+	function nearestEntityField(s, a) {
+		const filter = entityFilter(a && a[0]);
+		const field = String((a && a[1]) || 'distance').trim().toLowerCase();
+		const hit = entityEntries(s).find((entry) => (
+			inEntityBox(entry, s, ENTITY_RANGE) && entityMatches(entry, filter, s)));
+		switch (field) {
+			case 'x':
+				return hit ? hit.x : NaN;
+			case 'y':
+				return hit ? hit.y : NaN;
+			case 'z':
+				return hit ? hit.z : NaN;
+			case 'name':
+				return hit ? hit.name : '';
+			case 'health':
+				return hit ? hit.health : 0;
+			case 'max_health':
+				return hit ? hit.max_health : 0;
+			case 'type_id':
+				return hit ? hit.type : '';
+			default:
+				return hit ? hit.distance : -1;
+		}
+	}
+
+	/**
+	 * 附近实体快照。半径与数量在远程模式有上限：快照只带 {@link ENTITY_SNAPSHOT_RADIUS} 格内的实体，
+	 * 超出部分会被静默夹到上限（有效上限：半径 32 格、64 个，见 ARCHITECTURE.md §7.6）。
+	 */
+	function entitiesJson(s, a) {
+		const filter = entityFilter(a && a[0]);
+		const radius = Math.max(1, Math.min(64, Number((a && a[1]) === undefined ? ENTITY_RANGE : a[1]) || 0));
+		const limit = Math.max(1, Math.min(256, Number((a && a[2]) === undefined ? 32 : a[2]) || 0));
+		const effective = Math.min(radius, ENTITY_SNAPSHOT_RADIUS);
+		const out = [];
+		for (const entry of entityEntries(s)) {
+			if (!inEntityBox(entry, s, effective) || !entityMatches(entry, filter, s)) {
+				continue;
+			}
+			out.push(entry);
+			if (out.length >= limit) {
+				break;
+			}
+		}
+		// 条目字段顺序与游戏内 {@code Snapshots.entityObject} 完全一致，stringify 即逐字相同
+		return JSON.stringify(out);
+	}
+
+	/**
+	 * 物品名归一成注册名：{@code stone} 与 {@code minecraft:stone} 视为同一个。
+	 *
+	 * <p>只做前缀补全，不查中文名——游戏内 {@code ItemIds.resolve} 认中文，
+	 * 但浏览器侧没有那份表；用中文名写法时这里会匹配不到（见 ARCHITECTURE.md §7.6 已知限制）。</p>
+	 */
+	function itemKey(raw) {
+		const text = String(raw === undefined || raw === null ? '' : raw).trim().toLowerCase();
+		if (!text) {
+			return '';
+		}
+		return text.indexOf(':') >= 0 ? text : 'minecraft:' + text;
+	}
+
+	function defaultValue(kind) {
+		if (kind === 'boolean') {
+			return false;
+		}
+		if (kind === 'reporter') {
+			return '';
+		}
+		// command：返回 undefined，scratch-vm 不会把 undefined 当成 Promise 等待
+		return undefined;
+	}
+
+	/**
+	 * 所有积木的统一入口。
+	 *
+	 * @param {string} opcode 完整 opcode（{@code turbomc_xxx}）
+	 * @param {Array} argv 有序参数
+	 * @param {string} kind command / reporter / boolean
+	 * @param {Function} fallback 未连接时的占位行为（原来的预览）
+	 */
+	ext.__tmc = function (opcode, argv, kind, fallback, util) {
+		if (!S.connected) {
+			if (typeof fallback === 'function') {
+				return fallback.call(this);
+			}
+			return defaultValue(kind);
+		}
+		if (kind === 'reporter' || kind === 'boolean') {
+			// 「把列表读成数组」读的是当前 VM 的列表，只能在浏览器本地取：
+			// 列表不存在给空串，存在但为空给 "[]"——两者语义不同，不能合并
+			if (opcode === 'turbomc_jsonVmGetList') {
+				const found = findVmList(String((argv || [])[0] === undefined ? '' : argv[0]));
+				return found ? JSON.stringify(found.value || []) : '';
+			}
+			// JSON 一族是纯计算，浏览器本地算完就返回：reporter 是同步求值，等不了 RPC
+			if (JSON_LITE) {
+				// 积木表按裸 opcode（jsonGet）建键，这里拿到的是带前缀的 turbomc_jsonGet
+				const local = JSON_LITE.blocks[opcode.replace(/^turbomc_/, '')];
+				if (local) {
+					try {
+						const out = local(Array.isArray(argv) ? argv : []);
+						return kind === 'boolean' ? !!out : out;
+					} catch (e) {
+						return defaultValue(kind);
+					}
+				}
+			}
+			const reader = READERS[opcode];
+			if (!reader) {
+				if (!S.missingReporters.has(opcode)) {
+					S.missingReporters.add(opcode);
+					console.warn('[turbomc] 远程模式暂不支持该读数积木：' + opcode + '（返回空值）');
+				}
+				return defaultValue(kind);
+			}
+			try {
+				const value = reader(S.snapshot, argv, util);
+				if (value === undefined || value === null) {
+					return defaultValue(kind);
+				}
+				return kind === 'boolean' ? !!value : value;
+			} catch (e) {
+				return defaultValue(kind);
+			}
+		}
+		// 「把列表设为数组」也走本地：写的是浏览器 VM 里的列表，发到游戏再写没有意义
+		if (opcode === 'turbomc_jsonVmSetList') {
+			writeVmList(String((argv || [])[0] === undefined ? '' : argv[0]),
+				String((argv || [])[1] === undefined ? '' : argv[1]));
+			// 命令积木返回 undefined：VM 不会把它当 Promise 去等
+			return undefined;
+		}
+		return callRemote(opcode, argv);
+	};
+
+	/**
+	 * 按名字找列表：先各角色，再兼容老的 {@code target.lists}。
+	 *
+	 * <p>与游戏内 {@code __tmcFindList} 同一套查找顺序——两边对「哪个列表」的判断必须一致，
+	 * 否则同名列表在两份工程里指向不同对象。</p>
+	 */
+	function findVmList(name) {
+		const runtime = Scratch.vm && Scratch.vm.runtime;
+		if (!runtime || !Array.isArray(runtime.targets)) {
+			return null;
+		}
+		for (const target of runtime.targets) {
+			const vars = target.variables || {};
+			for (const id in vars) {
+				const item = vars[id];
+				if (item && item.name === name && item.type === 'list') {
+					return item;
+				}
+			}
+			const lists = target.lists || {};
+			for (const listId in lists) {
+				const legacy = lists[listId];
+				if (legacy && legacy.name === name) {
+					return legacy;
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 用 JSON 数组覆盖列表。
+	 *
+	 * <p>列表项只能是标量：对象/数组转成 JSON 文本、{@code null} 变空串——与 Java 侧
+	 * {@code VmListActions.toScratchList} 一致。不这么转，塞进去的对象只会变成
+	 * {@code [object Object]}，一进一出结构就没了。</p>
+	 */
+	function writeVmList(name, json) {
+		const found = findVmList(name);
+		if (!found) {
+			return;
+		}
+		let value;
+		try {
+			value = JSON.parse(json);
+		} catch (e) {
+			return;
+		}
+		if (!Array.isArray(value)) {
+			return;
+		}
+		found.value = value.map((item) => {
+			if (item === null || item === undefined) {
+				return '';
+			}
+			if (typeof item === 'object') {
+				return JSON.stringify(item);
+			}
+			return item;
+		});
+	}
+
+	function callRemote(opcode, argv) {
+		const ws = S.ws;
+		if (!ws || ws.readyState !== 1) {
+			return Promise.resolve(undefined);
+		}
+		const id = String(++S.seq);
+		return new Promise((resolve) => {
+			const entry = {id: id, resolve: resolve, value: null, tick0: S.tick, wait: 0, check: '', settled: false, pollTick: -1};
+			S.pending.set(id, entry);
+			try {
+				ws.send(JSON.stringify({t: 'call', id: id, op: opcode, argv: argv || []}));
+			} catch (e) {
+				finish(entry, undefined);
+				return;
+			}
+			setTimeout(() => finish(entry, undefined), CALL_TIMEOUT_MS);
+		});
+	}
+
+	/** 供积木按钮调用：打开/关闭连接面板。 */
+	ext.openRemotePanel = function () {
+		togglePanel();
+		return '';
+	};
+
+	// 安装即挂上停止订阅：漏了它，「点红停止后人物还在走」会是最难查的一类现象
+	hookStopAll();
+
+	return {
+		togglePanel: togglePanel,
+		connect: connect,
+		disconnect: disconnect,
+		state: S
+	};
+}
+
+	// 注入远程能力后再注册：installRemote 会给实例挂上 __tmc 与 openRemotePanel。
+	// 未连接时 __tmc 一律走 fallback，所以这份产物同时是「普通编辑器」与「远程调试器」。
+	const extension = new TurboMC();
+	installRemote(Scratch, extension, {id: 'turbomc'});
+	Scratch.extensions.register(extension);
 })(Scratch);

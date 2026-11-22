@@ -24,6 +24,19 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const DATA = require(path.join(ROOT, 'turbowarp/src/blocks.data.js'));
 const ITEMS = require(path.join(ROOT, 'turbowarp/src/items.data.js'));
+/** 远程客户端：真实源文件，构建时拼进编辑器产物（见下方 installRemote 调用）。 */
+const REMOTE_CLIENT = fs.readFileSync(path.join(ROOT, 'turbowarp/src/remote-client.js'), 'utf8').trim();
+/**
+ * JSON 积木的浏览器端实现。reporter 是同步求值，浏览器不可能为了一次读数等 RPC，
+ * 所以这批纯计算积木必须有一份本地实现；与 Java 侧的等价性由 json-parity 对拍保证。
+ * 只进编辑器产物——游戏内仍然走 Java。
+ */
+const JSON_LITE = fs.readFileSync(path.join(ROOT, 'turbowarp/src/json-lite.js'), 'utf8').trim();
+/**
+ * 画面：浏览器原生 getDisplayMedia + `<video>` 覆盖舞台（§10）。
+ * 与 JSON 一样只进编辑器产物——游戏端不参与画面，这是设计而非省略。
+ */
+const STAGE_VIEW = fs.readFileSync(path.join(ROOT, 'turbowarp/src/stage-view.js'), 'utf8').trim();
 
 const OUTPUTS = {
 	editor: path.join(ROOT, 'turbowarp/turbomc-extension.js'),
@@ -138,14 +151,50 @@ function emitMenus(target) {
 	return menus.join(',\n');
 }
 
+/**
+ * 生成每个积木的方法体：统一转发到 {@code __tmc}。
+ *
+ * <p>以前的产物是「一块积木一个 preview 占位」，未连接时只能打印；
+ * 现在所有积木都走同一个入口，由 {@code remote-client.js} 决定：
+ * 未连接执行 fallback（即原来的预览），连接后 reporter 读快照缓存、command 走 RPC。</p>
+ *
+ * <p>参数顺序用 {@link #argOrder}（中文文案的占位符顺序），与远程协议的 {@code argv}
+ * 直接对应；hat 积木不生成方法——它们不会被调用，是线程入口。</p>
+ */
 function emitStubs() {
 	const stubs = [];
 	for (const block of DATA.blocks) {
-		if (!block.opcode || !block.stub) {
+		if (!block.opcode) {
 			continue;
 		}
-		const params = /args\./.test(block.stub) ? 'args' : '';
-		stubs.push('\t\t' + block.opcode + '(' + params + ') { ' + oneLine(block.stub) + ' }');
+		if (block.blockType === 'hat') {
+			// 帽子的方法体只有一件事：返回 true。
+			// TurboWarp 里非 edge-activated 的扩展帽子，执行结果为空会被 retireThread——
+			// 事件派发我们绕开了帽子本身，但「手动点帽子」走的是 VM 的 toggleScript，
+			// 线程就停在帽子上，只有返回真值才会继续往下执行。
+			stubs.push('\t\t' + block.opcode + '() { return true; }');
+			continue;
+		}
+		const order = argOrder(block);
+		const opcode = DATA.id + '_' + block.opcode;
+		const argv = order.map((name) => 'args.' + name).join(', ');
+		// 第二个参数 util 必须一并转交：`触发我的聊天` 要读 `util.thread.tmcChat`，
+		// 那是 per-thread 的私有副本，全局槽读到的是「最后一条」（可能已经是别人的话）
+		const params = 'args, util';
+		let fallback;
+		if (block.stub) {
+			// 用普通 function 包住原文：stub 里的 args 由外层方法参数闭包提供
+			fallback = 'function () { ' + oneLine(block.stub) + ' }';
+		} else if (block.blockType === 'boolean') {
+			fallback = "function () { return false; }";
+		} else if (block.blockType === 'reporter') {
+			fallback = "function () { return ''; }";
+		} else {
+			// command：未连接时什么都不做（原来的占位行为）
+			fallback = 'null';
+		}
+		stubs.push('\t\t' + block.opcode + '(' + params + ') { return this.__tmc('
+			+ q(opcode) + ', [' + argv + '], ' + q(block.blockType) + ', ' + fallback + ', util); }');
 	}
 	return stubs.join('\n');
 }
@@ -201,6 +250,8 @@ const ITEM_TABLE = ${ITEM_TABLE_TEXT};
 				name: T(${q(DATA.name.en)}, ${q(DATA.name.zh)}),
 				color1: ${q(DATA.color1)},
 				blocks: [
+					// 远程调试入口：点一下打开连接面板（地址 / 端口 / 连接 / 断开）
+					{blockType: Scratch.BlockType.BUTTON, text: T('Remote debug', '远程调试'), func: 'openRemotePanel'},
 ${emitBlocks('editor')}
 				],
 				menus: {
@@ -217,7 +268,17 @@ ${emitStubs()}
 		}
 	}
 
-	Scratch.extensions.register(new TurboMC());
+${JSON_LITE}
+
+${STAGE_VIEW}
+
+${REMOTE_CLIENT}
+
+	// 注入远程能力后再注册：installRemote 会给实例挂上 __tmc 与 openRemotePanel。
+	// 未连接时 __tmc 一律走 fallback，所以这份产物同时是「普通编辑器」与「远程调试器」。
+	const extension = new TurboMC();
+	installRemote(Scratch, extension, {id: ${q(DATA.id)}});
+	Scratch.extensions.register(extension);
 })(Scratch);
 `;
 }

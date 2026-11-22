@@ -17,6 +17,7 @@ import xyz.turbomc.client.script.ai.AiService;
 import xyz.turbomc.client.script.runtime.ExtensionHealth;
 import xyz.turbomc.client.script.runtime.MonitorStore;
 import xyz.turbomc.client.script.runtime.PerfProbe;
+import xyz.turbomc.client.script.remote.RemoteBridge;
 import xyz.turbomc.client.script.vm.RhinoVm;
 
 import java.util.ArrayList;
@@ -107,10 +108,34 @@ public final class ScriptHudElement implements HudElement {
 		rows.add(new Row(
 				Text.literal(textRenderer.trimToWidth(prefix + engine.hudLine(), MAX_WIDTH)),
 				engine.statusColor()));
-		// 故障原因单独一行：挤在状态行里会被宽度裁掉，等于没显示
+		// 故障原因单独一行：挤在状态行里会被宽度裁掉，等于没显示。
+		// 远程会话的 detail 只有「实例 · 端口」，hudLine() 已经把它拼在状态行里了，
+		// 再单列一行就是同一句话打两遍。
 		String detail = engine.statusDetail().getString();
-		if (!detail.isEmpty()) {
+		if (!detail.isEmpty() && engine.status() != ScriptEngine.Status.REMOTE) {
 			rows.add(new Row(Text.literal(textRenderer.trimToWidth(detail, MAX_WIDTH)), engine.statusColor()));
+		}
+
+		// 远程调试：端口是扩展面板唯一要手填的参数，只能在 HUD 拿到。
+		// 会话中（REMOTE）状态行本身已经带了端口，这里不再重复。
+		RemoteBridge bridge = RemoteBridge.get();
+		if (bridge.running() && engine.status() != ScriptEngine.Status.REMOTE) {
+			boolean connected = bridge.hasController();
+			Text line = Text.translatable(
+					connected ? "hud.turbomc.remote_connected" : "hud.turbomc.remote_listening",
+					bridge.port());
+			rows.add(new Row(
+					Text.literal(textRenderer.trimToWidth(
+							(connected ? "\u25CF " : "\u25CB ") + line.getString(), MAX_WIDTH)),
+					connected ? 0xFF55DDFF : 0xFF9A9A9A));
+		} else if (!bridge.running() && TurboMCConfig.get().remoteEnabled()) {
+			// 开了开关却没在监听，通常是端口被占。不说的话玩家只会看到「没有那一行」，
+			// 以为是模组没生效
+			String why = bridge.lastError();
+			Text line = Text.translatable("hud.turbomc.remote_failed");
+			String text = why.isEmpty() ? line.getString() : line.getString() + "：" + why;
+			rows.add(new Row(Text.literal(textRenderer.trimToWidth("\u2715 " + text, MAX_WIDTH)),
+					0xFFFF6B6B));
 		}
 
 		// 扩展与模组对不上时，症状是「积木拖不出来」或「点了没反应」——都像模组坏了。

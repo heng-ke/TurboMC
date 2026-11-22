@@ -49,6 +49,13 @@ public final class PackStore {
 	private Path directory;
 	private boolean loaded;
 	/**
+	 * 上一次同步时的 {@code imports/} 指纹，用于热重载判定。
+	 *
+	 * <p>不用目录 mtime：Windows 上覆盖同名文件不会更新父目录的 mtime，热重载会永远不触发。
+	 * 指纹取「文件名 + 大小 + 文件 mtime」，与 {@link #pendingUpdate} 的比对口径一致。</p>
+	 */
+	private String lastImportsFingerprint = "";
+	/**
 	 * 最近一次操作的结果。
 	 *
 	 * <p>类型是 {@link Text} 而非字符串：这些消息要显示在界面上，走翻译键才能跟随语言，
@@ -101,13 +108,14 @@ public final class PackStore {
 		// 升级路径：老版本把 sb3 放在 imports/ 里当整体工程跑，从未建过包目录。
 		// 首次没有包时自动搬一次，免得用户以为「升级后脚本全没了」。
 		if (packs.isEmpty()) {
-			int added = importFrom(importsDir(), new ArrayList<>())
-					+ importFrom(importsDir().resolve("imported"), new ArrayList<>());
+			int added = importFrom(importsDir(), new ArrayList<>());
 			if (added > 0) {
 				LOG.info("[pack] 首次启动：从 imports 自动接管 {} 个 sb3", added);
 				reload();
 			}
 		}
+		// 热重载的基线：以启动时的 imports 状态为起点，避免开局就白跑一次同步
+		lastImportsFingerprint = importsFingerprint();
 	}
 
 	/** 重新扫描目录并恢复启用状态。 */
@@ -217,7 +225,7 @@ public final class PackStore {
 	public SyncResult importAll() {
 		load();
 		List<Text> failures = new ArrayList<>();
-		int added = importFrom(importsDir(), failures) + importFrom(importsDir().resolve("imported"), failures);
+		int added = importFrom(importsDir(), failures);
 		if (added > 0) {
 			// 新包要出现在列表里，顺便让索引回到一致状态
 			reload();
@@ -253,6 +261,54 @@ public final class PackStore {
 		}
 		LOG.info("[pack] 同步完成：新增 {}，更新 {}，失败 {}", added, updated, failures.size());
 		return new SyncResult(added, updated, activeUpdated, List.copyOf(failures));
+	}
+
+	/**
+	 * 热重载检查：{@code imports/} 的指纹变化时执行一次同步。
+	 *
+	 * <p>节流由调用方负责（见 {@code ScriptEngine#tick}），本方法只做「变了就同步」。
+	 * 指纹没变时直接返回 {@code null}，不碰磁盘上的包文件。</p>
+	 *
+	 * @return 本次同步结果；无变化时为 {@code null}
+	 */
+	public SyncResult pollImports() {
+		load();
+		String current = importsFingerprint();
+		if (current.equals(lastImportsFingerprint)) {
+			return null;
+		}
+		lastImportsFingerprint = current;
+		LOG.info("[pack] 检测到 imports 变化，开始同步");
+		return importAll();
+	}
+
+	/**
+	 * {@code imports/} 的指纹：每个 sb3 的「文件名 + 大小 + 修改时间」。
+	 *
+	 * <p>不用目录 mtime——Windows 上覆盖同名文件不会更新父目录的时间戳，
+	 * 拿目录时间做判定的话热重载永远不会触发。</p>
+	 */
+	private String importsFingerprint() {
+		Path dir = importsDir();
+		if (!Files.isDirectory(dir)) {
+			return "";
+		}
+		StringBuilder sb = new StringBuilder();
+		try (Stream<Path> files = Files.list(dir)) {
+			files.filter(PackStore::isSb3).sorted().forEach(path -> {
+				try {
+					sb.append(path.getFileName()).append('|')
+							.append(Files.size(path)).append('|')
+							.append(Files.getLastModifiedTime(path).toMillis()).append('\n');
+				} catch (IOException e) {
+					// 单个文件读不到就跳过：它下次仍被排除在指纹外，不会制造假变化
+				}
+			});
+		} catch (IOException e) {
+			LOG.warn("[pack] imports 指纹读取失败: {}", e.getMessage());
+			return "";
+		}
+		return sb.toString();
 	}
 
 	private int importFrom(Path dir, List<Text> failures) {
@@ -316,9 +372,27 @@ public final class PackStore {
 
 	/** 用 {@code imports/} 里的同名文件覆盖包。成功返回 {@code null}，失败返回原因。 */
 	private String copyInto(ScriptPack pack, Path source) {
+		Path target = pathOf(pack);
+		Path temp = null;
 		try {
-			Files.copy(source, pathOf(pack), StandardCopyOption.REPLACE_EXISTING);
+			// 先写临时文件再原子替换：写到一半崩掉或被杀毒软件读到，都不会留下半截 sb3。
+			// 与 ExtensionExporter 同一套写法。
+			temp = Files.createTempFile(target.getParent(), ".turbomc-pack", ".tmp");
+			Files.copy(source, temp, StandardCopyOption.REPLACE_EXISTING);
+			try {
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			} catch (IOException atomicUnsupported) {
+				// 部分网络盘 / 非 NTFS 文件系统不支持原子移动，退回普通覆盖
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			}
 		} catch (IOException e) {
+			if (temp != null) {
+				try {
+					Files.deleteIfExists(temp);
+				} catch (IOException ignored) {
+					// 临时文件清理失败不影响结论
+				}
+			}
 			LOG.error("[pack] 更新失败: {}", pack.fileName, e);
 			return reasonOf(e);
 		}

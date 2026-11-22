@@ -100,6 +100,22 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.auto_reload"),
+						config.shouldAutoReload())
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.auto_reload.tooltip"))
+				.setSaveConsumer(value -> config.autoReload = value)
+				.build());
+
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.keep_running_unfocused"),
+						config.shouldKeepRunningWhenUnfocused())
+				.setDefaultValue(false)
+				.setTooltip(Text.translatable("config.turbomc.keep_running_unfocused.tooltip"))
+				.setSaveConsumer(value -> config.keepRunningWhenUnfocused = value)
+				.build());
+
+		script.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.monitor_list_items"),
 						config.monitorListItems, 1, 20)
 				.setDefaultValue(5)
@@ -145,6 +161,20 @@ public final class TurboMCConfigScreen {
 				.setDefaultValue(8)
 				.setTooltip(Text.translatable("config.turbomc.chat_max_segments.tooltip"))
 				.setSaveConsumer(value -> config.chatMaxSegments = value)
+				.build());
+
+		// 开发调试：远程桥。默认关，普通玩家保持关闭即可。
+		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.dev_remote"),
+						config.remoteEnabled())
+				.setDefaultValue(false)
+				.setTooltip(Text.translatable("config.turbomc.dev_remote.tooltip"))
+				.setSaveConsumer(value -> {
+					if (config.dev == null) {
+						config.dev = new TurboMCConfig.Dev();
+					}
+					config.dev.enabled = value;
+				})
 				.build());
 
 		// ---- 寻路 ----

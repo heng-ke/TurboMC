@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
@@ -28,6 +29,7 @@ import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.PerfProbe;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
 import xyz.turbomc.client.script.runtime.TriggerDispatcher;
+import xyz.turbomc.client.script.remote.RemoteBridge;
 import xyz.turbomc.client.script.render.FrameOverlay;
 import xyz.turbomc.client.script.render.PathRenderer;
 import xyz.turbomc.client.script.ui.ScriptHudElement;
@@ -41,6 +43,8 @@ public class TurboMCClient implements ClientModInitializer {
 
 	private final TriggerDispatcher triggerDispatcher = new TriggerDispatcher();
 
+	/** 远程会话期间被临时改成 false 的「失焦暂停」原值；null 表示当前没改过。 */
+	private Boolean pauseOnLostFocusBackup;
 	@Override
 	public void onInitializeClient() {
 		// 客户端配置在初始化阶段加载，保证后续所有客户端功能都读到同一份数据。
@@ -75,8 +79,9 @@ public class TurboMCClient implements ClientModInitializer {
 
 		ClientReceiveMessageEvents.CHAT.register(
 				(message, signedMessage, sender, params, receptionTimestamp) -> {
-					// 引擎没在跑就不必算签名、也不必入队：入队的线程永远不会被 step
-					if (!ScriptEngine.get().active()) {
+					// 引擎没在跑就不必算签名、也不必入队：入队的线程永远不会被 step。
+					// 远程会话例外：那时内 VM 是停的，但帽子要由浏览器那侧起
+					if (!ScriptEngine.get().acceptsTriggers()) {
 						return;
 					}
 					String text = message.getString();
@@ -121,7 +126,7 @@ public class TurboMCClient implements ClientModInitializer {
 			if (!TurboMCConfig.get().chatFromServerMessages) {
 				return;
 			}
-			if (!ScriptEngine.get().active()) {
+			if (!ScriptEngine.get().acceptsTriggers()) {
 				return;
 			}
 			String text = message.getString();
@@ -173,14 +178,85 @@ public class TurboMCClient implements ClientModInitializer {
 					PathPlanner.reset();
 					// 一局结束就把性能汇总刷出来，不用等下一个 30 秒窗口
 					PerfProbe.flush();
+					// 退出世界时结束远程会话但保持监听：玩家可能马上又进来，扩展侧会自己重连
+					RemoteBridge.get().endSession();
 					// 总开关是持久化的，不在这里复位，下一局进世界会自动开跑。
 					// 内部会再走一次 stop()：上面的 abort / reset 都幂等，重复调用无副作用。
 					ScriptEngine.get().onWorldExit();
 				}));
 	}
 
+	/**
+	 * 远程桥的开关跟随配置：ModMenu 里改完不必重启游戏。
+	 *
+	 * <p>每 tick 只比两个布尔，成本可忽略；比注册配置变更回调少一层跨模块耦合。
+	 * 默认关闭，所以对普通玩家这条路径永远只是两次布尔比较。</p>
+	 */
+	private void syncRemoteBridge() {
+		boolean wanted = TurboMCConfig.get().remoteEnabled();
+		boolean running = RemoteBridge.get().running();
+		if (wanted && !running) {
+			// 动作表与积木注册都在 init 里：远程会话可能先于引擎启动（玩家没按 F6），
+			// 不补这一行，浏览器发来的 opcode 会一律回 notfound，看起来像「积木不支持」
+			ScriptEngine.get().init();
+			RemoteBridge.get().start();
+		} else if (!wanted && running) {
+			RemoteBridge.get().stop();
+		}
+	}
+
+	/**
+	 * 压住「失焦暂停」。
+	 *
+	 * <p>浏览器或编辑器在前台时游戏窗口必然失去焦点，原版会因此弹出暂停界面、单机世界
+	 * 随之停住：脚本读到的坐标不再变化、按键被 GUI 吞掉、动作积木看着成功但世界不动。
+	 * 这不是脚本的 bug，是「同机多窗口」这种用法的固有冲突。</p>
+	 *
+	 * <p>两种触发条件，任一成立即生效：</p>
+	 * <ul>
+	 *   <li><b>远程会话中</b>——必须生效，否则开发者一操作浏览器脚本就冻住；</li>
+	 *   <li><b>配置项 {@code keepRunningWhenUnfocused}</b>——用户希望平时也不暂停。</li>
+	 * </ul>
+	 *
+	 * <p>两层处理：把 {@code pauseOnLostFocus} 置假；再兜底关掉「因失焦弹出来的暂停界面」。
+	 * 只认 `失焦 + GameMenuScreen` 这一种组合——玩家自己按 ESC 的暂停不动它。
+	 * 两个条件都撤掉时恢复原值，不改用户的持久化设置。</p>
+	 */
+	private void guardFocusPause(MinecraftClient client) {
+		boolean remote = ScriptEngine.get().status() == ScriptEngine.Status.REMOTE;
+		boolean wanted = remote || TurboMCConfig.get().shouldKeepRunningWhenUnfocused();
+		if (wanted) {
+			if (pauseOnLostFocusBackup == null && client.options != null) {
+				pauseOnLostFocusBackup = client.options.pauseOnLostFocus;
+				client.options.pauseOnLostFocus = false;
+				TurboMC.LOGGER.info("[focus] 已临时关闭「失焦暂停」（{}）",
+						remote ? "远程会话" : "配置项");
+			}
+			// 只有一个备份字段，所以两条件并存时不会互相覆盖；都撤掉才恢复
+			if (!client.isWindowFocused() && client.currentScreen instanceof GameMenuScreen) {
+				client.setScreen(null);
+			}
+			return;
+		}
+		if (pauseOnLostFocusBackup != null && client.options != null) {
+			client.options.pauseOnLostFocus = pauseOnLostFocusBackup;
+			pauseOnLostFocusBackup = null;
+			TurboMC.LOGGER.info("[focus] 已恢复「失焦暂停」设置");
+		}
+	}
+
 	private void onClientTick(MinecraftClient client) {
+		syncRemoteBridge();
+
 		while (toggleScriptKey.wasPressed()) {
+			// 远程会话期间内 VM 已让位：此时翻开关不会真的启动，反而让 HUD 与浏览器侧对不上
+			if (ScriptEngine.get().status() == ScriptEngine.Status.REMOTE) {
+				if (client.player != null) {
+					client.player.sendMessage(
+							Text.translatable("message.turbomc.remote_busy"), true);
+				}
+				continue;
+			}
 			// 「停止全部」后 HUD 写的是「按 F6 重新开启」，那这一下就必须直接重开：
 			// 此时开关本来就是 true，走下面的反转只会先把引擎关掉，玩家要按两次（DEF-02）
 			if (ScriptEngine.get().resumeFromHalt()) {
@@ -214,7 +290,13 @@ public class TurboMCClient implements ClientModInitializer {
 		}
 
 		ScriptEngine.get().tick(client);
+		// 放在引擎 tick 之后：status 已经更新，才知道这一帧是不是处于远程会话。
+		// 也在 triggerDispatcher 之前：失焦弹出的暂停界面会挡住按键派发（要求 currentScreen 为 null）
+		guardFocusPause(client);
 		triggerDispatcher.tick(client);
+		// 快照放在最后：本 tick 的界面/血量/坐标变化都已落定，推出去的就是这一帧的最终值。
+		// 同时它也承担浏览器侧的时钟（wait 与 poll 都按快照 tick 推进）。
+		RemoteBridge.get().tick(client);
 	}
 
 	/**

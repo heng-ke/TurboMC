@@ -324,6 +324,19 @@ public final class ScriptBridge {
 	 * @return {@code true} 表示等待结束（成功、失败或放弃都算结束）
 	 */
 	public static boolean poll(String key) {
+		return poll(key, null);
+	}
+
+	/**
+	 * 带上下文的重载：远程模式没有静态 {@code current}，必须由调用方传入。
+	 *
+	 * <p>把 context 参数化而不是复制一份判断逻辑——「move / turn / ai: / break」这四条分支
+	 * 一旦分叉，远程模式与游戏内的等待语义就会悄悄不一致，而这类偏差只会在真机上表现为
+	 * 「积木一闪而过」或「卡住不动」，很难归因。</p>
+	 *
+	 * @param context 远程执行器本 tick 的上下文；为 {@code null} 时退回静态 {@code current}
+	 */
+	public static boolean poll(String key, ScriptContext context) {
 		if ("move".equals(key)) {
 			return PathFollower.finished();
 		}
@@ -338,7 +351,7 @@ public final class ScriptBridge {
 		if (!"break".equals(key)) {
 			return true;
 		}
-		return pollBreak();
+		return pollBreak(context);
 	}
 
 	// ---- 「等待方块被挖破」的状态 ----
@@ -348,16 +361,16 @@ public final class ScriptBridge {
 	/** 上一轮等待是否已结束；用于在新一轮开始时自动清空锁定的目标。 */
 	private static boolean breakDone = true;
 
-	private static boolean pollBreak() {
-		ScriptContext context = current;
-		if (context == null) {
+	private static boolean pollBreak(ScriptContext context) {
+		ScriptContext active = context != null ? context : current;
+		if (active == null) {
 			return true;
 		}
 		if (breakDone) {
 			breakState = null;
 			breakDone = false;
 		}
-		ScriptContext.BreakResult result = context.probeBreak(breakState);
+		ScriptContext.BreakResult result = active.probeBreak(breakState);
 		breakState = result.state();
 		// WAITING 之外（BROKEN / GIVE_UP）都结束等待：放弃时不应把脚本永久挂住
 		if (result.status() != BREAK_WAITING) {
