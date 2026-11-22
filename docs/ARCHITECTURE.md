@@ -89,13 +89,13 @@ src/client/java/xyz/turbomc/client/
     │   ├── ScriptKeys.java      按键按住 / 释放
     │   ├── InputKeys.java       Scratch 键名 ↔ Minecraft 按键
     │   ├── NativeRegistry.java  opcode → 动作的注册表
-    │   ├── JsonActions.java     JSON 积木的动作层（29 块，纯计算，不碰游戏状态）
-    │   ├── JsonText.java        严格 JSON 解析 + ECMAScript 兼容序列化（不借 Gson 的解析器）
+    │   ├── JsonText.java        严格 JSON 解析 + ECMAScript 兼容序列化（快照用；JSON 积木本身在 JS 侧）
     │   ├── ChatText.java        聊天清洗：换行 / § / 控制字符，256 字符与 768 字节双上限
     │   ├── ChatQueue.java       聊天发送队列：超长分段、按 tick 拉开间隔
     │   ├── path/                「走向」的移动会话（见 PATHFINDING.md）
     │   │   ├── PathActions.java    解析 x/y/z，启动会话
     │   │   ├── PathFollower.java   每 tick 驱动：转向 / 前进 / 跳跃 / 卡住
+    │   │   ├── PathMath.java       到达判定 / 会话超时 / 卡住窗口 / 氧气余量（纯算术，有单测）
     │   │   ├── PathPlanner.java    假僵尸 + 原版 A*（LandPathNodeMaker + PathNodeNavigator）
     │   │   └── MoveTarget.java     目标坐标（三轴全部来自积木）
     │   └── motion/              朝向平滑（寻路与「平滑看向」积木共用）
@@ -119,8 +119,6 @@ src/client/java/xyz/turbomc/client/
     ├── vm/                      JS 运行时
     │   ├── RhinoVm.java         Rhino Context 生命周期、时间预算、单帧中断
     │   ├── ScriptBridge.java    JS → Java 的唯一桥
-    │   ├── VmListActions.java   「把列表读成数组 / 设为」——需要 VM 内部状态，故注册在 RhinoVm.init()
-    │   ├── JsonBench.java       JSON 放 Java 还是 VM 的耗时基准（仅 verification 任务调用）
     │   └── *SmokeTest.java      纯 JVM 冒烟（不发布）
     ├── view/
     │   └── ViewSmoother.java    视角平滑：写入必须在渲染帧（tick 内写 50 ms 才一步，看得见台阶）
@@ -156,14 +154,15 @@ turbowarp/src/
 ├── blocks.data.js             97 块积木、16 个菜单、15 个分组标题、每块的占位方法体
 ├── items.data.js              1505 条物品（注册名|中文名|英文名）
 ├── remote-client.js           远程桥客户端：连接面板、__tmc、快照缓存、帽子匹配（见 §7.7）
-├── json-lite.js               JSON 积木的浏览器实现（只进编辑器产物，远程模式下本地实算）
+├── json-lite.js               JSON 积木的唯一实现（ES5；编辑器内联，运行时复制为 json-core.es5.js）
 └── stage-view.js              getDisplayMedia 画面捕获与舞台覆盖（同上）
 
 tools/
 ├── build-extension.js         渲染两份扩展副本（--check 供 CI 守新鲜度）
 ├── build-mapping-report.js    渲染 turbowarp/mapping-report.md（同上）
-├── json-parity-cases.json     JSON 语义对拍的 118 条用例（两侧共用）
-├── check-json-parity.js       与 Java 侧产物逐字比对（见 §7.6）
+├── json-parity-cases.json     JSON 语义对拍的 134 条用例
+├── json-parity-golden.json    迁移前 Java 实现产出的权威基线（行为回归用）
+├── check-json-parity.js       在 V8 里跑用例并与 golden 逐字比对（--write 重生成，见 §7.6）
 ├── probe/                     人工验证与回归工具（不发布）
 │   ├── turbomc-probe-extension.js  独立探针扩展：画面捕获、权限、手势、连接四项一次测全
 │   ├── probe-server.js             最小 WS 服务，用来单独验连通性与 LNA 授权
@@ -714,24 +713,37 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 29 块 JSON 积木（对齐 TurboWarp 扩展 `skyhigh173JSON`，MIT；原 32 块按下列规则合并）的输入输出全是标量，
 所以完全落在桥的「标量单值」约定内，没有第二套值模型：
 
-- 解析与序列化在 `action/JsonText`。**解析器是自己写的**：Gson 的 `JsonParser` 入口会把
+- 解析与序列化在 **JS 侧**（`turbowarp/src/json-lite.js`），与快照用的 `JsonText` 无关。
+  **解析器是自己写的**递归下降：Gson 的 `JsonParser` 入口会把
   `JsonReader` 临时切成宽松模式，`{a:1}` 会被判成合法，与浏览器的 `JSON.parse` 分叉；
-  数值序列化复用 `ScratchCast.numberToString`，否则 `1.0` 写回成 `"1.0"`，字符串比较会莫名不成立。
-- 列表互通的两块（`json.vm_getlist` / `json.vm_setlist`）必须读 VM 内部状态，
-  实现放在 `vm/VmListActions`、由 `RhinoVm.init()` 注册——保持 `vm → action` 这条既有依赖方向，
-  且仍走「桥 → NativeRegistry」单一路径，不在积木包装器里开分支。
+  数值序列化沿用 `JSON.stringify` 的 ECMAScript 规则，否则 `1.0` 写回成 `"1.0"`，
+  字符串比较会莫名不成立。`JsonText.java` 仍保留，但只服务快照（§18）——
+  快照在 Java 侧拼 JSON，和积木语义无关。
+- **单一实现**：这批积木只有 `json-lite.js` 一份源码。浏览器直接内联；游戏内由
+  `build-extension.js` 原样复制为 `json-core.es5.js`，`vm-bootstrap.js` 装积木时
+  直接挂本地实现，热路径上不经过桥。之所以写 ES5：两个宿主之一是 Rhino 1.7.15
+  （`optimizationLevel=-1`），它不支持 `class`，同一函数内重复 `const` 还会直接报错；
+  浏览器跑 ES5 没有副作用。代价是 Rhino 解释执行比原 Java 慢（逐元素操作尤其明显），
+  这是明确接受的取舍——换来单份实现、单份用例，不会再分叉。
+- 列表互通的两块（`jsonVmGetList` / `jsonVmSetList`）读的是宿主 VM 的列表容器：
+  浏览器侧在 `remote-client.js`，游戏内侧在 `vm-bootstrap.js`；两边都只做
+  「列表项 → JSON 文本」的标量化转换，不承载积木语义。
 - **面板瘦身**（原 32 块 → 29 块）：「键数量」与「数组长度」合成一块「长度」（本就是同一实现）；
   「是合法 JSON 吗」与「是 [对象/数组] 吗」合成三选一菜单；数组下标统一为 1 基后，
   「数组第 n 项」与「按键取值」不再需要两块——**下标基准不一致比少一块积木危险得多**。
 - 与原文的偏差只有三处：解析错误返回中文说明带位置、「长度」解析失败返回空串
   （原文是一个空格，明显笔误）、嵌套深度上限 256（防御递归栈）。
-- **远程模式下这批积木还有一份浏览器实现**（`turbowarp/src/json-lite.js`）：远程会话的主 VM
-  在浏览器里，而 reporter 是同步求值——等不了 RPC，任意 JSON 运算也无法预取缓存。
-  所以「错误文案无法跨引擎复刻」这条已经不成立：JS 侧移植了同一个递归下降解析器与同一批错误串。
-  两份实现的等价性由对拍守住：`tools/json-parity-cases.json` 同一批用例分别喂给
-  `JsonParityTest`（Java，产出 `build/json-parity-java.json`）与 `tools/check-json-parity.js`（JS），
-  比对「积木最终显示出来的字符串」。**改任何一侧都必须重跑对拍**，否则分叉只会在玩家那边暴露。
-  运行时副本不含这份 JS——游戏内始终走 Java。
+- **行为回归靠 golden**：`tools/json-parity-cases.json` 的 134 条用例，基线是迁移前
+  由 Java 实现产出的 `tools/json-parity-golden.json`。`JsonCoreParityTest` 在内嵌
+  Rhino 1.7.15 里跑**运行时产物本身**并与基线逐字比对，`tools/check-json-parity.js`
+  在 V8 里跑同一份源码做同样的比对；两条链路都必须绿。只有明确要改语义时才用
+  `node tools/check-json-parity.js --write` 重生成基线——那是一次有意识的决定，
+  不应顺手做。
+- **覆盖口径**：29 块里 27 块有直接用例（`jsonVmGetList` / `jsonVmSetList` 读写 VM 自己的列表，
+  走 `vmSmoke -PvmMode=json` 端到端，不进 cases）。每块至少一组正向 + 一组非法输入；
+  「非法」统一指容器参数不是合法 JSON、或类型不是数组/对象，期望值为空串。
+  两个例外：「分析」(`jsonArrayAnalysis`) 对非数组输入返回 `0`（见 BACKLOG JSON-06）；
+  「按分隔符拆」(`jsonArrayCreate`) 入参只有分隔符与任意文本，没有非法分支，所以不设反例。
 
 ### 24. 扩展的两份产物是生成物，唯一源在 `turbowarp/src`
 
@@ -741,6 +753,10 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 
 - `turbowarp/src/blocks.data.js` —— 97 块积木、16 个菜单、15 个分组标题、每块的占位方法体；
 - `turbowarp/src/items.data.js` —— 1505 条物品（`注册名|中文名|英文名`）。
+
+同一脚本还负责 `json-lite.js` 的运行时副本：源码本身就是 ES5，原样写为
+`assets/turbomc/vm/json-core.es5.js`（独立文件、先于 `vm-bootstrap.js` 加载）。
+`--check` 同时校验这份副本与源码逐字一致。
 
 **直接改产物会在下次生成时被覆盖**，CI 用 `--check` 拦「产物过期」，`verify-extension.js` 继续守
 编辑器契约。两份产物只有四处差异，其余逐字一致：
@@ -791,7 +807,7 @@ Gson 用 Unsafe 建实例、**不执行字段初始化器**，所以 json 缺 `a
    「把 JSON 结果悄悄套用到玩家 / 实体 / 背包」。否则 JSON 会变成隐式状态源，
    而它今天的价值正是「纯值、可单测、可复制」。
 3. **不用 `json.*` 前缀**。快照依赖 `MinecraftClient`，进不了纯 JVM 单测；`json.*` 的前提是
-   「不碰游戏状态、`./gradlew test` 可覆盖」（见 `JsonActions` 类注释）。opcode 归 `world.*`。
+   「纯计算、不碰游戏状态、可脱离客户端测试」。opcode 归 `world.*`。
 4. **拼装逻辑要能脱离客户端测**。取值仍在 `WorldQueries` 里读 `MinecraftClient`，
    但「原语 → JSON 文本」抽成只收 primitives 的纯函数（`Snapshots`），让字段名、顺序、数值格式有单测
    （同 `EntityFilter` 把解析与判定拆开的手法）。
@@ -1103,21 +1119,22 @@ S→C {"t":"stopped"} | {"t":"pong"} | {"t":"evicted"} | {"t":"snap",...} | {"t"
 | 类 | 数量 | 做法 |
 |---|---|---|
 | 快照类 | 约 36 | 直接读缓存，同步返回 |
-| JSON 一族 | 27 | **浏览器本地实现**（`json-lite.js`），含严格解析器与中文错误串 |
+| JSON 一族 | 27 | **同一份 ES5 实现**（`json-lite.js`），浏览器与游戏内共用，含严格解析器与中文错误串 |
 | 聊天/AI/实体 | 其余 | 快照里的 `chat` / `ai` / `ents` 子对象 |
 | `blockAt` / `blockJson` / `scanJson` | 3 | **不支持**：任意坐标查询无法预取，reporter 等不了 RPC |
 
-JSON 一族是纯计算，跑在浏览器 VM 里与游戏无关。语义靠**对拍**守，不靠自觉：
+JSON 一族是纯计算，浏览器与游戏内跑的是同一份源码。语义靠**golden 回归**守，不靠自觉：
 
 ```bash
-./gradlew test --tests "*JsonParityTest*"   # Java 侧跑 tools/json-parity-cases.json
-node tools/check-json-parity.js             # 同一批用例两侧逐字比对
+./gradlew test --tests "*JsonCoreParityTest*"  # Rhino 1.7.15 跑运行时产物，与 golden 逐字比对
+node tools/check-json-parity.js                # V8 跑同一份源码，与 golden 逐字比对
 ```
 
 比对的是「积木最终显示出来的字符串」，所以 `1.0` vs `1` 这类数值格式差异也会被抓到。
-当前 118 条用例两侧一致。
+当前 134 条用例与基线一致。
 
-**命令积木全部走 RPC**，没有本地实现——它们都有副作用，必须落在游戏主线程。
+**涉及游戏世界的命令积木全部走 RPC**，没有本地实现——它们都有副作用，必须落在游戏主线程。
+唯一例外是 `jsonVmSetList`：它写的是**当前 VM 自己的列表**，发到对面写没有意义，所以两侧都在本地执行。
 
 **远程模式特有的三条限制**（游戏内引擎没有）：
 
@@ -1134,11 +1151,13 @@ node tools/check-json-parity.js             # 同一批用例两侧逐字比对
 | 文件 | 作用 | 进哪份产物 |
 |---|---|---|
 | `turbowarp/src/remote-client.js` | 连接面板、`__tmc`、快照缓存与 tick 时钟、帽子匹配器、Promise 包装 | 编辑器产物 |
-| `turbowarp/src/json-lite.js` | 27 个 JSON 积木的浏览器实现 | 编辑器产物 |
+| `turbowarp/src/json-lite.js` | 27 个 JSON 积木的唯一实现 | 编辑器内联 + 运行时 `json-core.es5.js` |
 | `turbowarp/src/stage-view.js` | `getDisplayMedia` 捕获 + `<video>` 覆盖舞台 | 编辑器产物 |
 | `turbowarp/src/blocks.data.js` 等 | 积木定义与 stub（唯一数据源） | 两份 |
 
-运行时副本（游戏内）**不含**这三份：那里由 `vm-bootstrap.js` 注入真实调用，没有远程逻辑。
+运行时副本（游戏内）**不含** `remote-client.js` 与 `stage-view.js`：那里由 `vm-bootstrap.js`
+注入真实调用，没有远程逻辑。`json-lite.js` 是例外——它同样进运行时，但以独立文件
+`json-core.es5.js` 先于 bootstrap 加载，因为 JSON 一族不走桥。
 所有非 hat 积木的方法体统一生成成：
 
 ```js
@@ -1202,13 +1221,17 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 
 | 任务 | 作用 |
 |---|---|
-| `./gradlew vmSmoke` | 载入 project.json，验证顺序执行 |
+| `./gradlew vmSmoke` | 载入 project.json，验证顺序执行；并**全量断言**扩展积木的实现覆盖（见下） |
 | `./gradlew vmSmoke -PvmMode=hat -PvmProject=hat-project.json` | 验证事件触发帽子积木 |
 | `./gradlew vmSmoke -PvmMode=block -PvmProject=block-project.json` | 验证阻塞动作按时长挂起 |
+| `./gradlew vmSmoke -PvmProject=merged-project.json` | 验证合并积木（一块 + 下拉）走真实的 sb3 → VM → 桥链路 |
+| `./gradlew vmSmoke -PvmMode=wait -PvmProject=wait-mouse-project.json` | 验证「等待直到 <按下鼠标? >」在无输入时一直挂住（布尔归一化接线） |
+| `./gradlew vmSmoke -PvmMode=json -PvmProject=json-project.json` | 验证 29 块 JSON 全在 JS 侧求值：桥调用必须为 0，且抽查结果非空 |
 | `./gradlew vmImport` | 验证 sb3 能解析成树，并被 VM 执行 |
 | `./gradlew vmChat` | 验证聊天帽子一条消息只触发一次、关键词能过滤、自己发的聊天不回声 |
 | `./gradlew vmNumberFormat` | 验证数值积木的字符串化是 ECMAScript 格式（`20` 而非 `20.0`） |
 | `./gradlew vmKeyHat` | 验证「当按下 [键]」按 `KEY_OPTION` 正确派发：对得上起 1 个线程、对不上起 0 个 |
+| `./gradlew vmScreenHat` | 验证「当打开 [界面]」按 `SCREEN` 正确派发（`container` / `inventory` / `any` 命中数） |
 | `./gradlew vmList` | 验证 HUD 能读到列表内容，以及算术积木的 `NUM1/NUM2` 映射成 `A/B`；`-PlistProject=路径` 可换成任意工程 |
 | `./gradlew vmDepth` | 验证超长 `next` 链被深度保护截断，而不是打穿线程栈 |
 | `./gradlew vmPreload -Pmode=preload` | 测量预热前后首次载入工程的耗时（`cold` 为对照） |
@@ -1218,6 +1241,11 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 **夹具在 `src/test/resources/turbomc-vm/`，进版本控制**——CI 上只有这一份，
 放在 `run/` 下会因被 gitignore 而在 CI 上消失。
 
+**CI 闸门**：上表除 `vmPreload`（测量型，不该当闸门）外全部由 `.github/workflows/build.yml`
+逐步执行，失败即红。曾经漏过的是 `vmKeyHat` / `vmScreenHat` / `vmList` / `vmDepth`
+和 `vmSmoke -PvmMode=json`——它们注册在 gradle 里却没人调用，等于写了没跑；
+新增冒烟任务时**必须同时把它加进 workflow**，否则只算本地脚本。
+
 读取顺序：`-P` 参数指定的路径 → classpath 里的同名夹具。常用夹具：
 `project.json`（顺序执行）、`hat-project.json`（聊天帽子）、`keyhat-project.json`（按键帽子）、
 `list-project.json`（列表监视器）、`block-project.json`（条件等待）、`ask-project.json`（询问链路）、
@@ -1225,6 +1253,24 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 
 > **`hat` 与 `block` 模式必须显式指定 `-PvmProject`**：默认的 `project.json`
 > 里没有对应的帽子积木，`startHat` 会起 0 个线程——那是**假失败**，不是真问题。
+
+### 覆盖断言（`vmSmoke` 内置，六种模式都跑）
+
+`vmSmoke` 在进入模式分支之前，顺着 `Sb3Mapping.extensionOpcodes()` 把扩展的每个 opcode
+往实现层查一遍，三类分开判：
+
+| 类别 | 数量 | 断言 |
+|---|---|---|
+| JSON | 29 | **不许**有原生实现——有就说明双实现回来了（§23 单一实现契约） |
+| 帽子 | 4 | 由宿主事件派发，不走 `NativeRegistry` |
+| 其余 | 64 | 必须有 `Action` 或 `Function` |
+
+合计 97 块，帽子之外 93 块。缺哪个就逐个打印 `名字（动作层未实现 类型）` 并以非零退出。
+这条守的是「面板上有、拖得出来、点下去没反应」那类静默失效：夹具里只写了 4 个动作，
+其余 60 块要么读世界状态（纯 JVM 必 NPE）、要么没有夹具，端到端跑不出来。
+
+它替代了原先只硬编码 15 个 id 的抽查。**新增积木时不必再往名单里补一行**——
+只要 `Sb3Mapping` 与 `NativeRegistry` 对得上就自动通过。
 
 ### 单元测试
 
@@ -1235,14 +1281,28 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 |---|---|
 | `ScratchCastTest` | Scratch 弱类型转换规则（非数字串得 0、`" false "` 为真、数字转字符串按 ECMAScript） |
 | `ChatGateTest` | 同一条聊天只触发一次：有签名按签名去重、无签名按正文 + 1 秒窗口 |
-| `TurnMathTest` | 转向步进的限幅 / 死区 / 最短路径，以及 NaN 输入得 0 |
-| `ChatTextTest` | 聊天清洗与切段：换行 / `§` / 控制字符、256 字符与 768 字节双上限、按标点切、不切代理对；含「先 clean 再 split」的顺序回归 |
+| `ChatStateTest` | 聊天环形缓冲：旧的在前、超 32 条环绕、条数钳在 1–容量、清空、`null` 转空串 |
 | `ChatQueueTest` | 聊天队列：首段立即发、间隔准确、溢出丢弃、clear 生效、未装出口不崩 |
+| `ChatTextTest` | 聊天清洗与切段：换行 / `§` / 控制字符、256 字符与 768 字节双上限、按标点切、不切代理对 |
+| `SpeechBubbleBookTest` | 气泡登记：到期移除后不被重新登记（DEF-06）、被顶掉 / 说新句、上限与非法上限、clear |
+| `TurnMathTest` | 转向步进的限幅 / 死区 / 最短路径，以及 NaN 输入得 0 |
+| `FrameBoxTest` | 画框的坐标换算与颜色回退（写错不抛异常，只会框跑偏 / 变色） |
+| `PathMathTest` | 走向的四段纯算术：到达判定（水平/垂直分开）、会话超时公式与钳制、卡住窗口的两个阈值、氧气余量 |
+| `Sb3RenderingTest` | sb3 → 查看器积木树的三条还原规则（错了像面板 bug，其实是导入 bug） |
+| `MergedBlockContractTest` | 合并积木三处登记齐全：扩展声明 / `Sb3Mapping` / `BlockRegistry`，缺一处都静默 |
+| `ParamLabelsTest` | 参数本地化：拼出的语言键与语言文件里的键必须对得上 |
+| `ProjectSanityTest` | 载入前校验：造型为空的工程给出「哪个角色没有造型」，正常工程必须放行（DEF-03） |
+| `EngineStatusTest` | `ScriptEngine.Status` 语义：关闭时纠正过期现场（DEF-01）、停止后按一次 F6 就重开（DEF-02） |
 | `EntityFilterTest` | 实体类型参数解析（`any` / `hostile` / `player` / 具体 id） |
 | `ItemIdsTest` | 物品 id 规范化（`iron_ore`、`IRON_ORE`、带空格 → `minecraft:iron_ore`） |
-| `Sb3RenderingTest` | sb3 → 查看器积木树的三条还原规则（错了像面板 bug，其实是导入 bug） |
-| `ParamLabelsTest` | 参数本地化：拼出的语言键与语言文件里的键必须对得上 |
-| `JsonParityTest` | JSON 29 块在 Java 侧的 118 条用例结果（与浏览器实现逐字比对，见 §7.6） |
+| `JsonTextTest` | 快照仍在用的 JSON 解析 / 序列化（积木语义归 `json-lite.js`，见 `JsonCoreParityTest`） |
+| `JsonCoreParityTest` | JSON 唯一实现的回归：运行时副本与源码逐字一致；在 Rhino 1.7.15 里跑 134 条用例并与迁移基线比对（见 §7.6） |
+| `SnapshotJsonTest` | 快照 JSON 形状：键集合与 `*_KEYS` 逐项相等、键顺序、扁平结构、数值格式、转义、空数据给 `{}` / `[]` |
+| `SnapshotKeysDocTest` | 键名三处一致：`Snapshots` 清单 ↔ `turbowarp/README.md` 键行 ↔ 编辑器 stub |
+
+> 这张表要跟着测试类一起改：**列漏了就等于「没有」，下一轮盘点会照着它误判缺口**
+> （2026-11-22 的 CI 缺口核查里，三项「无自动化」的误判就是只有 10 个类上榜导致的）。
+
 
 涉及客户端的验证一律走冒烟任务——纯 JVM 里没有客户端，动作会抛 NPE 被桥吞成
 `null`，测不到真实行为。
@@ -1252,7 +1312,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```bash
 node tools/probe/test-stop-hats.js      # 帽子派发 / 停止链路 / 读数 / 列表，57 项
 node tools/probe/test-panel-render.js   # 面板 20Hz 刷新时控件不得被重建
-node tools/check-json-parity.js         # 需先跑 ./gradlew test --tests "*JsonParityTest*"
+node tools/check-json-parity.js         # V8 侧回归；golden 基线见 §7.6
 ```
 
 ## 九、使用流程

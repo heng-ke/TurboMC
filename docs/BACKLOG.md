@@ -37,10 +37,10 @@
 
 | ID | 事项 | 状态 | 依据与下一步 |
 |---|---|---|---|
-| JSON-01 | 29 块实现位置：保持 Java / 迁到 VM / 双实现 | 待决策 | `OPEN_JSON_PLACEMENT.md` D1；远程桥已引入浏览器侧实现（`json-lite.js`，118 条对拍），游戏内仍走 Java——「双实现」已经是现状，待定的是要不要统一 `ARCHITECTURE.md` §7.6 |
-| JSON-03 | 手写解析器比 Rhino 原生 `JSON.parse` 慢约 15% | 待实施 | 同上 D3；改基本类型容器，预期收回 20–30% |
+| JSON-03 | 手写解析器比 Rhino 原生 `JSON.parse` 慢约 15% | 待实施 | 解析器已是唯一实现；要动就改 `turbowarp/src/json-lite.js`，改完必须让 `JsonCoreParityTest` 与 `node tools/check-json-parity.js` 全绿（基线见 `ARCHITECTURE.md` §23） |
 | JSON-04 | 9 块「可选」积木未实现：`json_has_value` / `json_equal` / `json_flip` / `json_array_from` / `json_array_reverse` / `json_array_flat` / `json_merge` / `json_vm_export_var` / `json_vm_import_var` | 待决策 | 语义对照见 `turbowarp/vendor/README.md`；其中后两块（导出/导入全部变量）建议永久排除：全变量副作用大，与多目标语义不合 |
 | JSON-05 | 与现成的 `skyhigh173JSON` 工程不兼容（opcode 前缀是 `turbomc_`） | 待决策 | 保留原前缀需改成多扩展注册，即 ENG-03 的同一套改造 |
+| JSON-06 | 「分析」(`jsonArrayAnalysis`) 对非数组输入返回 `0`，而同族其它块返回空串——脚本分不清「结果真是 0」与「输入非法」 | 待决策 | 语义已由 `aanalysis-bad-json` 固化在 `tools/json-parity-golden.json`；要改需同步 golden + `ARCHITECTURE.md` §23 |
 | SNAP-04 | 事件类积木：「当打开界面」已上线；还剩 当实体进入范围 / 当血量低于 X / 当准星方块变化 | 待决策 | 已实现的界面帽子见 §6.1.1（字段匹配要自建）；其余三项需先定轮询频率与走 VM 每帧比较还是宿主轮询 |
 
 ## 聊天与 AI
@@ -50,6 +50,17 @@
 | AI-01 | 部分厂商需要额外请求头（如 `anthropic-version`）或非 OpenAI 格式 | 待决策 | §20「未决」 |
 | AI-02 | `java.net.http` 不读 `http_proxy` 环境变量，代理环境下请求直连 | 待决策 | §20「未决」 |
 | AI-03 | 脚本可以写出无数个会话名，会话表是否需要上限 | 待决策 | §20「未决」 |
+
+## 验证与 CI
+
+> 来源：2026-11-22 对「CI 补齐清单（AUTO-01…08）」的逐项核查。三项被判定已覆盖，移入文末「已失效」；
+> 下面是**核实后仍然成立**的缺口。已接进 CI 的（5 个冒烟任务 + `vmSmoke -PvmMode=json`）不在此列。
+
+| ID | 事项 | 状态 | 依据与下一步 |
+|---|---|---|---|
+| AUTO-01 | 剩「每个动作端到端执行一次」：CI 里 93 块中真正跑过的仍是 33 块 | 待决策 | 「有没有实现」已由 `vmSmoke` 全量断言（93 块逐个查类型登记 + 原生实现，JSON 反查不许有原生实现；2026-11-22 上线，见 `ARCHITECTURE.md` §八「覆盖断言」）。剩下 60 块要么读世界状态（纯 JVM 必 NPE）、要么没有夹具；要覆盖需打桩客户端 |
+| AUTO-03 | 包管理（导入 / 更新 / 重命名 / 删除 / 索引损坏）无测试 | 待决策 | `PackStore` 是硬单例且路径现取 `FabricLoader`；纯 JVM 里 `getConfigDir()` 返回 null（实测 NPE）。要么加路径注入（改生产代码），要么只留真机验收 |
+| AUTO-08 | 配置加载无测试：缺段 / 缺字段 / 越界值 / 旧字段 | 待决策 | 同 AUTO-03：`PATH` 是 `static final` 取自 `FabricLoader`，类初始化即炸；§25 明确不做逐字段迁移，「旧字段」能测的只是「带 `hudCorner` 的旧 json 不炸、取默认值」 |
 
 ## 文档与工程
 
@@ -64,5 +75,9 @@
 | X-01 | 查看器 P4「形状化渲染」 | 自研可写编辑器已整体移除，没有渲染对象 |
 | X-02 | 引擎链路 A（删旧引擎）/ B（并存）二选一 | 已被 `392f5ea`「重建为 sb3 运行时」取代 |
 | X-03 | 局部变量按 `scopeId` 隔离（把脚本塞进不同 Sprite） | 新架构按帽子拆脚本、同角色共享局部变量，目标已达成 |
-| X-05 | 编辑器里 JSON 积木返回占位值，作者无法试算 | 远程调试连上后在浏览器本地实算（`json-lite.js`，118 条对拍），编辑期试算已可用；未连接时仍给占位值，属离线预览的固有限制 |
+| X-05 | 编辑器里 JSON 积木返回占位值，作者无法试算 | 远程调试连上后在浏览器本地实算（`json-lite.js`，134 条对拍），编辑期试算已可用；未连接时仍给占位值，属离线预览的固有限制 |
+| X-06 | JSON 实现位置：保持 Java / 迁到 VM / 双实现 | 已决定单一实现：29 块全部落在 `json-lite.js`（ES5），游戏内加载 `json-core.es5.js`，Java 副本与注册删除；行为由迁移前 golden 锁住（`ARCHITECTURE.md` §23） |
 | X-04 | `docs/archive/` 下 21 份阶段性报告 | 按 `docs/README.md` 维护约定第 3 条清出仓库，需要回溯时看 `git log -- docs/archive/` |
+| X-07 | AUTO-02「参数契约回归未全量进 CI」 | 已覆盖：`tools/build-mapping-report.js` 做四路比对（中文占位符 ↔ `arguments` ↔ `Blocks.java` 模板 ↔ `BlockParam`，顺序敏感），由 CI「映射表新鲜度」执行；运行期 `argsSelfTest` 另对全部 97 块比占位符个数 |
+| X-08 | AUTO-05「JSON 29 块无参数化测试」 | 已覆盖：`JsonCoreParityTest` 在 CI 跑 134 条用例 / 27 个 op（每块一组正向 + 一组非法输入）；`vm_getlist` / `vm_setlist` 是 VM 内部件，不进 cases 是有意的。残留项见 AUTO-05b |
+| X-09 | AUTO-06「快照 schema 无完整快照测试」 | 已覆盖：`SnapshotJsonTest`（键集合 / 顺序 / 空数据形态 / 转义 / 数值格式）+ `SnapshotKeysDocTest`（代码 ↔ 文档 ↔ 编辑器 stub 三方一致） |
