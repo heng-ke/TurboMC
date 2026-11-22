@@ -65,7 +65,10 @@ function installRemote(Scratch, ext, meta) {
 	// ---- 配置 ----
 
 	function loadConfig() {
-		const fallback = {address: '127.0.0.1', port: 35671, name: '', autoReconnect: true};
+		const fallback = {
+			address: '127.0.0.1', port: 35671, name: '', autoReconnect: true,
+			panelX: null, panelY: null
+		};
 		try {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (!raw) {
@@ -76,7 +79,10 @@ function installRemote(Scratch, ext, meta) {
 				address: parsed.address || fallback.address,
 				port: Number(parsed.port) || fallback.port,
 				name: parsed.name || '',
-				autoReconnect: parsed.autoReconnect !== false
+				autoReconnect: parsed.autoReconnect !== false,
+				// 面板位置：拖过一次才记，没记过就按默认的左下角（CSS 的 bottom:12px）
+				panelX: Number.isFinite(parsed.panelX) ? parsed.panelX : null,
+				panelY: Number.isFinite(parsed.panelY) ? parsed.panelY : null
 			};
 		} catch (e) {
 			return fallback;
@@ -129,8 +135,123 @@ function installRemote(Scratch, ext, meta) {
 		document.body.appendChild(root);
 		S.panel = root;
 		S.panelBody = body;
+		makeDraggable(root, head);
+		applyPanelPosition(root);
+		// 窗口变小后把面板拉回可视区，否则标题栏可能被推到屏幕外、再也抓不回来。
+		// 探针沙箱（tools/probe）的 window 是精简桩，没有 addEventListener，故按能力探测
+		if (typeof window.addEventListener === 'function') {
+			window.addEventListener('resize', () => clampPanel(root));
+		}
 		renderPanel();
 		return root;
+	}
+
+	/**
+	 * 让面板可拖动。
+	 *
+	 * <p>面板固定 340px 宽、压在编辑器左下角，遮住积木区时没有任何办法挪开——这是
+	 * 「远程调试按下去就挡住工作区」的直接原因。改成拖标题栏移动，位置记进 localStorage，
+	 * 下次打开还在原处；双击标题栏回到默认位置。</p>
+	 *
+	 * <p>用 Pointer Events：鼠标 / 触屏 / 触控笔一套逻辑，不需要分别监听 mouse 与 touch。
+	 * 坐标一律钳在视口内——标题栏是唯一的抓手，它跑到屏幕外就等于面板丢了。</p>
+	 */
+	function makeDraggable(root, head) {
+		head.style.cursor = 'move';
+		head.style.userSelect = 'none';
+		head.title = '拖动可移动，双击回到左下角';
+
+		head.addEventListener('pointerdown', (e) => {
+			// 关闭按钮上的按下不算拖动（按钮自己还要收 click）
+			if (e.target !== head && e.target.tagName !== 'SPAN') {
+				return;
+			}
+			if (typeof e.button === 'number' && e.button !== 0) {
+				return;
+			}
+			const rect = root.getBoundingClientRect();
+			const offsetX = e.clientX - rect.left;
+			const offsetY = e.clientY - rect.top;
+			// 先把「左下角锚定」换成「左上角坐标」，否则拖动会从 12px 处跳一下
+			root.style.left = rect.left + 'px';
+			root.style.top = rect.top + 'px';
+			root.style.bottom = 'auto';
+			if (typeof head.setPointerCapture === 'function') {
+				head.setPointerCapture(e.pointerId);
+			}
+
+			// 用 AbortController 统一收回监听：比 removeEventListener 少写三行、
+			// 也不会漏掉 pointercancel 这一路
+			const controller = typeof AbortController === 'function' ? new AbortController() : null;
+			const opts = controller ? {signal: controller.signal} : undefined;
+
+			const move = (ev) => {
+				const maxX = Math.max(0, window.innerWidth - root.offsetWidth);
+				const maxY = Math.max(0, window.innerHeight - root.offsetHeight);
+				const x = Math.min(Math.max(0, ev.clientX - offsetX), maxX);
+				const y = Math.min(Math.max(0, ev.clientY - offsetY), maxY);
+				root.style.left = x + 'px';
+				root.style.top = y + 'px';
+				S.config.panelX = x;
+				S.config.panelY = y;
+			};
+			const up = () => {
+				if (controller) {
+					controller.abort();
+				} else {
+					head.removeEventListener('pointermove', move);
+					head.removeEventListener('pointerup', up);
+				}
+				// 拖完才写盘：拖动过程每帧都写 localStorage 会卡顿
+				saveConfig();
+			};
+			head.addEventListener('pointermove', move, opts);
+			head.addEventListener('pointerup', up, opts);
+			if (controller) {
+				head.addEventListener('pointercancel', up, opts);
+			}
+		});
+
+		head.addEventListener('dblclick', () => resetPanelPosition(root));
+	}
+
+	/** 恢复默认位置（左下角），并把记录清掉。 */
+	function resetPanelPosition(root) {
+		S.config.panelX = null;
+		S.config.panelY = null;
+		saveConfig();
+		root.style.left = '12px';
+		root.style.top = 'auto';
+		root.style.bottom = '12px';
+	}
+
+	/** 应用上次记录的位置；没记录就保持 CSS 里的左下角默认值。 */
+	function applyPanelPosition(root) {
+		if (!Number.isFinite(S.config.panelX) || !Number.isFinite(S.config.panelY)) {
+			return;
+		}
+		root.style.left = S.config.panelX + 'px';
+		root.style.top = S.config.panelY + 'px';
+		root.style.bottom = 'auto';
+		clampPanel(root);
+	}
+
+	/** 把面板钳回视口内（窗口缩小、换了显示器、上次保存时窗口更大）。 */
+	function clampPanel(root) {
+		if (!root || !Number.isFinite(S.config.panelX) || !Number.isFinite(S.config.panelY)) {
+			return;
+		}
+		const width = root.offsetWidth || 340;
+		const height = root.offsetHeight || 0;
+		const maxX = Math.max(0, window.innerWidth - width);
+		const maxY = Math.max(0, window.innerHeight - height);
+		const x = Math.min(Math.max(0, S.config.panelX), maxX);
+		const y = Math.min(Math.max(0, S.config.panelY), maxY);
+		S.config.panelX = x;
+		S.config.panelY = y;
+		root.style.left = x + 'px';
+		root.style.top = y + 'px';
+		root.style.bottom = 'auto';
 	}
 
 	function field(label, value, onChange, type) {

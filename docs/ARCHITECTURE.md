@@ -1198,6 +1198,11 @@ node tools/check-json-parity.js                # V8 跑同一份源码，与 gol
 | `turbowarp/src/remote-client.js` | 连接面板、`__tmc`、快照缓存与 tick 时钟、帽子匹配器、Promise 包装 | 编辑器产物 |
 | `turbowarp/src/json-lite.js` | 27 个 JSON 积木的唯一实现 | 编辑器内联 + 运行时 `json-core.es5.js` |
 | `turbowarp/src/stage-view.js` | `getDisplayMedia` 捕获 + `<video>` 覆盖舞台 | 编辑器产物 |
+
+面板是 `position:fixed` 的浮窗，会遮住积木区，所以标题栏可拖动：位置写进 `localStorage`
+（与地址/端口同一个键），松手才落盘，双击标题栏回左下角。坐标与窗口尺寸变化时都钳在视口内——
+标题栏是唯一的抓手，它跑出屏幕等于面板丢了。`renderPanel()` 只重建 `panelBody` 的子节点，
+不碰 `root` 的位置，所以「连接状态变化触发重绘」不会把拖好的位置弹回去。
 | `turbowarp/src/blocks.data.js` 等 | 积木定义与 stub（唯一数据源） | 两份 |
 
 运行时副本（游戏内）**不含** `remote-client.js` 与 `stage-view.js`：那里由 `vm-bootstrap.js`

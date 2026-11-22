@@ -25,6 +25,15 @@ function makeEl(tag) {
 			this.children = this.children.filter((x) => x !== c);
 			return c;
 		},
+		setPointerCapture() {},
+		removeEventListener(type, fn) {
+			this._handlers[type] = (this._handlers[type] || []).filter((x) => x !== fn);
+		},
+		dispatch(type, event) {
+			(this._handlers[type] || []).forEach((fn) => fn(event));
+		},
+		offsetWidth: 340,
+		offsetHeight: 200,
 		addEventListener(type, fn) {
 			(this._handlers[type] = this._handlers[type] || []).push(fn);
 		},
@@ -67,7 +76,7 @@ const S = {
 const ctx = {
 	Scratch: S,
 	document: {body, createElement: makeEl, getElementById: () => null},
-	window: {top: {}, alert() {}},
+	window: {top: {}, alert() {}, innerWidth: 1200, innerHeight: 800, addEventListener() {}},
 	navigator: {language: 'zh-cn', userAgent: 'test'},
 	localStorage: {getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }},
 	console: {log() {}, warn() {}, info() {}, error: console.error},
@@ -126,6 +135,34 @@ setTimeout(() => {
 	const discBtn = findButton(body, '断开');
 	discBtn.click();
 	check(ws.closed === true, '点「断开」后 WebSocket 已关闭');
+
+	// 5) 面板可拖动：遮住积木区时唯一的挪开办法，位置要记住
+	const findText = (el, text) => {
+		if (!el) return null;
+		if (el.textContent === text) return el;
+		for (const c of el.children || []) {
+			const hit = findText(c, text);
+			if (hit) return hit;
+		}
+		return null;
+	};
+	const titleSpan = findText(body, 'TurboMC 远程调试');
+	const head = titleSpan && titleSpan.parentElement;
+	const panel = head && head.parentElement;
+	check(!!head && !!panel, '找到面板标题栏');
+	head.dispatch('pointerdown', {target: head, button: 0, clientX: 100, clientY: 100, pointerId: 1});
+	head.dispatch('pointermove', {clientX: 160, clientY: 140});
+	head.dispatch('pointerup', {});
+	check(panel.style.left === '60px' && panel.style.top === '40px',
+		'拖动标题栏后面板移动', panel.style.left + ',' + panel.style.top);
+	const storedRaw = Object.values(store).find((v) => String(v).indexOf('"address"') >= 0) || '{}';
+	const stored = JSON.parse(storedRaw);
+	check(stored.panelX === 60 && stored.panelY === 40, '拖动位置写进 localStorage',
+		'panelX=' + stored.panelX + ' panelY=' + stored.panelY);
+
+	head.dispatch('dblclick', {});
+	check(panel.style.left === '12px' && panel.style.top === 'auto' && panel.style.bottom === '12px',
+		'双击标题栏回到左下角', panel.style.left + ',' + panel.style.top);
 
 	setTimeout(() => {
 		check(FakeWS.instances.length === 1, '3.5 秒后没有自动重连', 'WS 实例数=' + FakeWS.instances.length);
