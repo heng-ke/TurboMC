@@ -18,7 +18,8 @@ Fabric 1.21.11 客户端模组：用 Scratch 积木描述自动化行为，在 M
 ```
 TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/turbomc/imports/
                                               │
-                                        F7 点「导入」
+                        每 2 秒查 imports 指纹（autoReload，可关）
+                              或 F7 点「导入」
                                               │
                                               ▼
                                    config/turbomc/packages/
@@ -44,6 +45,17 @@ TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/turbomc/im
 **运行路径没有任何序列化。** 启用的包就是 sb3 里那份 project.json，直接
 `loadProject`。这样「看到什么」和「跑什么」永远一致——早期版本用中间格式往返，
 曾出现 `wait 20` 被当成 20 秒、`chat` 的消息被静默清空这类只有真机才暴露的问题。
+
+**两个目录的分工（不要合并）**：`imports/` 是用户写入区，`packages/` 是运行副本区。
+编辑时保存的目标文件不是瞬间写完的；若让它直接写 `packages/`，游戏恰在此刻
+`restart()` 打开它会解析到半个 zip，表现为「工程载入失败」。同步用
+「临时文件 + `ATOMIC_MOVE`」替换，保证 `packages/` 里永远是完整文件。
+用户侧只需要面对 `imports/`。
+
+**热重载**：`ScriptEngine.tick` 每 `reloadIntervalMs`（默认 2000）调一次
+`PackStore.pollImports()`。指纹取「文件名 + 大小 + 文件 mtime」——
+**不能用目录 mtime**，Windows 上覆盖同名文件不更新父目录时间戳，会永远不触发。
+启用中的包被更新时才 `restart()`，导入新包不打断正在跑的脚本。
 
 ## 三、包级开关是互斥的
 
@@ -96,6 +108,11 @@ src/client/java/xyz/turbomc/client/
     │   ├── ChatState.java       最近 32 条聊天的环形缓冲（网络线程写、脚本线程读）
     │   ├── ExtensionHealth.java 扩展与模组的 opcode 集合自检（不一致时 HUD 红字）
     │   └── Values / ScratchCast  值转换（scratch-vm 已自带运算与比较，Java 不重复实现）
+    ├── remote/                  浏览器远程开发桥（见 §7）
+    │   ├── RemoteBridge.java    监听、Origin 校验、握手、心跳、单控制者、tick 入口
+    │   ├── RemoteProtocol.java  协议常量、错误码、originAllowed()
+    │   ├── RemoteExecutor.java  FIFO 队列、每 tick 预算、call / poll 执行
+    │   └── SnapshotPublisher.java 每 tick 采集快照（采集在主线程，发送异步入队）
     ├── ai/                      大模型对话
     │   ├── AiService.java       HTTP（HttpClient 异步）、会话表、历史裁剪、并发与取消
     │   └── AiActions.java       四个积木的动作：ask / reply / reset / system
@@ -115,7 +132,7 @@ src/client/java/xyz/turbomc/client/
     │   ├── Sb3Mapping.java      opcode ↔ 内部类型、字段/输入改名（全项目唯一一份）
     │   └── Sb3Importer.java     sb3 → 积木树（只读查看用）
     ├── store/
-    │   ├── PackStore.java       包管理：导入、互斥启用、改名、删除、解析缓存
+    │   ├── PackStore.java       包管理：导入、热重载指纹、原子替换、互斥启用、改名、删除、解析缓存
     │   ├── ScriptPack.java      一个包的视图
     │   └── ScriptDefinition.java 解析出的一份脚本（视图模型，不持久化）
     ├── block/                   积木定义（只服务于「渲染成一行文本」）
@@ -137,11 +154,21 @@ src/client/java/xyz/turbomc/client/
 ```
 turbowarp/src/
 ├── blocks.data.js             97 块积木、16 个菜单、15 个分组标题、每块的占位方法体
-└── items.data.js              1505 条物品（注册名|中文名|英文名）
+├── items.data.js              1505 条物品（注册名|中文名|英文名）
+├── remote-client.js           远程桥客户端：连接面板、__tmc、快照缓存、帽子匹配（见 §7.7）
+├── json-lite.js               JSON 积木的浏览器实现（只进编辑器产物，远程模式下本地实算）
+└── stage-view.js              getDisplayMedia 画面捕获与舞台覆盖（同上）
 
 tools/
 ├── build-extension.js         渲染两份扩展副本（--check 供 CI 守新鲜度）
 ├── build-mapping-report.js    渲染 turbowarp/mapping-report.md（同上）
+├── json-parity-cases.json     JSON 语义对拍的 118 条用例（两侧共用）
+├── check-json-parity.js       与 Java 侧产物逐字比对（见 §7.6）
+├── probe/                     人工验证与回归工具（不发布）
+│   ├── turbomc-probe-extension.js  独立探针扩展：画面捕获、权限、手势、连接四项一次测全
+│   ├── probe-server.js             最小 WS 服务，用来单独验连通性与 LNA 授权
+│   ├── test-stop-hats.js           扩展侧回归：帽子派发、停止链路、读数、列表（57 项）
+│   └── test-panel-render.js        面板回归：快照 20Hz 刷新时控件不得被重建
 └── compare-getinfo.js         迁移期的一次性语义闸门（保留作回归用）
 ```
 
@@ -646,8 +673,13 @@ Promise 让线程进入 `PROMISE_WAIT`，每帧 `__tmcPumpPromises` 回调 `Scri
 `ChatSpamTracker` 每秒上限 20 条，每 tick 一条正好贴着红线。段数上限 `chatMaxSegments`
 （默认 8，约 2000 字），超出的部分不再发送，末段补 `…`。
 
-`ScriptEngine.tick()` 每 tick 推一次队列；停引擎、切包、停止全部都必须 `clearChatQueue()`，
-否则上一份工程的长回复会在新工程里继续冒出来。
+`ScriptEngine.tick()` **第一行**推一次队列，与任何分支无关；停引擎、切包、停止全部都必须
+`clearChatQueue()`，否则上一份工程的长回复会在新工程里继续冒出来。
+
+**为什么必须放在第一行**：队列的间隔靠 `tick()` 递减冷却。早先它只在 `vm.tick()` 之后
+调用，而「引擎开关关闭」「总开关关闭」「远程会话让位」三条分支都在之前 `return`，
+于是第一条消息发出后冷却永远不减，后续全部卡在队列里——症状是「说了一次就再也不说」，
+日志里一句异常也没有。
 
 这顺带修掉一个旧行为：以前同帧的第二次「在聊天栏说」会被 50 ms 节流**静默丢弃**，
 现在全部入队，一条不丢。
@@ -691,8 +723,15 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 - **面板瘦身**（原 32 块 → 29 块）：「键数量」与「数组长度」合成一块「长度」（本就是同一实现）；
   「是合法 JSON 吗」与「是 [对象/数组] 吗」合成三选一菜单；数组下标统一为 1 基后，
   「数组第 n 项」与「按键取值」不再需要两块——**下标基准不一致比少一块积木危险得多**。
-- 与原文的偏差只有三处：解析错误返回中文说明带位置（浏览器文案无法跨引擎复刻）、
-  「长度」解析失败返回空串（原文是一个空格，明显笔误）、嵌套深度上限 256（防御递归栈）。
+- 与原文的偏差只有三处：解析错误返回中文说明带位置、「长度」解析失败返回空串
+  （原文是一个空格，明显笔误）、嵌套深度上限 256（防御递归栈）。
+- **远程模式下这批积木还有一份浏览器实现**（`turbowarp/src/json-lite.js`）：远程会话的主 VM
+  在浏览器里，而 reporter 是同步求值——等不了 RPC，任意 JSON 运算也无法预取缓存。
+  所以「错误文案无法跨引擎复刻」这条已经不成立：JS 侧移植了同一个递归下降解析器与同一批错误串。
+  两份实现的等价性由对拍守住：`tools/json-parity-cases.json` 同一批用例分别喂给
+  `JsonParityTest`（Java，产出 `build/json-parity-java.json`）与 `tools/check-json-parity.js`（JS），
+  比对「积木最终显示出来的字符串」。**改任何一侧都必须重跑对拍**，否则分叉只会在玩家那边暴露。
+  运行时副本不含这份 JS——游戏内始终走 Java。
 
 ### 24. 扩展的两份产物是生成物，唯一源在 `turbowarp/src`
 
@@ -822,6 +861,27 @@ Gson 用 Unsafe 建实例、**不执行字段初始化器**，所以 json 缺 `a
 要精确进度只能读打开界面后的 `ScreenHandler` 属性，本版未提供，因此不要在脚本里做
 「等到烧完」这类判断，改为「等待固定时长后取输出槽」。
 
+### 27. 失焦暂停只在两种条件下被接管
+
+原版在窗口失去焦点时会弹暂停菜单、把单人世界冻住。开发脚本时经常要切到浏览器或编辑器，
+一失焦世界就静止：坐标不再变化、`TriggerDispatcher` 的按键派发被 GUI 挡住（它要求
+`currentScreen == null`）、动作积木却仍返回成功——看起来像积木坏了。
+
+`TurboMCClient.guardFocusPause()` 每 tick 判断 `wanted = 处于 REMOTE || 配置项
+keepRunningWhenUnfocused`，成立时：
+
+1. 把 `GameOptions.pauseOnLostFocus` 置假；
+2. 若窗口失焦且 `currentScreen instanceof GameMenuScreen`，`setScreen(null)` 关掉它。
+
+三个边界不能动：
+
+- **只认「失焦 + 暂停界面」这一种组合**。玩家在窗口内按 ESC 的暂停照旧，否则按 ESC 关不掉菜单。
+- **不写持久化设置**，只改内存里的 `options`；`wanted` 转假时写回备份值。
+- **单字段备份就是引用计数**：只有一个 `pauseOnLostFocusBackup`，两个触发条件并存时不会互相覆盖，
+  都撤掉才恢复——否则「远程会话结束」会把用户打开的配置项一起撤掉。
+
+配置项默认关：它改的是原版行为，不该在玩家没要求时生效。
+
 ## 六、HUD
 HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定，三处界面共用
 （HUD / 包列表 / 运行面板），不各自判断 `isRunning()`：
@@ -831,10 +891,17 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 | `RUNNING` | `●` | 绿 | 工程已载入并在推进 |
 | `OFF` / `NO_PACK` / `NO_WORLD` / `OFF_WORLD_EXIT` | `○` | 灰 | 没开、没选包、还没进世界、退出世界自动关 |
 | `HALTED` | `○` | 黄 | 脚本执行了「停止全部」，按**一次** F6 即重开 |
+| `REMOTE` | `●` | 青 | 浏览器远程会话进行中，内 VM 让位（按 F6 会提示先断开） |
 | `LOAD_FAILED` / `RUNTIME_ERROR` | `✕` | 红 | 工程读不出/启动失败、运行期异常 |
 
 状态之后跟具体原因（异常摘要，截断 60 字），故障时单独占一行：挤在状态行里会被宽度
 裁掉，等于没显示。这是「为什么脚本不动」在游戏内唯一的自查出口。
+唯一例外是 `REMOTE`：它的 detail 只有「实例 · 端口」，`hudLine()` 已拼进状态行，
+不再单列——否则同一句话会打两遍。
+
+**远程桥端口常驻一行**：只要监听中，HUD 就显示 `○ 远程调试监听 · 端口 N（未连接）`，
+连上后变青色 `● 远程调试已连接 · 端口 N`。端口是扩展面板唯一要手填的参数，
+只写在 `logs/latest.log` 里等于每次都要去翻文件；会话中（`REMOTE`）状态行已带端口，不重复。
 
 **`NO_WORLD` 只在标题界面成立**：人已经站在世界里、只是引擎关着时，必须显示
 `OFF`。早先关闭分支只在 `running / RUNNING / HALTED` 时收尾，`NO_WORLD` 会永久残留，
@@ -872,7 +939,257 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 读法是 `target.getCustomState('Scratch.looks')`，用其中的 `usageId` 判断是否是新
 一句（每次说话都会重新生成，比对比文本可靠）。每句停留 5 秒，最多同时 3 条。
 
-## 七、构建
+## 七、远程开发桥
+
+> 状态：**B1–B3 已落地并实机联调通过**（2026-11-22）。仅剩一项人工闸门：
+> V8/Rhino 双引擎回归（`BACKLOG.md` ENG-07）。
+
+**定位**：让 TurboWarp 浏览器里的积木直接遥控正在运行的游戏。开发时工程在浏览器里跑，
+游戏只当「执行器 + 状态源」；发布仍走原来的「导出 sb3 → `imports/` → 热重载」，两条路互不影响。
+
+```
+TurboWarp（主 VM）
+  ├ 积木读   ← 快照缓存（每 tick 一帧，零往返）
+  ├ 积木写   → RPC，主线程 tick 边界按 FIFO 执行
+  ├ 事件帽子 ← 游戏侧边沿检测 → event → 浏览器起线程
+  └ 画面     ← getDisplayMedia（系统合成器直供，不经游戏、不进 socket）
+```
+
+**为什么读要走快照**：Scratch 的 reporter 是同步求值。若每个 reporter 都往返一次，
+20Hz 快照下每次读要等一个 tick，一段 `重复 10 次 { 说 (X 坐标) }` 就会慢到跑不动。
+快照把「读」变成本地缓存，是这套方案成立的前提。
+
+### 7.1 进程与生命周期
+
+| 时机 | 动作 |
+|---|---|
+| 握手成功 | `suspendForRemote()` → `Status.REMOTE`，HUD 青蓝「远程调试中：实例 · 端口」 |
+| 会话期间 | `ScriptEngine.tick()` 命中 `REMOTE` 直接 return，**不再被 `if (!running) start()` 拉起** |
+| 断开 / 心跳超时 / 被新连接接管 | `endRemoteSession()` → `Status.OFF`，并把 `scriptEngineEnabled` 写回 `false` |
+
+- **让位复用 `stop()`**，不新造暂停态。代价是 `teardown()` 会松开按键、中止寻路与转向、
+  清空监视器与画框、**取消进行中的 AI 会话**——最后一条与原「AI 收手不取消会话」的决议相反，
+  是刻意改的：内 VM 已停用，回复没有脚本能接收，留着跑只浪费连接与 token。
+- **断开后一律关闭，不恢复会话前状态**。否则断开下一帧 `start()` 就把脚本拉起来，
+  开发者刚在浏览器里调完，游戏里突然开跑，是最坏的意外。
+- **`REMOTE` 期间按 F6 只提示不翻转**——翻了开关但内 VM 不动，HUD 会与浏览器侧对不上。
+- **不碰 `ScriptBridge` 的静态字段**（`current` / `pendingWait` / `pendingCheck`）。远程路径直接
+  `NativeRegistry` + 每 tick 新建的 `ScriptContext`，静态状态冲突从设计上消失。
+
+每 tick 的调用顺序（`TurboMCClient.onClientTick`）：
+
+```
+ScriptEngine.tick      → 内 VM（REMOTE 时直接 return）
+guardFocusPause        → 压住失焦暂停（见 §27）
+TriggerDispatcher.tick → 按键/界面/聊天边沿，REMOTE 时转发给浏览器
+RemoteBridge.tick      → 先执行队列，再采集快照
+```
+
+快照必须排在最后：本 tick 的界面、血量、坐标都已落定；同时它也承担浏览器侧的时钟。
+
+### 7.2 协议
+
+一条连接纯文本 JSON，没有二进制帧、没有 Token。`Origin` 只在 WebSocket 握手头校验。
+
+```
+C→S {"t":"hello","v":1,"client":"turbowarp"}
+S→C {"t":"welcome","v":1,"build":"1.6.0-beta","instance":"run","world":"...","port":35671,
+     "tickRate":20,"snapshotHz":20,"schema":6,"maxCallsPerTick":64,"queue":1024,
+     "opcodes":[...],"hats":[...],"snapshotKeys":{...}}
+
+C→S {"t":"call","id":"41","op":"turbomc_key","argv":["w","true"]}
+S→C {"t":"ret","id":"41","ok":true,"v":null,"wait":0,"check":"","limit":0}
+
+C→S {"t":"poll","id":"42","key":"move"}
+S→C {"t":"ret","id":"42","ok":true,"done":false}
+
+C→S {"t":"cancel","id":"42"} | {"t":"stop","reason":"user"} | {"t":"ping"}
+S→C {"t":"stopped"} | {"t":"pong"} | {"t":"evicted"} | {"t":"snap",...} | {"t":"event",...}
+```
+
+- **`argv` 是有序数组，不是对象**。动作层按位置读（`GameActions.key` 里是 `args[0]`），
+  对象没有顺序，按原设计的 `args: {KEY: ...}` 实现会静默取到 `undefined`。
+- **枚举参数用菜单的 `value`，不是显示文本**。`turbomc_key` 的「按下/松开」实际是字符串布尔
+  `"true"` / `"false"`；传 `"up"` 会经 `Cast.toBoolean` 判为**真**（非空字符串），表现为「再按一次」。
+- **`wait` / `check` / `limit` 是三元组**，对应 `ScriptContext` 的三个 `takeWaitXxx`。
+  缺 `limit` 时「等条件但最多等 N 帧」会退化成无限等。
+- **`welcome` 下发服务端自己的参数**（`snapshotHz` / `maxCallsPerTick` / `queue` / `schema`），
+  客户端不硬编码，换版本不会对不上。
+- **错误带 `code`**：`unmapped`（opcode 未映射）、`rate`（限流）、`budget`（超预算）、
+  `notfound`（动作层未实现）、`internal`（异常）。只有 `rate` 值得重试，靠字符串区分不出来。
+- `id` 由客户端单调递增，重连后归零。
+
+### 7.3 执行模型
+
+| 项 | 取值 | 理由 |
+|---|---|---|
+| 队列 | FIFO，容量 1024，满了丢**最旧** | 旧的通常是断线前堆积的过期动作 |
+| `call` 与 `poll` | **共用一条队列** | 浏览器先发调用、拿到 `check` 再轮询，两条消息的先后有意义 |
+| 每 tick 预算 | 8ms + 64 条，超出回 `rate` | 防脚本死循环刷动作卡帧；不静默丢弃 |
+| 异常隔离 | 单条失败回 `internal`，同批其他照跑 | 与 `ScriptBridge.call` 既有口径一致 |
+| 时钟 | **快照 `tick` 号**，不是 `setTimeout` | `setTimeout(50)` 实际 52–56ms，跑久累积漂移；且 poll 会掉到 20Hz 以下 |
+
+阻塞积木在浏览器侧返回 Promise：`wait: n` 等快照 tick 前进 n；`check` 非空时由每帧快照触发一次
+`poll`。快照 3 秒不来（心跳超时）由收手路径统一 resolve，不留永挂的线程。
+
+**`ScriptContext` 每 tick 重建**，与 `RhinoVm.tick` 同口径；并且必须
+`setBreakProbe(WorldQueries::probeBreak)`——不注入的话「等待挖破」会立刻通过，看起来没报错、
+实际一秒都没等。
+
+### 7.4 快照
+
+每 tick 一帧（20Hz），全量推，不做订阅化。**`SNAPSHOT_SCHEMA` 加/改字段必须 +1**：
+字段只增不减，旧客户端缺字段不报错、只让积木恒为假/空——那种症状与「积木坏了」无法区分。
+扩展比对不一致时在面板直接写「客户端快照版本旧」，不再靠猜。
+
+| 组 | 字段 |
+|---|---|
+| 时钟与状态 | `tick` / `schema` / `inWorld` / `paused` |
+| 玩家扁平 | `x` `y` `z` / `yaw` `pitch` / `motion_*` / `hp` `maxHp` `absorption` / `food` `saturation` / `air` `xpLevel` `xpProgress` `armor` / `dim` `slot` |
+| 结构化子对象 | `hand` / `aim` / `below` / `mining` / `mouse` / `me` / `worldInfo` / `players` / `inv` / `ui` / `chat` / `ai` / `ents` / `hostile` |
+| 环境 | `onGround` / `isDay` / `inWater` / `inLava` / `biome` / `ping` |
+
+**拼装只有一处**：`Snapshots` 里返回 `JsonObject` 的方法同时服务两条路——游戏内动作
+`stringify` 它，远程桥把它塞进快照。所以「浏览器里看到的背包 JSON」与「游戏内跑出来的」
+是同一串，键序、字段名都不会分叉。这类地方最容易悄悄不一致，从源头消掉比事后对拍便宜。
+
+**派生值不单列**：「前方有方块」读 `aim.has`，`any` 鼠标键由三键合并，都不多存一份——
+快照是 20 次/秒的长期成本。`inv` 只列非空槽位，`ui` 最多 128 格，最坏约 40 KB/s（环回可忽略）。
+
+**`ui` 只在当前界面带槽位（`ScreenHandlerProvider`）时才有值**。用 `currentScreenHandler` 顶替的话，
+暂停菜单、聊天界面都会被当成 46 格背包，槽位编号整体错位。
+
+**耐久百分比用 `round(remaining * 1000 / max) / 10`**，与游戏内同一算式。浮点除再乘 100
+会差 0.1，「耐久 > 50」这类判断会偶发不成立——这类偏差最难查。
+
+### 7.5 事件与帽子
+
+`ScriptEngine.fire / fireScreen / fireKey / fireChat / fireServerChat` 各加一个 `REMOTE` 分支，
+转发 `RemoteBridge.publishEvent()`。**同一处同时喂游戏内与浏览器**，不另写一套语义。
+
+判定入口是 `acceptsTriggers() = active() || REMOTE`：触发源原本只看 `active()`，
+而远程会话里内 VM 是停的，`active()` 恒假，帽子会全哑。
+
+**匹配规则由服务端下发**（`welcome.hats`），因为两处各写一套必然漂移：
+
+```json
+{"ev":"screen_open","op":"turbomc_whenScreenOpen","match":"field:SCREEN","alsoAny":true}
+{"ev":"chat","op":"turbomc_whenChat","match":"input:MATCH","contains":true}
+```
+
+客户端只需三种通用匹配器：无参数 / `field:名称`（带 `alsoAny` 时额外发一次 `any`）/
+`input:名称` + `contains`（遍历 `targets` 读输入做包含判断）。改语义只改 Java 一处。
+
+**硬约束：线程必须起在帽子的下一块，不能在帽子上。** `runtime.startHats` 内部先
+`stepThread(thread)` 再 `goToNextBlock()`；扩展帽子没有实现体，执行时返回 `undefined`，
+命中 `n || retireThread(t)` 当场退役——**帽子高亮、后面一块都不跑**。内置
+`event_whenkeypressed` 是 edge-activated，走另一条分支，所以只有它「看起来正常」。
+`pushHatsMatching` 因此自己遍历顶层块、匹配字段、`_pushThread(nextId, target)`。
+
+**手动点击帽子是另一条路径**：`runtime.toggleScript` 把线程起在帽子上并执行帽子本身，
+所以生成器必须给每个 hat 生成 `opcode() { return true; }`，否则点击同样退役。
+
+**「触发我的聊天」不能读快照**：一条聊天进来后帽子线程下一帧才执行，中间任何一条消息
+（别人说话、系统广告）都会改写全局槽，脚本读到的就是别人的话。所以入队时把消息挂到
+**线程对象**（`thread.tmcChat`），积木方法因此需要 `util` 参数。
+
+`teardown()` 会清空键表，而按键边沿检测要它——`suspendForRemote` / `abortForRemote` 之后
+必须 `refreshRemoteContext()` 重新解析一遍（只读 sb3，不跑绿旗）。
+
+### 7.6 读数覆盖
+
+69 个 reporter/boolean 中 **66 个可用**：
+
+| 类 | 数量 | 做法 |
+|---|---|---|
+| 快照类 | 约 36 | 直接读缓存，同步返回 |
+| JSON 一族 | 27 | **浏览器本地实现**（`json-lite.js`），含严格解析器与中文错误串 |
+| 聊天/AI/实体 | 其余 | 快照里的 `chat` / `ai` / `ents` 子对象 |
+| `blockAt` / `blockJson` / `scanJson` | 3 | **不支持**：任意坐标查询无法预取，reporter 等不了 RPC |
+
+JSON 一族是纯计算，跑在浏览器 VM 里与游戏无关。语义靠**对拍**守，不靠自觉：
+
+```bash
+./gradlew test --tests "*JsonParityTest*"   # Java 侧跑 tools/json-parity-cases.json
+node tools/check-json-parity.js             # 同一批用例两侧逐字比对
+```
+
+比对的是「积木最终显示出来的字符串」，所以 `1.0` vs `1` 这类数值格式差异也会被抓到。
+当前 118 条用例两侧一致。
+
+**命令积木全部走 RPC**，没有本地实现——它们都有副作用，必须落在游戏主线程。
+
+**远程模式特有的三条限制**（游戏内引擎没有）：
+
+| 项 | 限制 | 原因 |
+|---|---|---|
+| 附近实体 | 半径上限 **32 格**、最多 **64 个** | 快照只带这个盒范围内的实体；请求更大也拿不到 |
+| 物品名 | 只认注册名，`stone` 自动补 `minecraft:`，**中文名不认** | 浏览器侧没有 `ItemIds` 那份 1505 条中文表 |
+| 任意坐标查询 | 三个积木返回空 | 见上，同步求值等不了 RPC |
+
+### 7.7 扩展侧结构
+
+远程逻辑不写在模板字符串里（没法 lint、没法测、转义易错），而是真实源文件，构建时拼接：
+
+| 文件 | 作用 | 进哪份产物 |
+|---|---|---|
+| `turbowarp/src/remote-client.js` | 连接面板、`__tmc`、快照缓存与 tick 时钟、帽子匹配器、Promise 包装 | 编辑器产物 |
+| `turbowarp/src/json-lite.js` | 27 个 JSON 积木的浏览器实现 | 编辑器产物 |
+| `turbowarp/src/stage-view.js` | `getDisplayMedia` 捕获 + `<video>` 覆盖舞台 | 编辑器产物 |
+| `turbowarp/src/blocks.data.js` 等 | 积木定义与 stub（唯一数据源） | 两份 |
+
+运行时副本（游戏内）**不含**这三份：那里由 `vm-bootstrap.js` 注入真实调用，没有远程逻辑。
+所有非 hat 积木的方法体统一生成成：
+
+```js
+opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command', fallback, util); }
+```
+
+**未连接时执行 fallback**（即原来的预览行为），所以一份产物同时是「普通编辑器」和「远程调试器」。
+`util` 只给需要当前线程的积木（`triggerChat`），其余不需要。
+
+### 7.8 画面
+
+`getDisplayMedia` + `<video>` 覆盖舞台，**游戏端零代码**：画面由系统合成器直供浏览器，
+不走 socket、不占带宽、不影响游戏帧率。原设计的「FBO 缩放 + JPEG + WS 二进制帧」需要
+约 1000 行且全项目无离屏渲染先例，已否决——它的唯一正当场景是跨机与无人值守录制。
+
+| 项 | 做法 |
+|---|---|
+| 舞台定位 | 优先 `runtime.renderer.canvas`，回退页面上面积最大的 canvas |
+| 比例 | `object-fit: contain`（游戏 16:9 / 舞台默认 4:3），建议把舞台设 640×360 消黑边 |
+| 切到舞台 | 只 `display:none`，**不停止捕获**（停了再开要重新选源） |
+| 源被外部停止 | 监听 track 的 `ended` 收尾，不留一个黑掉的 video |
+
+已知限制：游戏窗口**最小化会黑屏**（捕获跟随窗口可见性，与遮挡无关）；每次会话要选一次捕获源。
+
+### 7.9 宿主、授权与安全
+
+| 项 | 结论 |
+|---|---|
+| unsandboxed | **硬要求**。sandboxed 扩展跑在扩展 Worker 里，没有 `document`，权限请求直接失败 |
+| LNA（本地网络访问） | https 页面连 `ws://127.0.0.1` 需一次 `loopback-network` 授权，且**首次必须由用户手势触发**（故「保存后自动连接」被禁止）；`file://` 与桌面自定义协议属同地址空间，不触发 |
+| TurboWarp Desktop | RPC **可用**（`tw-editor://.`，p50 0.5ms）；画面 `NotSupportedError`（主进程无 display media handler） |
+| Origin 白名单 | 默认含自建站、官方站、`http://localhost:*`、`http://127.0.0.1:*`、`tw-editor://.`、`null`；可在配置里加 |
+| 绑定 | 只绑 `127.0.0.1`，不做跨机；单控制者，新连接接管时旧连接收 `evicted` |
+
+**`permissions.query` 的状态 ≠ 是否被拦**。Desktop 的 `loopback-network` 报 `denied` 却仍能连——
+LNA 在网络栈按地址空间判定，权限查询读的是另一套视图。实测比读文档可靠。
+
+### 7.10 文件职责
+
+| 文件 | 职责 |
+|---|---|
+| `script/remote/RemoteBridge.java` | 端口绑定与自动分配、Origin 校验、握手、心跳、单控制者、tick 入口 |
+| `script/remote/RemoteProtocol.java` | 协议常量、错误码、`originAllowed()` |
+| `script/remote/RemoteExecutor.java` | FIFO 队列、每 tick 预算、`call` / `poll` 执行与回包 |
+| `script/remote/SnapshotPublisher.java` | 每 tick 采集快照（**采集留在主线程**，序列化与发送异步入队） |
+| `script/ScriptEngine` | `Status.REMOTE`、`suspendForRemote` / `endRemoteSession`、事件转发分支 |
+| `config/TurboMCConfig` | `dev` 段：开关、端口、实例名、Origin 白名单 |
+| `TurboMCClient` | 每 tick 跟随配置起停监听、`guardFocusPause` |
+| `turbowarp/src/remote-client.js` 等 | 扩展侧实现，见 §7.7 |
+
+## 八、构建
 
 ```bash
 # Loom 1.19 要求 JDK 25，系统默认 JDK 21 会在配置阶段失败
@@ -925,23 +1242,34 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | `ItemIdsTest` | 物品 id 规范化（`iron_ore`、`IRON_ORE`、带空格 → `minecraft:iron_ore`） |
 | `Sb3RenderingTest` | sb3 → 查看器积木树的三条还原规则（错了像面板 bug，其实是导入 bug） |
 | `ParamLabelsTest` | 参数本地化：拼出的语言键与语言文件里的键必须对得上 |
+| `JsonParityTest` | JSON 29 块在 Java 侧的 118 条用例结果（与浏览器实现逐字比对，见 §7.6） |
 
 涉及客户端的验证一律走冒烟任务——纯 JVM 里没有客户端，动作会抛 NPE 被桥吞成
 `null`，测不到真实行为。
 
-## 八、使用流程
+**远程桥的扩展侧回归**（不进 gradle，测的是生成产物，需要先 `node tools/build-extension.js`）：
+
+```bash
+node tools/probe/test-stop-hats.js      # 帽子派发 / 停止链路 / 读数 / 列表，57 项
+node tools/probe/test-panel-render.js   # 面板 20Hz 刷新时控件不得被重建
+node tools/check-json-parity.js         # 需先跑 ./gradlew test --tests "*JsonParityTest*"
+```
+
+## 九、使用流程
 
 1. 在 TurboWarp 里加载 `turbowarp/turbomc-extension.js`（否则扩展积木显示为未知块）
 2. 编写脚本，导出为 `.sb3`
 3. 放进 `.minecraft/config/turbomc/imports/`（F7 界面里的「文件夹」可直接打开该目录）
 4. 游戏内按 **F7** → 点「导入/更新」→ 点圆点启用
+   - **开着 `autoReload` 时可跳过这一步**：导入与重启都会在 2 秒内自动发生，
+     迭代时只需在编辑器里覆盖同一个文件
 5. 按 **F6** 开引擎，HUD 出现 `● 运行中：包名` 即表示在跑
    - 总开关是持久化的：配置里 `scriptEngineEnabled` 为 `true` 时，进世界第一帧就会
      `start()` + `greenFlag()`，与有没有按 F6 无关
    - 退出存档/断开服务器时默认复位为 `false`（配置 `disableEngineOnExit`，字段缺失视为
      开），所以每局都要重新按 F6；关掉该项则保留上一局状态，进世界自动运行
 
-## 九、日志关键字
+## 十、日志关键字
 
 排查时优先看这几个：
 
