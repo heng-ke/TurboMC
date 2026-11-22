@@ -61,6 +61,15 @@ public final class RemoteBridge {
 	private long retryAfter;
 	/** 上一次启动失败的原因，供 HUD 显示。成功或停止后清空。 */
 	private volatile String lastError = "";
+	/**
+	 * 握手要用的世界名与实例名，由主线程每 tick 刷新。
+	 *
+	 * <p>握手跑在 WebSocket I/O 线程上：直接读 {@code client.world} 会撞上主线程切维度 /
+	 * 退出世界，欢迎包里就可能出现旧维度或空串；读配置同理（界面正在改）。
+	 * 这两个字段只在主线程写、I/O 线程读，用 {@code volatile} 保证可见性即可。</p>
+	 */
+	private volatile String cachedWorld = "";
+	private volatile String cachedInstance = "";
 	private final SnapshotPublisher snapshotPublisher = new SnapshotPublisher();
 	private final RemoteExecutor executor = new RemoteExecutor();
 
@@ -126,6 +135,10 @@ public final class RemoteBridge {
 		port = boundPort;
 		retryAfter = 0L;
 		lastError = "";
+		// 本方法在主线程（syncRemoteBridge → tick）上：先把手里的两个字段暖起来，
+		// 万一握手在下一帧 tick 之前就到了，读到的也不是空串
+		cachedWorld = currentWorld();
+		cachedInstance = instanceName();
 		LOG.info("[remote] 监听 127.0.0.1:{}（{}）", boundPort, how);
 		return true;
 	}
@@ -198,6 +211,13 @@ public final class RemoteBridge {
 	 * 会与 tick 并发。而 {@code send()} 本身是异步入队的，主线程调用不会阻塞网络。</p>
 	 */
 	public void tick(MinecraftClient client) {
+		// 每 tick 采一次握手要用的字段（主线程）。放在「没有连接就 return」之前：
+		// 断线期间世界可能换了，下一次握手不能拿着断开时的旧值。
+		cachedWorld = client == null || client.world == null
+				? ""
+				: client.world.getRegistryKey().getValue().toString();
+		cachedInstance = instanceName();
+
 		WebSocket socket = controller;
 		if (socket == null || !socket.isOpen()) {
 			return;
@@ -319,8 +339,10 @@ public final class RemoteBridge {
 		welcome.addProperty("t", RemoteProtocol.T_WELCOME);
 		welcome.addProperty("v", RemoteProtocol.VERSION);
 		welcome.addProperty("build", modVersion());
-		welcome.addProperty("instance", instanceName());
-		welcome.addProperty("world", currentWorld());
+		// 两个名字都读主线程维护的缓存：本方法在 WebSocket I/O 线程上，
+		// 直接读 client.world / 配置会与主线程打架（见字段注释）
+		welcome.addProperty("instance", cachedInstance);
+		welcome.addProperty("world", cachedWorld);
 		welcome.addProperty("port", port);
 		welcome.addProperty("pid", ProcessHandle.current().pid());
 		welcome.addProperty("tickRate", 20);
@@ -334,7 +356,7 @@ public final class RemoteBridge {
 		LOG.info("[remote] 握手完成");
 		// 会话建立即让位：本方法跑在 WebSocket I/O 线程上，收尾动作必须回主线程
 		onMainThread(() -> ScriptEngine.get()
-				.suspendForRemote(instanceName() + " · 端口 " + port));
+				.suspendForRemote(cachedInstance + " · 端口 " + port));
 	}
 
 	/** 把手上的活丢回客户端主线程；已经在线程上就直接执行。 */

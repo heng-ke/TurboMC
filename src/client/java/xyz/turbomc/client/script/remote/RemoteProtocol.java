@@ -74,6 +74,11 @@ public final class RemoteProtocol {
 	 * <p>{@code Origin} 缺失时按字面量 {@code "null"} 处理——这是 {@code file://} 页面和
 	 * TurboWarp Desktop 的实际情况（实测见 ARCHITECTURE.md §7.9），
 	 * 白名单里必须显式写出 {@code "null"} 才会放行，不是"缺失即放行"。</p>
+	 *
+	 * <p><b>默认值里刻意没有 {@code "null"}</b>：它只对应「下载到本地、用浏览器直接打开」的
+	 * HTML，正是最容易被顺手点开的那一类。TurboWarp Desktop 走 {@code tw-editor://.}，
+	 * 自建站走 {@code http(s)://域名}，都不需要它。要从本地文件打开时，
+	 * 在模组菜单的「允许的来源」里自己加一行。</p>
 	 */
 	public static boolean originAllowed(String origin, List<String> patterns) {
 		if (patterns == null || patterns.isEmpty()) {

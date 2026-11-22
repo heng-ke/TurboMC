@@ -180,13 +180,20 @@ public final class TurboMCConfig {
 		return value == null ? "" : value.trim();
 	}
 
-	/** 生效的 Origin 白名单：配置非空就用配置，否则用内置默认值。 */
+	/**
+	 * 生效的 Origin 白名单：配置非空就用配置，否则用内置默认值。
+	 *
+	 * <p><b>必须返回快照</b>：握手在 WebSocket I/O 线程上遍历这份列表，而模组菜单会在
+	 * 主线程增删同一个 {@code ArrayList}——直接返回本体，遍历到一半被改就是
+	 * {@code ConcurrentModificationException}（表现为握手静默失败）。{@code DEFAULT_DEV_ORIGINS}
+	 * 本身是 {@code List.of}，不可变，不必再拷。</p>
+	 */
 	public List<String> remoteAllowedOrigins() {
 		List<String> configured = dev == null ? null : dev.allowedOrigins;
 		if (configured == null || configured.isEmpty()) {
 			return DEFAULT_DEV_ORIGINS;
 		}
-		return configured;
+		return List.copyOf(configured);
 	}
 
 	/**
@@ -322,15 +329,21 @@ public final class TurboMCConfig {
 		public List<String> allowedOrigins = new ArrayList<>();
 	}
 
-	/** 远程桥默认放行的 Origin。含实测到的三种形态，见 ARCHITECTURE.md §7.9。 */
+	/**
+	 * 远程桥默认放行的 Origin。含实测到的三种形态，见 ARCHITECTURE.md §7.9。
+	 *
+	 * <p><b>刻意不含 {@code "null"}</b>：那是 {@code file://} 页面（也就是「从网上下载一个
+	 * HTML、双击打开」）的 Origin，是唯一能被「顺手打开一个文件」就接管游戏的入口。
+	 * 自己搭的 TurboWarp 站点走 {@code https://域名} 或 {@code http://localhost:端口}，
+	 * 不需要它；真要从本地文件打开，在模组菜单的「允许的来源」里手动加一行 {@code null}。</p>
+	 */
 	public static final List<String> DEFAULT_DEV_ORIGINS = List.of(
 			"https://turbowarp.org",
 			"https://zzj.hengke.xyz",
 			"http://localhost:*",
 			"http://127.0.0.1:*",
 			"tw-editor://.",
-			"tw-editor://./",
-			"null"
+			"tw-editor://./"
 	);
 
 	private TurboMCConfig() {

@@ -177,6 +177,32 @@ public final class TurboMCConfigScreen {
 				})
 				.build());
 
+		// 「允许的来源」：远程桥只校验 WebSocket 的 Origin，所以自建 TurboWarp 站点
+		// （https://自己的域名、http://localhost:端口）必须能在这里加，否则只能手改 json。
+		// 留空 = 用内置默认值；手填的列表会整体替换默认值，不是追加。
+		script.addEntry(entries
+				.startStrList(Text.translatable("config.turbomc.dev_origins"),
+						config.dev == null || config.dev.allowedOrigins == null
+								? new ArrayList<>()
+								: new ArrayList<>(config.dev.allowedOrigins))
+				.setDefaultValue(new ArrayList<>())
+				.setExpanded(false)
+				.setTooltip(Text.translatable("config.turbomc.dev_origins.tooltip"))
+				// 拼错的来源不会报错，只会「连不上」，所以在格子里就地标红：
+				// 合法形态是 scheme://host[:*] ，或字面量 null（file:// 页面）
+				.setCellErrorSupplier(value -> isOriginPattern(value)
+						? java.util.Optional.empty()
+						: java.util.Optional.of(Text.translatable("config.turbomc.dev_origins.invalid")))
+				.setSaveConsumer(value -> {
+					if (config.dev == null) {
+						config.dev = new TurboMCConfig.Dev();
+					}
+					config.dev.allowedOrigins = value == null
+							? new ArrayList<>()
+							: new ArrayList<>(value);
+				})
+				.build());
+
 		// ---- 寻路 ----
 		// 放在脚本引擎之后：这些是「走向」积木的精度参数，改完下一 tick 即生效，无需重启。
 		ConfigCategory pathing = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.pathing"));
@@ -439,5 +465,38 @@ public final class TurboMCConfigScreen {
 		} catch (RuntimeException ignored) {
 			return fallback;
 		}
+	}
+
+	/**
+	 * 一行白名单是否写成了合法形态。
+	 *
+	 * <p>只做形态检查，不联网也不解析端口：{@code scheme://host[:port|:*]} 或字面量
+	 * {@code null}（{@code file://} 页面）。空行交给 Cloth 自己处理——它在保存时就会忽略，
+	 * 这里报红只会让人困惑。</p>
+	 */
+	private static boolean isOriginPattern(String raw) {
+		if (raw == null) {
+			return true;
+		}
+		String value = raw.trim();
+		if (value.isEmpty() || "null".equals(value)) {
+			return true;
+		}
+		if (value.indexOf(' ') >= 0) {
+			return false;
+		}
+		int separator = value.indexOf("://");
+		if (separator <= 0 || separator + 3 >= value.length()) {
+			return false;
+		}
+		for (int i = 0; i < separator; i++) {
+			char c = value.charAt(i);
+			boolean schemeChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+					|| c == '+' || c == '-' || c == '.';
+			if (!schemeChar) {
+				return false;
+			}
+		}
+		return true;
 	}
 }
