@@ -41,51 +41,23 @@ import java.util.List;
 public final class PathFollower {
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
 
-	/**
-	 * 会话上限（tick）：按起始距离缩放，128 格时仍是 1200 tick（约 60 秒）。
-	 *
-	 * <p>128 格 × 0.216 格/tick ≈ 592 tick，绕路按 1.6 倍算 ≈ 950，再留分段停顿的余量，
-	 * 由此定出 1200。改成按距离算是因为「最远目标距离」已可配置：只放大距离而不动超时，
-	 * 远距离目标会在走完之前被判超时。</p>
-	 */
-	private static final double TICKS_PER_BLOCK = 8.0;
-	private static final int TICKS_BASE = 176;
-	private static final int TICKS_MIN = 600;
-	private static final int TICKS_MAX = 3600;
-	/** 脚本侧等待上限比会话上限多留 40 tick，让 Java 的超时先发生。 */
-	private static final int WAIT_SLACK = 40;
+	// 会话超时、到达容差判定、卡住窗口与氧气余量的常量与算术都在 {@link PathMath} 里：
+	// 那四段是纯算术且不会抛异常，抽出去才能用单测钉住（见 PathMathTest）。
 	/** 结束后保留约 3 秒，便于回看走了哪条路。 */
 	private static final int FADE_TICKS = 60;
 
 	// 节点推进阈值与站定转向阈值已改为可配置项，见 TurboMCConfig#pathNodeReach() 与
 	// #pathStandTurnDeg()。两者的取舍说明（几何耦合：转弯半径 ≈ 1.03 格）留在配置字段的 javadoc 里。
-	private static final int STUCK_TICKS = 10;
-	/** 卡住重算上限。与半截路的分段次数分开计：这是「原地打转」，那是「够不到目标」。 */
-	private static final int MAX_REPLANS = 3;
-	private static final int REPLAN_INTERVAL = 20;
 	/**
 	 * 半截路的分段上限。被剪断时每段可能只有十几格，128 格最多也就十几段；
-	 * 给 16 是留余量，真正的总闸仍是会话超时（{@link #maxTicksFor}）。
+	 * 给 16 是留余量，真正的总闸仍是会话超时（见 {@link PathMath#sessionTicks}）。
 	 */
 	private static final int MAX_PARTIAL_REPLANS = 16;
 	/** 连续几次半截路停在同一格：说明再算也一样，别空转。 */
 	private static final int MAX_SAME_END = 3;
-	/** 窗口式卡住判定：锚点位移超过半格即认为有进展（抗贴墙蠕动）。 */
-	private static final double ANCHOR_PROGRESS = 0.5;
-	private static final double STUCK_MIN_MOVE = 0.02;
 	/** 位置突变（传送 / 服务端回拉）阈值。 */
 	private static final double TELEPORT_SQUARED = 64;
 
-	/**
-	 * 氧气余量 = 深度 × 10 + 40 tick，clamp 到 [80, 280]。
-	 *
-	 * <p>依据：水下上浮约 0.1 格/tick（保守估计），每格留 10 tick，另加 40 tick 反应时间。
-	 * 满氧 300 tick，所以上限压到 280——比这更深的水本来就浮不上来，早点中止比硬走好。</p>
-	 */
-	private static final int AIR_PER_BLOCK = 10;
-	private static final int AIR_BASE = 40;
-	private static final int AIR_MIN = 80;
-	private static final int AIR_MAX = 280;
 	/** 水面高度每 10 tick 重采一次：上浮过程中水面不变，没必要每 tick 向上扫。 */
 	private static final int SURFACE_SAMPLE_INTERVAL = 10;
 	/** 紧急上浮上限：水下没有可上的路时，不能一直按着跳跃键。 */
@@ -155,7 +127,7 @@ public final class PathFollower {
 
 		session = new Session(target, client.world, posOf(player));
 		session.distance = target.horizontalDistanceTo(player);
-		session.maxTicks = maxTicksFor(session.distance);
+		session.maxTicks = PathMath.sessionTicks(session.distance);
 		lastState = State.FOLLOWING;
 		return true;
 	}
@@ -166,13 +138,7 @@ public final class PathFollower {
 	 * <p>必须传玩家：上限按起始距离缩放，128 格时仍是 1200 + 40。</p>
 	 */
 	public static int waitLimitTicks(MoveTarget target, ClientPlayerEntity player) {
-		return maxTicksFor(target.horizontalDistanceTo(player)) + WAIT_SLACK;
-	}
-
-	/** 128 格 → 1200 tick，与改造前的固定值一致；距离越远上限越高。 */
-	private static int maxTicksFor(double distance) {
-		return MathHelper.clamp(
-				(int) Math.round(distance * TICKS_PER_BLOCK) + TICKS_BASE, TICKS_MIN, TICKS_MAX);
+		return PathMath.waitTicks(target.horizontalDistanceTo(player));
 	}
 
 	/** poll 的返回值：终态为真，且一直保持到下一次 start()。 */
@@ -305,7 +271,7 @@ public final class PathFollower {
 			} else {
 				// 这一段走完了，目标还没到：留下重算标记，下一 tick 以当前位置为起点算下一段。
 				// 不在这一 tick 直接算——重算要几毫秒，统一放在 tick 开头的 replan 分支里，
-				// 才好吃到 REPLAN_INTERVAL 的节流、也才好统计耗时。
+				// 才好吃到 {@link PathMath#REPLAN_INTERVAL} 的节流、也才好统计耗时。
 				s.wantReplan = true;
 			}
 			return;
@@ -421,20 +387,14 @@ public final class PathFollower {
 	/**
 	 * 是否已经站在 {@code end} 这一格上。
 	 *
-	 * <p>水平与垂直分开判，不能用 3D 距离：目标正上方 4 格的同一 (x,z) 水平距离是 0，
-	 * 只判水平会立刻宣布到达。两个容差都来自配置（水平默认 0.6、垂直默认 0.6），
-	 * 垂直容差容得下半砖的 0.5，容不下整整一格。</p>
-	 *
-	 * <p>判的是路径终点而不是用户给的 target：A\* 会把终点吸到它认为可站的相邻格。</p>
+	 * <p>判的是路径终点而不是用户给的 target：A\* 会把终点吸到它认为可站的相邻格。
+	 * 水平/垂直分开判的理由与两个容差的来历见 {@link PathMath#arrived}。</p>
 	 */
 	private static boolean isArrived(ClientPlayerEntity player, BlockPos end) {
 		TurboMCConfig config = TurboMCConfig.get();
-		double horizontal = config.pathArriveHorizontal();
-		double vertical = config.pathArriveVertical();
-		double dx = end.getX() + 0.5 - player.getX();
-		double dz = end.getZ() + 0.5 - player.getZ();
-		return dx * dx + dz * dz <= horizontal * horizontal
-				&& Math.abs(player.getY() - end.getY()) <= vertical;
+		return PathMath.arrived(player.getX(), player.getY(), player.getZ(),
+				end.getX(), end.getY(), end.getZ(),
+				config.pathArriveHorizontal(), config.pathArriveVertical());
 	}
 
 	private static boolean shouldJump(ClientPlayerEntity player, BlockPos node) {
@@ -469,7 +429,7 @@ public final class PathFollower {
 			s.surfaceSampleTick = s.ticks;
 		}
 		int depth = Math.max(1, s.waterSurfaceY - player.getBlockY());
-		return MathHelper.clamp(depth * AIR_PER_BLOCK + AIR_BASE, AIR_MIN, AIR_MAX);
+		return PathMath.airReserveForDepth(depth);
 	}
 
 	/** 从玩家所在列向上找第一个非液体方块，作为水面高度。 */
@@ -519,33 +479,37 @@ public final class PathFollower {
 	}
 
 	/**
-	 * 窗口式卡住判定：锚点累计位移够 {@link #ANCHOR_PROGRESS} 就重置窗口，所以贴墙蠕动
-	 * （每 tick 动一点点）不会被误判。真卡住 {@link #STUCK_TICKS} tick 后重算，
-	 * 累计 {@link #MAX_REPLANS} 次仍卡就放弃。
+	 * 窗口式卡住判定：锚点累计位移够半格就重置窗口，真卡住 10 tick 后重算，
+	 * 累计 3 次仍卡就放弃。两个阈值各自管什么、以及「蠕动」在哪个区间才不会误判，
+	 * 见 {@link PathMath#stuckWindow}——那里有单测，别只按这里的直觉改。
 	 */
 	private static void checkStuck(MinecraftClient client, Session s, ClientPlayerEntity player) {
-		if (horizontalFrom(s.anchor, posOf(player)) >= ANCHOR_PROGRESS) {
-			s.anchor = posOf(player);
+		Vec3d now = posOf(player);
+		PathMath.Window window = PathMath.stuckWindow(
+				s.anchor.x, s.anchor.z,
+				s.lastPos.x, s.lastPos.y, s.lastPos.z,
+				now.x, now.y, now.z, s.stuckTicks);
+		if (window.progressed()) {
+			s.anchor = now;
 			s.stuckTicks = 0;
 			return;
 		}
-		if (s.lastPos.distanceTo(posOf(player)) < STUCK_MIN_MOVE) {
-			s.stuckTicks++;
-		}
-		if (s.stuckTicks < STUCK_TICKS) {
+		s.stuckTicks = window.stuckTicks();
+		if (s.stuckTicks < PathMath.STUCK_TICKS) {
 			return;
 		}
-		s.anchor = posOf(player);
+		s.anchor = now;
 		s.stuckTicks = 0;
-		if (s.replans >= MAX_REPLANS) {
-			finish(s, State.GAVE_UP, client, "卡住，重算 " + s.replans + " 次");
-			return;
+		switch (PathMath.replanStep(s.replans, s.ticks - s.lastReplan)) {
+			case GIVE_UP -> finish(s, State.GAVE_UP, client, "卡住，重算 " + s.replans + " 次");
+			// 节流：这一轮先不重算，下个窗口再试
+			case WAIT -> {
+			}
+			case REPLAN -> {
+				s.replans++;
+				s.wantReplan = true;
+			}
 		}
-		if (s.ticks - s.lastReplan < REPLAN_INTERVAL) {
-			return;   // 节流：这一轮先不重算，10 tick 后再试
-		}
-		s.replans++;
-		s.wantReplan = true;
 	}
 
 	// ---- 按键 ----
@@ -652,12 +616,6 @@ public final class PathFollower {
 		return (float) Math.toDegrees(Math.atan2(-dx, dz));
 	}
 
-	private static double horizontalFrom(Vec3d a, Vec3d b) {
-		double dx = a.x - b.x;
-		double dz = a.z - b.z;
-		return Math.sqrt(dx * dx + dz * dz);
-	}
-
 	// ---- 会话数据 ----
 
 	private static final class Session {
@@ -666,8 +624,8 @@ public final class PathFollower {
 		List<BlockPos> nodes;
 		int index;
 		int ticks;
-		/** 本会话的 tick 上限，由起始距离算出（见 {@link #maxTicksFor}）。 */
-		int maxTicks = TICKS_MIN;
+		/** 本会话的 tick 上限，由起始距离算出（见 {@link PathMath#sessionTicks}）。 */
+		int maxTicks = PathMath.TICKS_MIN;
 		int fadeTicks = -1;
 		Vec3d anchor;
 		Vec3d lastPos;
@@ -675,7 +633,7 @@ public final class PathFollower {
 		double distance;
 		long planMs;
 		int replans;
-		int lastReplan = -REPLAN_INTERVAL;
+		int lastReplan = -PathMath.REPLAN_INTERVAL;
 		boolean wantReplan = true;
 		boolean turning;
 		boolean forwardHeld;

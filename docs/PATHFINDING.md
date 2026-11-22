@@ -817,6 +817,11 @@ PathFollower.tick(client);   // 本 tick 新启动的会话立刻走第一步
 | `PATH_KEEP_TICKS` | 60 | 结束后保留 3 秒，便于回看路线 |
 | `LINE_WIDTH` | 2.0 | 与参考实现一致 |
 
+> **2026-11-22**：上表里 `TICKS_*` / `WAIT_SLACK` / `STUCK_TICKS` / `MAX_REPLANS` /
+> `REPLAN_INTERVAL` / `ANCHOR_PROGRESS` / `STUCK_MIN_MOVE` / `AIR_*` 已从 `PathFollower`
+> 移入 `PathMath`（数值一个没改），到达判定、会话超时、卡住窗口、氧气余量四段算术
+> 由 `PathMathTest` 覆盖。查常量时别再只 grep `PathFollower`。
+
 ### 12.1 已开放为配置项（2026-11-19）
 
 下表常量原先写死在代码里，现由 `TurboMCConfig.Pathing`（配置文件 `pathing` 段、模组设置 → **寻路**）
@@ -835,7 +840,7 @@ PathFollower.tick(client);   // 本 tick 新启动的会话立刻走第一步
 两处必须联动的改动：
 
 1. **`maxDistance` 与会话超时联动。** `MAX_TICKS` 不再固定 1200，改由
-   `maxTicksFor(起始水平距离) = clamp(距离×8 + 176, 600, 3600)` 计算——128 格时正好 1200。
+   `PathMath.sessionTicks(起始水平距离) = clamp(距离×8 + 176, 600, 3600)` 计算——128 格时正好 1200。
    否则把最远距离放大后，远目标会在走完之前被判超时。脚本侧 `waitLimitTicks(target, player)`
    用同一公式加 40 tick，保持「Java 侧超时先发生」的次序。
 2. **`nodeReach` 与 `standTurnDeg` 成对约束。** 边走边转的转弯半径 R = 4.317 ÷ 4.19 ≈ 1.03 格
