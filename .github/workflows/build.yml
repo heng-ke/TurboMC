@@ -52,10 +52,30 @@ jobs:
       # 「等待直到 按下鼠标 [中键]?」必须挂住：守住布尔归一化接线（恒真事故）
       - name: 等待条件冒烟
         run: ./gradlew vmSmoke -PvmMode=wait -PvmProject=wait-mouse-project.json
+
+      # JSON 29 块从 sb3 → VM → 桥整条链走一遍。断言的是「桥调用必须是 0」：
+      # JSON 现在只在 JS 侧求值，出现非零说明又有积木漏回了 Java 路径。
+      # 块级语义由 JsonCoreParityTest 的 118 条对拍守；这一条守的是接线。
+      - name: smoke · JSON 本地求值
+        run: ./gradlew vmSmoke -PvmMode=json -PvmProject=json-project.json
+
       - name: smoke · sb3 导入
         run: ./gradlew vmImport
       - name: smoke · 聊天帽子去重
         run: ./gradlew vmChat
+      # 按键帽子：startHats 的字段匹配只认 field，对不上时起 0 个线程而不是报错，
+      # 所以「按了没反应」只能靠这条兜住
+      - name: smoke · 按键帽子
+        run: ./gradlew vmKeyHat
+      # 界面帽子：同一类静默失效，但字段是 SCREEN（container/inventory/any）
+      - name: smoke · 界面帽子
+        run: ./gradlew vmScreenHat
+      # 列表监视器：HUD 读列表 + 算术积木 NUM1/NUM2 → A/B 的接线
+      - name: smoke · 列表监视器
+        run: ./gradlew vmList
+      # 深度保护：超长 next 链必须被截断，否则打穿线程栈导致整局崩
+      - name: smoke · 深度保护
+        run: ./gradlew vmDepth
       - name: smoke · 数值字符串化
         run: ./gradlew vmNumberFormat
       - name: smoke · 扩展释放

@@ -103,6 +103,18 @@ tasks.withType(JavaCompile).configureEach {
 // 这里只放纯逻辑（不依赖 Minecraft 客户端）的测试；涉及客户端的验证走冒烟任务。
 tasks.named('test', Test) {
 	useJUnitPlatform()
+	// 有几个测试直接从仓库读文件（不是 classpath 资源）：JsonCoreParityTest 读 cases / golden /
+	// json-lite.js，SnapshotKeysDocTest 读 turbowarp/README.md 与 blocks.data.js。
+	// 不声明为输入时，改了 golden 或文档，测试仍被判 up-to-date——本地的「绿」是假的。
+	// （CI 每次 checkout 都是新工作区，所以只有本地会踩，但这种假绿最容易骗过自己。）
+	inputs.files(
+			'tools/json-parity-cases.json',
+			'tools/json-parity-golden.json',
+			'turbowarp/src/json-lite.js',
+			'turbowarp/src/blocks.data.js',
+			'turbowarp/README.md')
+			.withPropertyName('repoFiles')
+			.withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 		showStandardStreams = false
@@ -134,14 +146,12 @@ jar {
 	}
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-	// 冒烟 / 基准类只用于 `gradlew vm*`，不随模组发布。
-	// 别只写 *SmokeTest*：同目录的 ChatHatTest（vmChat 的入口）与 JsonBench 不符合该模式，
-	// 曾因此混进发布 jar（约 23 KB 带 main 的测试代码）。这三个任务用的都是 classes 目录，
-	// 从 jar 里排除不影响它们运行。
+	// 冒烟类只用于 `gradlew vm*`，不随模组发布。
+	// 别只写 *SmokeTest*：同目录的 ChatHatTest（vmChat 的入口）不符合该模式，
+	// 曾因此混进发布 jar。这些任务用的都是 classes 目录，从 jar 里排除不影响它们运行。
 	exclude "xyz/turbomc/client/script/vm/*SmokeTest*.class"
 	exclude "xyz/turbomc/client/script/vm/*Test.class"
 	exclude 'xyz/turbomc/client/script/vm/*Test$*.class'
-	exclude "xyz/turbomc/client/script/vm/JsonBench*.class"
 }
 
 // VM 后端的冒烟测试：不启动客户端，直接验证 Rhino + scratch-vm 链路
@@ -248,15 +258,6 @@ tasks.register('vmDepth', JavaExec) {
 	group = 'verification'
 	description = '验证 sb3 的超长积木链会被深度保护截断，而不是打穿线程栈'
 	mainClass = 'xyz.turbomc.client.script.vm.DepthSmokeTest'
-	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
-	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
-}
-
-// JSON 积木基准：同一套算法在 Rhino（解释执行）与 Java 两侧的耗时对比
-tasks.register('jsonBench', JavaExec) {
-	group = 'verification'
-	description = 'JSON 积木放在 VM 侧还是 Java 侧：耗时对比，不改生产代码'
-	mainClass = 'xyz.turbomc.client.script.vm.JsonBench'
 	classpath = sourceSets.client.runtimeClasspath + sourceSets.test.output
 	jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }

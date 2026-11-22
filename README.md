@@ -123,8 +123,8 @@ HUD 的停留时长、最多行数与预览字数在模组设置 → AI 对话�
 JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ```
 
-产物位于 `build/libs/turbomc-<mod_version>.jar`。发布 jar **不含**冒烟/基准类
-（`*SmokeTest*`、`ChatHatTest`、`JsonBench` 在 `jar` 任务里排除），它们只在
+产物位于 `build/libs/turbomc-<mod_version>.jar`。发布 jar **不含**冒烟类
+（`*SmokeTest*`、`ChatHatTest` 在 `jar` 任务里排除），它们只在
 `./gradlew vm*` 时用 `classes` 目录运行。
 
 冒烟测试不需要启动客户端：
@@ -133,6 +133,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmSmoke                  # 顺序执行
 ./gradlew vmSmoke -PvmMode=hat     # 事件触发
 ./gradlew vmSmoke -PvmMode=block   # 阻塞动作
+./gradlew vmSmoke -PvmProject=json-project.json -PvmMode=json  # JSON 全本地求值（桥调用必须 0）
 ./gradlew vmImport                 # sb3 解析 + 执行
 ./gradlew vmChat                   # 聊天帽子：一次事件只触发一次、关键词过滤
 ./gradlew vmKeyHat                 # 按键帽子：对得上起 1 个线程、对不上起 0 个
@@ -144,6 +145,9 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 ./gradlew vmPreload -Pmode=preload # 预热前后首次载入工程的耗时对比
 ./gradlew exportSmoke              # 扩展释放：创建 / 内容一致不动 / 旧版覆盖
 ```
+
+除 `vmPreload`（测量型）外，上面每一条都已在 CI 里逐步执行；新增冒烟任务时记得
+同时加进 `.github/workflows/build.yml`，否则只算本地脚本。
 
 ## 文档
 

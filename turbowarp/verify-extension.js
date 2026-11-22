@@ -30,7 +30,10 @@ global.Scratch = {
 	ArgumentType: {STRING: 'string', NUMBER: 'number', BOOLEAN: 'boolean',
 		ANGLE: 'angle', COLOR: 'color', NOTE: 'note'},
 	TargetType: {SPRITE: 'sprite', STAGE: 'stage'},
-	extensions: {register: (i) => { instance = i; }}
+	// unsandboxed 必须为真，否则 installRemote 会按设计直接抛错——远程面板要碰 DOM、
+	// WebSocket 与 localStorage，沙箱 Worker 里做不到。编辑器实际就是以 unsandboxed
+	// 方式加载本扩展的，这里只是把宿主契约补齐；漏了它整个自检在 require 阶段就崩。
+	extensions: {register: (i) => { instance = i; }, unsandboxed: true}
 };
 
 require(path.resolve(target));

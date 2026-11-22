@@ -33,7 +33,7 @@ public final class VmSmokeTest {
 			System.err.println("找不到工程夹具: " + source);
 			System.err.println("可用的 classpath 夹具: project.json / hat-project.json /"
 					+ " block-project.json / ask-project.json / wait-mouse-project.json /"
-					+ " merged-project.json");
+					+ " merged-project.json / json-project.json");
 			System.exit(2);
 		}
 
@@ -59,20 +59,17 @@ public final class VmSmokeTest {
 		boolean userOk = vm.userHooked();
 		boolean askOk = vm.askHooked();
 		boolean monitorOk = vm.monitorHooked();
-		// 映射了但动作层没实现时，桥只会记一次 miss 并返回 null，积木看起来"永远为假"
-		boolean mouseBlockOk = NativeRegistry.getFunction("input.mouse_button_down") != null;
-		// 合并块：注册表里缺一个，面板上就有、游戏里就没反应，
-		// 而夹具只能端到端跑 slotField（其余读世界状态，纯 JVM 无客户端会 NPE），
-		// 所以这里直接查注册表，覆盖「漏实现」这一层
-		String[] merged = {"world.pos", "world.aim_pos", "world.nearest_entity_field",
-				"world.held_item_field", "world.slot_field"};
-		boolean mergedOk = allImplemented(merged);
-		// 快照三块同理：漏实现时积木照常能拖，只是永远返回空对象/空数组
-		boolean snapshotOk = allImplemented(new String[]{
-				"world.player_json", "world.entities_json", "world.block_json",
-				"world.inventory_json", "world.screen_json", "world.world_json",
-				"world.players_json", "world.scan_json", "query.chat_history",
-				"world.snapshot_keys"});
+		// 全量覆盖：扩展侧每个 opcode 都要有「类型登记 + 动作层实现」。
+		//
+		// 这条替代了原来只硬编码 15 个 id 的抽查。漏实现时的现象是：积木在面板里正常，
+		// 拖下来也对，点下去没反应——桥记一次 miss 后返回 null，积木看起来「永远是空/假」。
+		// 那种缺口靠夹具端到端跑不出来（要么读世界状态、纯 JVM 必 NPE，要么没人写进夹具），
+		// 所以在这里一次查完，缺哪个就直接打印哪个。
+		//
+		// JSON 那 29 块反过来断言「不许有原生实现」：它们只在 JS 侧求值。谁把 JSON 实现
+		// 加回 Java 侧，桥调用就不再是 0，两个引擎立刻开始分叉（§23）。
+		Coverage coverage = checkCoverage();
+		boolean coverageOk = coverage.ok();
 		boolean boolOk = vm.booleanNormalizeOk();
 		// 扩展积木的占位符数必须与查看器侧登记的参数数一致：不等就说明参数会错位
 		String argProblems = vm.argsSelfTest();
@@ -86,16 +83,60 @@ public final class VmSmokeTest {
 				+ "，用户名 " + (userOk ? "已装" : "缺失")
 				+ "，询问 " + (askOk ? "已装" : "缺失")
 				+ "，监视器 " + (monitorOk ? "已装" : "缺失")
-				+ "，鼠标积木 " + (mouseBlockOk ? "已注册" : "未实现")
-				+ "，合并块 " + (mergedOk ? "已实现" : "有缺失")
-				+ "，快照 " + (snapshotOk ? "已实现" : "有缺失")
 				+ "，布尔归一化 " + (boolOk ? "正常" : "异常"));
+		System.out.println("[smoke] 覆盖 " + coverage.total() + " 块扩展积木（JSON " + coverage.json()
+				+ " / 帽子 " + coverage.hat() + " / 需原生实现 " + coverage.nativeCount()
+				+ "；帽子之外共 " + (coverage.json() + coverage.nativeCount()) + " 块）"
+				+ (coverageOk ? "全部就位" : "有缺失：" + coverage.problems()));
 		System.out.println("[smoke] 扩展参数名 " + (argsOk ? "一致" : "不一致：" + argProblems));
 		System.out.println("[smoke] 扩展自检 " + (extensionOk ? "一致" : "不一致：" + extensionWarning));
+
+		// 覆盖缺口是结构性错误，跟跑哪个模式无关：在这里就红，否则
+		// `-PvmMode=hat` 之类的运行会把「某个查询永远返回空」掩盖成一次通过。
+		if (!coverageOk) {
+			System.out.println("SMOKE FAIL");
+			System.exit(1);
+		}
 
 		boolean hatMode = args.length > 1 && "hat".equals(args[1]);
 		boolean blockMode = args.length > 1 && "block".equals(args[1]);
 		boolean waitMode = args.length > 1 && "wait".equals(args[1]);
+		boolean jsonMode = args.length > 1 && "json".equals(args[1]);
+		if (jsonMode) {
+			// JSON 一族现在全部在 JS 侧求值：桥调用必须是 0，非零说明又有积木漏回了 Java 路径。
+			// 同时抽查几个结果，确保「本地执行」不是只把空值写进变量。
+			vm.greenFlag();
+			for (int i = 0; i < 10; i++) {
+				vm.tick(null);
+			}
+			String dump = vm.variableDump();
+			String[] expected = {
+					"r1=true",
+					"r3=2",
+					"r20=JSON 解析失败：不允许尾随逗号（位置 15）",
+					"r41=[1,2,3]",
+					"r42=[3,2,1]",
+					"r48=[\"x\",\"{\\\"k\\\":1}\",\"\"]",
+					"r49=6",
+					"r52=2",
+					"r53=0.6666666666666666",
+					"r59=true"
+			};
+			int missing = 0;
+			for (String part : expected) {
+				if (dump.indexOf(part) < 0) {
+					System.out.println("[smoke] 缺少结果：" + part);
+					missing++;
+				}
+			}
+			boolean localOk = ScriptBridge.callCount() == 0 && ScriptBridge.missCount() == 0;
+			System.out.println("[smoke] JSON 本地求值：桥调用 " + ScriptBridge.callCount()
+					+ " 次（期望 0），缺失结果 " + missing + " 项");
+			boolean jsonOk = localOk && missing == 0;
+			System.out.println(jsonOk ? "JSON SMOKE PASS" : "JSON SMOKE FAIL");
+			System.exit(jsonOk ? 0 : 1);
+			return;
+		}
 		if (waitMode) {
 			// 「等待直到 <按下鼠标 [中键]?>」在没有任何鼠标输入时必须一直挂住。
 			// 这条守住的是「布尔归一化接线断了 → 所有是/否积木恒真」那次事故：
@@ -170,21 +211,72 @@ public final class VmSmokeTest {
 		System.out.println("[smoke] 变量 " + vm.variableDump());
 
 		boolean ok = ScriptBridge.callCount() > 0 && ScriptBridge.missCount() == 0
-				&& keyboardOk && mouseOk && userOk && askOk && monitorOk && mouseBlockOk && boolOk
-				&& argsOk && stopHookOk && mergedOk && extensionOk;
+				&& keyboardOk && mouseOk && userOk && askOk && monitorOk && boolOk
+				&& coverageOk && argsOk && stopHookOk && extensionOk;
 		System.out.println(ok ? "SMOKE PASS" : "SMOKE FAIL");
 		System.exit(ok ? 0 : 1);
 	}
 
-	/** 逐个查动作层的实现；缺哪个就打印出来，不靠一次性的布尔值埋线索。 */
-	private static boolean allImplemented(String[] types) {
-		for (String type : types) {
-			if (NativeRegistry.getFunction(type) == null) {
-				System.out.println("[smoke] 缺少实现: " + type);
-				return false;
+	/** 覆盖统计：三类积木各多少、缺哪些。{@code problems} 为空即全绿。 */
+	private record Coverage(int total, int json, int hat, int nativeCount,
+							java.util.List<String> problems) {
+		boolean ok() {
+			return problems.isEmpty();
+		}
+	}
+
+	/**
+	 * 扩展声明的每个 opcode 都要有「类型登记 + 动作层实现」。
+	 *
+	 * <p>基线口径：{@link xyz.turbomc.client.script.sb3.Sb3Mapping#extensionOpcodes()} 是权威清单
+	 * （它与扩展产物的一致性由 `tools/build-mapping-report.js --check` 和启动期
+	 * {@code ExtensionHealth} 两处守着），这里顺着它往实现层查一层。</p>
+	 *
+	 * <p>三类分开判，因为「该由谁实现」不同：</p>
+	 * <ol>
+	 *   <li><b>JSON</b>：只在 JS 侧求值，<b>不许</b>有原生实现——有就说明双实现回来了；</li>
+	 *   <li><b>帽子</b>：由宿主事件派发（{@code ScriptEngine.fire*}），不走 NativeRegistry；</li>
+	 *   <li><b>其余</b>：必须有 {@code Action} 或 {@code Function}，缺了就是「拖得出来、点下去没反应」。</li>
+	 * </ol>
+	 */
+	private static Coverage checkCoverage() {
+		xyz.turbomc.client.script.block.BlockRegistry.bootstrapOnce();
+		java.util.List<String> problems = new java.util.ArrayList<>();
+		int total = 0;
+		int json = 0;
+		int hat = 0;
+		int nativeCount = 0;
+		for (String name : xyz.turbomc.client.script.sb3.Sb3Mapping.extensionOpcodes()) {
+			total++;
+			String sb3Opcode = "turbomc_" + name;
+			String type = xyz.turbomc.client.script.sb3.Sb3Mapping.typeOf(sb3Opcode);
+			if (type == null) {
+				problems.add(name + "（未映射）");
+				continue;
+			}
+			xyz.turbomc.client.script.block.BlockType block =
+					xyz.turbomc.client.script.block.BlockRegistry.get(type);
+			if (block == null) {
+				problems.add(name + "（类型未登记 " + type + "）");
+				continue;
+			}
+			boolean hasNative = NativeRegistry.getAction(type) != null
+					|| NativeRegistry.getFunction(type) != null;
+			if (type.startsWith("json.")) {
+				json++;
+				if (hasNative) {
+					problems.add(name + "（JSON 块不该有原生实现 " + type + "）");
+				}
+			} else if (block.shape() == xyz.turbomc.client.script.block.BlockShape.HAT) {
+				hat++;
+			} else {
+				nativeCount++;
+				if (!hasNative) {
+					problems.add(name + "（动作层未实现 " + type + "）");
+				}
 			}
 		}
-		return true;
+		return new Coverage(total, json, hat, nativeCount, problems);
 	}
 
 	/**
