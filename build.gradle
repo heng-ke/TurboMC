@@ -93,6 +93,19 @@ processResources {
 	}
 }
 
+// 扩展产物新鲜度：turbowarp/src 是唯一数据源，两份产物由 tools/build-extension.js 渲染。
+//
+// 改了源却忘记重新生成时，在这里失败，而不是把旧扩展打进 jar——那种 jar 在游戏里表现为
+// HUD 红字「扩展与模组不一致」或某些积木不存在，最容易被误判成代码 bug。
+// 与 CI 的「扩展产物新鲜度」是同一条命令；--check 只比对、不写文件，因此不声明
+// inputs/outputs：一旦允许 up-to-date，这项校验就会被跳过。
+processResources.dependsOn tasks.register('checkExtensionFreshness', Exec) {
+	group = 'verification'
+	description = '校验 turbowarp 扩展产物与 turbowarp/src 一致（需要 node 在 PATH）'
+	workingDir projectDir
+	commandLine 'node', 'tools/build-extension.js', '--check'
+}
+
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 21
 	// 源码含中文注释与提示文案，强制 UTF-8，避免在 GBK 平台上出现乱码字面量。

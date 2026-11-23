@@ -304,6 +304,11 @@ JS 侧必须返回**数组**而不是计数，否则永远显示 0。
 
 - 新增积木必须同时改三处：`blocks.data.js` 声明、`Sb3Mapping` 映射、`Blocks.java` 登记。
   名字与顺序的一致性由 `tools/build-mapping-report.js` 在构建期校验（§6.1）。
+- 两份扩展产物由 `tools/build-extension.js` 从 `turbowarp/src` 渲染。`processResources`
+  依赖 `checkExtensionFreshness`（同一脚本的 `--check`），改了源忘记重新生成时，
+  `./gradlew build` 与 `runClient` 都会直接失败，不会把旧扩展打进 jar——那种 jar 在游戏里
+  表现为「扩展与模组不一致」，最容易被误判成代码 bug。该任务**不声明 `inputs/outputs`**：
+  允许 up-to-date 等于让校验被跳过。CI 另有一道同名步骤，命令完全相同。
 - 下拉的 `value` 必须是 ASCII 且与语言无关（工程里存的是 value），显示名走
   `ParamLabels` 的 `value.turbomc.field.*`。
 
