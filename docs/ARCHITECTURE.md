@@ -1102,7 +1102,10 @@ S→C {"t":"stopped"} | {"t":"pong"} | {"t":"evicted"} | {"t":"snap",...} | {"t"
 | 时钟 | **快照 `tick` 号**，不是 `setTimeout` | `setTimeout(50)` 实际 52–56ms，跑久累积漂移；且 poll 会掉到 20Hz 以下 |
 
 阻塞积木在浏览器侧返回 Promise：`wait: n` 等快照 tick 前进 n；`check` 非空时由每帧快照触发一次
-`poll`。快照 3 秒不来（心跳超时）由收手路径统一 resolve，不留永挂的线程。
+`poll`。`limit` 是 `check` 型的兜底上限，与游戏内 `vm-bootstrap` 的 `__tmcPending.until` 同一个值——
+到点无论服务端是否判完都释放。少了这一条，服务端不判完（视角冻结、暂停菜单、会话被抢）时脚本要挂满
+`CALL_TIMEOUT_MS` 的 60 秒，而游戏内 60 tick 就放行。快照 3 秒不来（心跳超时）由收手路径统一 resolve，
+不留永挂的线程。
 
 **`ScriptContext` 每 tick 重建**，与 `RhinoVm.tick` 同口径；并且必须
 `setBreakProbe(WorldQueries::probeBreak)`——不注入的话「等待挖破」会立刻通过，看起来没报错、

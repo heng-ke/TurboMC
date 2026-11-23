@@ -4285,7 +4285,7 @@ function installRemote(Scratch, ext, meta) {
 		welcome: null,
 		tick: 0,
 		seq: 0,
-		/** id → { resolve, value, tick0, wait, check, settled, pollTick } */
+		/** id → { resolve, value, tick0, wait, check, limit, settled, pollTick } */
 		pending: new Map(),
 		snapshot: null,
 		lastSnapAt: 0,
@@ -4855,6 +4855,10 @@ function installRemote(Scratch, ext, meta) {
 		p.tick0 = S.tick;
 		p.wait = Number(message.wait) || 0;
 		p.check = message.check || '';
+		// 上限必须留到 advancePending 里用：check 型等待结束与否由服务端判定，
+		// 万一那边卡住（视角冻结、暂停菜单、会话被抢），没有这条就只能等 CallTimeout 60 秒。
+		// 游戏内 vm-bootstrap 一直用这个值兜底（__tmcPending.push 的 until），两侧必须同一个上限。
+		p.limit = Number(message.limit) || 0;
 		if (!p.wait && !p.check) {
 			finish(p, p.value);
 		}
@@ -4863,7 +4867,8 @@ function installRemote(Scratch, ext, meta) {
 	/**
 	 * 每收到一帧快照推进一步等待。
 	 *
-	 * <p>这里就是 §7.3 的时钟：{@code wait} 按 tick 号推进，{@code check} 每帧发一次 poll。
+	 * <p>这里就是 §7.3 的时钟：{@code wait} 按 tick 号推进，{@code check} 每帧发一次 poll，
+	 * {@code limit} 是 check 型等待的兜底上限（与游戏内同一口径）。
 	 * 不用 setTimeout——它的实际间隔是 52–56ms，跑几分钟会明显漂移。</p>
 	 */
 	function advancePending() {
@@ -4872,6 +4877,11 @@ function installRemote(Scratch, ext, meta) {
 		}
 		for (const [id, p] of S.pending) {
 			if (p.wait > 0 && S.tick >= p.tick0 + p.wait) {
+				finish(p, p.value);
+				continue;
+			}
+			// 先判上限再发 poll：到点就不再追问，省掉一次没有意义的往返
+			if (p.limit > 0 && S.tick >= p.tick0 + p.limit) {
 				finish(p, p.value);
 				continue;
 			}
@@ -5662,7 +5672,7 @@ function installRemote(Scratch, ext, meta) {
 		}
 		const id = String(++S.seq);
 		return new Promise((resolve) => {
-			const entry = {id: id, resolve: resolve, value: null, tick0: S.tick, wait: 0, check: '', settled: false, pollTick: -1};
+			const entry = {id: id, resolve: resolve, value: null, tick0: S.tick, wait: 0, check: '', limit: 0, settled: false, pollTick: -1};
 			S.pending.set(id, entry);
 			try {
 				ws.send(JSON.stringify({t: 'call', id: id, op: opcode, argv: argv || []}));

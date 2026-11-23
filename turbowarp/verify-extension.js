@@ -15,6 +15,7 @@
  *   3. 分类标题（LABEL）不能带 opcode 或 arguments，否则面板会出怪东西。
  *
  * 还有一条行为断言：JSON 一族在**未连接**时必须算出真实结果（纯计算，与游戏无关）。
+ * 以及一条静态断言：等待上限 limit 必须被消费，否则 check 型等待没有上限。
  *
  * 用法：node verify-extension.js [路径，默认同目录的 turbomc-extension.js]
  * 退出码 0 表示通过。
@@ -132,6 +133,22 @@ for (const [opcode, args, expect] of jsonChecks) {
 	}
 	if (String(actual) !== String(expect)) {
 		problems.push(`JSON 积木 ${opcode} 未连接时返回 ${JSON.stringify(actual)}，期望 ${JSON.stringify(expect)}`);
+	}
+}
+
+/*
+ * 等待上限必须被消费。
+ *
+ * 服务端每次回包都带 limit（TurnSession / PathFollower 的 waitLimitTicks，与游戏内
+ * vm-bootstrap 里 __tmcPending 的 until 是同一个值）。曾经浏览器侧只读 wait 与 check、
+ * 把 limit 整个丢掉，后果是 check 型等待没有上限：服务端一旦不判完（视角冻结、暂停菜单、
+ * 会话被抢），脚本要挂满 CALL_TIMEOUT_MS 的 60 秒，而游戏内 60 tick 就释放了。
+ * 这类偏差不报错，只是「同一份工程在两个引擎上超时不一样」，所以在这里静态守一道。
+ */
+const extSource = require('fs').readFileSync(path.resolve(target), 'utf8');
+for (const snippet of ['p.limit = Number(message.limit)', 'p.tick0 + p.limit']) {
+	if (!extSource.includes(snippet)) {
+		problems.push(`产物未消费等待上限：缺少 ${snippet}`);
 	}
 }
 
