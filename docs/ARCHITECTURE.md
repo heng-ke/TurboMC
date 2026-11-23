@@ -756,7 +756,8 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
   数值序列化沿用 `JSON.stringify` 的 ECMAScript 规则，否则 `1.0` 写回成 `"1.0"`，
   字符串比较会莫名不成立。`JsonText.java` 仍保留，但只服务快照（§18）——
   快照在 Java 侧拼 JSON，和积木语义无关。
-- **单一实现**：这批积木只有 `json-lite.js` 一份源码。浏览器直接内联；游戏内由
+- **单一实现**：这批积木只有 `json-lite.js` 一份源码。浏览器直接内联，且**构建期就生成直调**
+  （`__tmcJson`），运行期不经过 `__tmc`——因此未连接游戏时也算真实结果；游戏内由
   `build-extension.js` 原样复制为 `json-core.es5.js`，`vm-bootstrap.js` 装积木时
   直接挂本地实现，热路径上不经过桥。之所以写 ES5：两个宿主之一是 Rhino 1.7.15
   （`optimizationLevel=-1`），它不支持 `class`，同一函数内重复 `const` 还会直接报错；
@@ -1164,15 +1165,17 @@ S→C {"t":"stopped"} | {"t":"pong"} | {"t":"evicted"} | {"t":"snap",...} | {"t"
 | 类 | 数量 | 做法 |
 |---|---|---|
 | 快照类 | 约 36 | 直接读缓存，同步返回 |
-| JSON 一族 | 27 | **同一份 ES5 实现**（`json-lite.js`），浏览器与游戏内共用，含严格解析器与中文错误串 |
+| JSON 一族 | 27 | **同一份 ES5 实现**（`json-lite.js`），浏览器与游戏内共用；浏览器侧构建期直调，**未连接也算真实结果** |
 | 聊天/AI/实体 | 其余 | 快照里的 `chat` / `ai` / `ents` 子对象 |
 | `blockAt` / `blockJson` / `scanJson` | 3 | **不支持**：任意坐标查询无法预取，reporter 等不了 RPC |
 
-JSON 一族是纯计算，浏览器与游戏内跑的是同一份源码。语义靠**golden 回归**守，不靠自觉：
+JSON 一族是纯计算，浏览器与游戏内跑的是同一份源码；浏览器侧在 `build-extension.js` 里
+被生成为直调（不经 `__tmc`），所以**是否连接游戏不影响结果**。语义靠**golden 回归**守，不靠自觉：
 
 ```bash
 ./gradlew test --tests "*JsonCoreParityTest*"  # Rhino 1.7.15 跑运行时产物，与 golden 逐字比对
 node tools/check-json-parity.js                # V8 跑同一份源码，与 golden 逐字比对
+node turbowarp/verify-extension.js             # 额外守一条：未连接时 JSON 必须算对
 ```
 
 比对的是「积木最终显示出来的字符串」，所以 `1.0` vs `1` 这类数值格式差异也会被抓到。
@@ -1208,7 +1211,7 @@ node tools/check-json-parity.js                # V8 跑同一份源码，与 gol
 运行时副本（游戏内）**不含** `remote-client.js` 与 `stage-view.js`：那里由 `vm-bootstrap.js`
 注入真实调用，没有远程逻辑。`json-lite.js` 是例外——它同样进运行时，但以独立文件
 `json-core.es5.js` 先于 bootstrap 加载，因为 JSON 一族不走桥。
-所有非 hat 积木的方法体统一生成成：
+除 JSON 纯计算积木外，所有非 hat 积木的方法体统一生成成：
 
 ```js
 opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command', fallback, util); }
@@ -1216,6 +1219,16 @@ opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command',
 
 **未连接时执行 fallback**（即原来的预览行为），所以一份产物同时是「普通编辑器」和「远程调试器」。
 `util` 只给需要当前线程的积木（`triggerChat`），其余不需要。
+
+**JSON 一族是唯一例外**：`build-extension.js` 构建期执行 `json-lite.js` 取得 27 个键，
+这些积木直接生成为 `__tmcJson('jsonGet', [args.json, args.item], false)`，运行期**不经过 `__tmc`**。
+理由是它们不读写游戏状态：放进 `__tmc` 就会被「未连接 → fallback」短路成假值，
+表现为「导入扩展后、连接游戏前 JSON 全返回空/0」——这条曾经真实发生过。
+读写 VM 列表的两块（`jsonVmGetList` / `jsonVmSetList`）不在此列：它们需要 runtime 对象，
+仍走 `__tmc` 的本地分支，但该分支已排在连接判断**之前**。
+
+构建期还有一条硬断言：数据源里 `json*` 的纯计算积木集合必须与 `json-lite.js` 的 `blocks` 键
+逐项一致，缺一边就构建失败。这比运行期查表可靠——查表失败只会静默返回空值。
 
 ### 7.8 画面
 

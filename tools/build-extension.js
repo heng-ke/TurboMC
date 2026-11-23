@@ -16,6 +16,8 @@
  *   2. 分组标题：只有编辑器渲染（内嵌 vm.es5.js 不支持 label）；
  *   3. 菜单 items：编辑器内联数组（Worker 要结构化克隆），运行时用函数引用（省 1.6 秒初始化）；
  *   4. 占位方法：只有编辑器生成（游戏内由 vm-bootstrap 注入真实调用）。
+ *      例外：JSON 一族是纯计算，编辑器也不生成 __tmc 占位，直接调本地实现——
+ *      否则「未连接 → fallback」会把它们短路成假值。
  *
  * 用法：
  *   node tools/build-extension.js           写入产物
@@ -24,6 +26,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA = require(path.join(ROOT, 'turbowarp/src/blocks.data.js'));
@@ -38,6 +41,48 @@ const REMOTE_CLIENT = fs.readFileSync(path.join(ROOT, 'turbowarp/src/remote-clie
  * 行为基线由 tools/json-parity-golden.json 锁住（见 check-json-parity.js）。</p>
  */
 const JSON_LITE = fs.readFileSync(path.join(ROOT, 'turbowarp/src/json-lite.js'), 'utf8').trim();
+
+/**
+ * JSON 积木的键集合（裸 opcode），构建期执行源码取得。
+ *
+ * <p>不读文本猜键：这份实现是唯一事实源，生成器必须与它逐键对齐。
+ * 只在生成器里硬编码一份清单的话，新增一块积木时产物会有积木、本地却没实现，
+ * 表现是「未连接返回空、连接后仍返回空」——既不报错也不好查。</p>
+ */
+const JSON_BLOCK_KEYS = (() => {
+	const sandbox = {};
+	vm.createContext(sandbox);
+	vm.runInContext(JSON_LITE + '\nthis.createJsonLite = createJsonLite;', sandbox);
+	return Object.keys(sandbox.createJsonLite().blocks);
+})();
+
+/**
+ * 读写浏览器 VM 列表的两块：它们要碰 runtime 里的列表对象，不属于「纯计算」。
+ *
+ * <p>这两块仍走 {@code __tmc} 的本地分支（见 remote-client.js），
+ * 其余 27 块在构建期就生成直调，运行期不经过 {@code __tmc}，与连接状态无关。</p>
+ */
+const VM_LIST_OPS = new Set(['jsonVmGetList', 'jsonVmSetList']);
+
+/**
+ * 断言数据源与 json-lite.js 的 JSON 积木集合一致。
+ *
+ * <p>两个方向都要查：数据源多出一块（产物有积木、本地没实现）会静默返回空值；
+ * 实现多出一块（本地有实现、产物没积木）是死代码，通常是改了名没同步。</p>
+ */
+function assertJsonCoverage() {
+	const fromData = DATA.blocks
+		.filter((block) => block.opcode && block.opcode.indexOf('json') === 0 && !VM_LIST_OPS.has(block.opcode))
+		.map((block) => block.opcode);
+	const fromLite = JSON_BLOCK_KEYS.filter((key) => !VM_LIST_OPS.has(key));
+	const missing = fromData.filter((key) => fromLite.indexOf(key) < 0);
+	const extra = fromLite.filter((key) => fromData.indexOf(key) < 0);
+	if (missing.length || extra.length) {
+		throw new Error('[build-extension] JSON 积木与 json-lite.js 不一致'
+			+ (missing.length ? '；数据源缺实现：' + missing.join(', ') : '')
+			+ (extra.length ? '；实现无人引用：' + extra.join(', ') : ''));
+	}
+}
 /**
  * 画面：浏览器原生 getDisplayMedia + `<video>` 覆盖舞台（§10）。
  * 与 JSON 一样只进编辑器产物——游戏端不参与画面，这是设计而非省略。
@@ -190,6 +235,16 @@ function emitStubs() {
 		const order = argOrder(block);
 		const opcode = DATA.id + '_' + block.opcode;
 		const argv = order.map((name) => 'args.' + name).join(', ');
+		// 纯计算积木（JSON 一族）：构建期就生成直调，运行期不进 __tmc。
+		// 它们不读写游戏状态，未连接时也必须算出正确结果——若走 __tmc，
+		// 会被「未连接 → fallback」短路成 blocks.data.js 里的占位假值。
+		// 读写 VM 列表的两块（jsonVmGetList / jsonVmSetList）需要 runtime，不在此列。
+		if (!VM_LIST_OPS.has(block.opcode) && JSON_BLOCK_KEYS.indexOf(block.opcode) >= 0) {
+			const isBoolean = String(block.blockType || '').toLowerCase() === 'boolean';
+			stubs.push('\t\t' + block.opcode + '(args, util) { return __tmcJson('
+				+ q(block.opcode) + ', [' + argv + '], ' + isBoolean + '); }');
+			continue;
+		}
 		// 第二个参数 util 必须一并转交：`触发我的聊天` 要读 `util.thread.tmcChat`，
 		// 那是 per-thread 的私有副本，全局槽读到的是「最后一条」（可能已经是别人的话）
 		const params = 'args, util';
@@ -282,6 +337,34 @@ ${emitStubs()}
 
 ${JSON_LITE}
 
+	/*
+	 * 纯计算积木（JSON 一族）的本地入口：构建期为这 27 块生成直调，
+	 * 运行期完全不经过 __tmc，因此与「是否已连接游戏」无关。
+	 *
+	 * <p>以前它们和其他积木共用 __tmc，而 __tmc 的第一句就是「未连接 → 返回 fallback」，
+	 * 于是「导入扩展后、连接游戏前」JSON 全部返回占位假值（长度恒 0、取键恒空串、
+	 * 新建数组得到 {}）。这里把它们挪到连接判断之外，未连接也能算出真实结果。</p>
+	 *
+	 * <p>查表只做一次：createJsonLite() 每次调用都会重建整张积木表，热路径上不能重复付这个代价。</p>
+	 */
+	let __tmcJsonBlocks = null;
+	function __tmcJson(opcode, argv, isBoolean) {
+		if (!__tmcJsonBlocks) {
+			__tmcJsonBlocks = createJsonLite().blocks;
+		}
+		const fn = __tmcJsonBlocks[opcode];
+		if (!fn) {
+			return isBoolean ? false : '';
+		}
+		try {
+			const out = fn(Array.isArray(argv) ? argv : []);
+			// 布尔积木必须归一化成 JS 原始布尔：scratch 的 Cast.toBoolean 会把任意对象判真
+			return isBoolean ? !!out : out;
+		} catch (e) {
+			return isBoolean ? false : '';
+		}
+	}
+
 ${STAGE_VIEW}
 
 ${REMOTE_CLIENT}
@@ -356,6 +439,7 @@ ${emitMenus('runtime')}
 
 function main() {
 	const check = process.argv.includes('--check');
+	assertJsonCoverage();
 	const rendered = {editor: renderEditor(), runtime: renderRuntime()};
 	let stale = 0;
 

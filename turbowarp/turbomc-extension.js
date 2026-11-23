@@ -2836,33 +2836,33 @@ const ITEM_TABLE = [
 		aiReply(args, util) { return this.__tmc('turbomc_aiReply', [args.SESSION], 'reporter', function () { this.preview('aiReply'); return ''; }, util); }
 		aiReset(args, util) { return this.__tmc('turbomc_aiReset', [args.SESSION], 'command', function () { this.preview('aiReset'); }, util); }
 		aiSystem(args, util) { return this.__tmc('turbomc_aiSystem', [args.SESSION, args.TEXT], 'command', function () { this.preview('aiSystem'); }, util); }
-		jsonIs(args, util) { return this.__tmc('turbomc_jsonIs', [args.json, args.check], 'boolean', function () { this.preview('jsonIs ' + args.check); return true; }, util); }
-		jsonNew(args, util) { return this.__tmc('turbomc_jsonNew', [args.json], 'reporter', function () { this.preview('jsonNew ' + args.json); return '{}'; }, util); }
-		jsonLength(args, util) { return this.__tmc('turbomc_jsonLength', [args.json], 'reporter', function () { this.preview('jsonLength'); return 0; }, util); }
-		jsonHasKey(args, util) { return this.__tmc('turbomc_jsonHasKey', [args.json, args.key], 'boolean', function () { this.preview('jsonHasKey ' + args.key); return true; }, util); }
-		jsonGetAll(args, util) { return this.__tmc('turbomc_jsonGetAll', [args.json, args.Stype], 'reporter', function () { this.preview('jsonGetAll ' + args.Stype); return '[]'; }, util); }
-		jsonErrMsg(args, util) { return this.__tmc('turbomc_jsonErrMsg', [args.json], 'reporter', function () { this.preview('jsonErrMsg'); return ''; }, util); }
-		jsonMinify(args, util) { return this.__tmc('turbomc_jsonMinify', [args.json], 'reporter', function () { this.preview('jsonMinify'); return args.json; }, util); }
-		jsonGet(args, util) { return this.__tmc('turbomc_jsonGet', [args.json, args.item], 'reporter', function () { this.preview('jsonGet ' + args.item); return ''; }, util); }
-		jsonSet(args, util) { return this.__tmc('turbomc_jsonSet', [args.json, args.item, args.value], 'reporter', function () { this.preview('jsonSet ' + args.item); return args.json; }, util); }
-		jsonDelete(args, util) { return this.__tmc('turbomc_jsonDelete', [args.json, args.item], 'reporter', function () { this.preview('jsonDelete ' + args.item); return args.json; }, util); }
-		jsonGetPath(args, util) { return this.__tmc('turbomc_jsonGetPath', [args.json, args.path], 'reporter', function () { this.preview('jsonGetPath'); return ''; }, util); }
-		jsonSetPath(args, util) { return this.__tmc('turbomc_jsonSetPath', [args.json, args.path, args.data], 'reporter', function () { this.preview('jsonSetPath'); return args.json; }, util); }
-		jsonArrayPush(args, util) { return this.__tmc('turbomc_jsonArrayPush', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayPush'); return args.json; }, util); }
-		jsonArraySet(args, util) { return this.__tmc('turbomc_jsonArraySet', [args.json, args.pos, args.item], 'reporter', function () { this.preview('jsonArraySet ' + args.pos); return args.json; }, util); }
-		jsonArrayInsert(args, util) { return this.__tmc('turbomc_jsonArrayInsert', [args.json, args.pos, args.item], 'reporter', function () { this.preview('jsonArrayInsert ' + args.pos); return args.json; }, util); }
-		jsonArrayDelete(args, util) { return this.__tmc('turbomc_jsonArrayDelete', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayDelete ' + args.item); return args.json; }, util); }
-		jsonArrayRemoveAll(args, util) { return this.__tmc('turbomc_jsonArrayRemoveAll', [args.json, args.item], 'reporter', function () { this.preview('jsonArrayRemoveAll'); return args.json; }, util); }
-		jsonArrayItemNum(args, util) { return this.__tmc('turbomc_jsonArrayItemNum', [args.item, args.json], 'reporter', function () { this.preview('jsonArrayItemNum'); return 0; }, util); }
-		jsonArrayFromTo(args, util) { return this.__tmc('turbomc_jsonArrayFromTo', [args.json, args.item, args.item2], 'reporter', function () { this.preview('jsonArrayFromTo'); return '[]'; }, util); }
-		jsonArraySetLen(args, util) { return this.__tmc('turbomc_jsonArraySetLen', [args.json, args.len], 'reporter', function () { this.preview('jsonArraySetLen ' + args.len); return args.json; }, util); }
-		jsonArrayConcat(args, util) { return this.__tmc('turbomc_jsonArrayConcat', [args.json, args.json2], 'reporter', function () { this.preview('jsonArrayConcat'); return '[]'; }, util); }
-		jsonArrayMapField(args, util) { return this.__tmc('turbomc_jsonArrayMapField', [args.json, args.key], 'reporter', function () { this.preview('jsonArrayMapField'); return '[]'; }, util); }
-		jsonArrayCreate(args, util) { return this.__tmc('turbomc_jsonArrayCreate', [args.d, args.text], 'reporter', function () { this.preview('jsonArrayCreate'); return '[]'; }, util); }
-		jsonArrayJoin(args, util) { return this.__tmc('turbomc_jsonArrayJoin', [args.d, args.json], 'reporter', function () { this.preview('jsonArrayJoin'); return ''; }, util); }
-		jsonArraySort(args, util) { return this.__tmc('turbomc_jsonArraySort', [args.list, args.order], 'reporter', function () { this.preview('jsonArraySort ' + args.order); return args.list; }, util); }
-		jsonArrayTextFilter(args, util) { return this.__tmc('turbomc_jsonArrayTextFilter', [args.list, args.options, args.text, args.type], 'reporter', function () { this.preview('jsonArrayTextFilter'); return '[]'; }, util); }
-		jsonArrayAnalysis(args, util) { return this.__tmc('turbomc_jsonArrayAnalysis', [args.list, args.analysis], 'reporter', function () { this.preview('jsonArrayAnalysis ' + args.analysis); return 0; }, util); }
+		jsonIs(args, util) { return __tmcJson('jsonIs', [args.json, args.check], true); }
+		jsonNew(args, util) { return __tmcJson('jsonNew', [args.json], false); }
+		jsonLength(args, util) { return __tmcJson('jsonLength', [args.json], false); }
+		jsonHasKey(args, util) { return __tmcJson('jsonHasKey', [args.json, args.key], true); }
+		jsonGetAll(args, util) { return __tmcJson('jsonGetAll', [args.json, args.Stype], false); }
+		jsonErrMsg(args, util) { return __tmcJson('jsonErrMsg', [args.json], false); }
+		jsonMinify(args, util) { return __tmcJson('jsonMinify', [args.json], false); }
+		jsonGet(args, util) { return __tmcJson('jsonGet', [args.json, args.item], false); }
+		jsonSet(args, util) { return __tmcJson('jsonSet', [args.json, args.item, args.value], false); }
+		jsonDelete(args, util) { return __tmcJson('jsonDelete', [args.json, args.item], false); }
+		jsonGetPath(args, util) { return __tmcJson('jsonGetPath', [args.json, args.path], false); }
+		jsonSetPath(args, util) { return __tmcJson('jsonSetPath', [args.json, args.path, args.data], false); }
+		jsonArrayPush(args, util) { return __tmcJson('jsonArrayPush', [args.json, args.item], false); }
+		jsonArraySet(args, util) { return __tmcJson('jsonArraySet', [args.json, args.pos, args.item], false); }
+		jsonArrayInsert(args, util) { return __tmcJson('jsonArrayInsert', [args.json, args.pos, args.item], false); }
+		jsonArrayDelete(args, util) { return __tmcJson('jsonArrayDelete', [args.json, args.item], false); }
+		jsonArrayRemoveAll(args, util) { return __tmcJson('jsonArrayRemoveAll', [args.json, args.item], false); }
+		jsonArrayItemNum(args, util) { return __tmcJson('jsonArrayItemNum', [args.item, args.json], false); }
+		jsonArrayFromTo(args, util) { return __tmcJson('jsonArrayFromTo', [args.json, args.item, args.item2], false); }
+		jsonArraySetLen(args, util) { return __tmcJson('jsonArraySetLen', [args.json, args.len], false); }
+		jsonArrayConcat(args, util) { return __tmcJson('jsonArrayConcat', [args.json, args.json2], false); }
+		jsonArrayMapField(args, util) { return __tmcJson('jsonArrayMapField', [args.json, args.key], false); }
+		jsonArrayCreate(args, util) { return __tmcJson('jsonArrayCreate', [args.d, args.text], false); }
+		jsonArrayJoin(args, util) { return __tmcJson('jsonArrayJoin', [args.d, args.json], false); }
+		jsonArraySort(args, util) { return __tmcJson('jsonArraySort', [args.list, args.order], false); }
+		jsonArrayTextFilter(args, util) { return __tmcJson('jsonArrayTextFilter', [args.list, args.options, args.text, args.type], false); }
+		jsonArrayAnalysis(args, util) { return __tmcJson('jsonArrayAnalysis', [args.list, args.analysis], false); }
 		jsonVmGetList(args, util) { return this.__tmc('turbomc_jsonVmGetList', [args.list], 'reporter', function () { this.preview('jsonVmGetList ' + args.list); return '[]'; }, util); }
 		jsonVmSetList(args, util) { return this.__tmc('turbomc_jsonVmSetList', [args.list, args.json], 'command', function () { this.preview('jsonVmSetList ' + args.list); }, util); }
 
@@ -3952,6 +3952,34 @@ function createJsonLite() {
 	};
 }
 
+	/*
+	 * 纯计算积木（JSON 一族）的本地入口：构建期为这 27 块生成直调，
+	 * 运行期完全不经过 __tmc，因此与「是否已连接游戏」无关。
+	 *
+	 * <p>以前它们和其他积木共用 __tmc，而 __tmc 的第一句就是「未连接 → 返回 fallback」，
+	 * 于是「导入扩展后、连接游戏前」JSON 全部返回占位假值（长度恒 0、取键恒空串、
+	 * 新建数组得到 {}）。这里把它们挪到连接判断之外，未连接也能算出真实结果。</p>
+	 *
+	 * <p>查表只做一次：createJsonLite() 每次调用都会重建整张积木表，热路径上不能重复付这个代价。</p>
+	 */
+	let __tmcJsonBlocks = null;
+	function __tmcJson(opcode, argv, isBoolean) {
+		if (!__tmcJsonBlocks) {
+			__tmcJsonBlocks = createJsonLite().blocks;
+		}
+		const fn = __tmcJsonBlocks[opcode];
+		if (!fn) {
+			return isBoolean ? false : '';
+		}
+		try {
+			const out = fn(Array.isArray(argv) ? argv : []);
+			// 布尔积木必须归一化成 JS 原始布尔：scratch 的 Cast.toBoolean 会把任意对象判真
+			return isBoolean ? !!out : out;
+		} catch (e) {
+			return isBoolean ? false : '';
+		}
+	}
+
 /*
  * 远程调试的「画面」：浏览器原生屏幕/窗口捕获，覆盖在 TurboWarp 舞台上方。
  *
@@ -4245,11 +4273,6 @@ function installRemote(Scratch, ext, meta) {
 	const CALL_TIMEOUT_MS = 60000;
 	/** 扩展期望的快照字段版本；与客户端 RemoteProtocol.SNAPSHOT_SCHEMA 必须一致。 */
 	const SNAP_SCHEMA = 6;
-	/**
-	 * JSON 积木的本地实现（json-lite.js，构建时拼在同一作用域里）。
-	 * 缺失时这些积木退回「返回空值」——不会抛错，也不会误走 RPC。
-	 */
-	const JSON_LITE = typeof createJsonLite === 'function' ? createJsonLite() : null;
 	/**
 	 * 画面：浏览器原生捕获（stage-view.js，构建时拼在同一作用域里）。
 	 * 缺失时面板不显示画面按钮，其余功能不受影响。
@@ -5538,6 +5561,22 @@ function installRemote(Scratch, ext, meta) {
 	 * @param {Function} fallback 未连接时的占位行为（原来的预览）
 	 */
 	ext.__tmc = function (opcode, argv, kind, fallback, util) {
+		// 读写当前 VM 列表的两块：碰的是浏览器自己的列表对象，与连接状态无关。
+		//
+		// 必须排在「未连接 → fallback」之前。放在后面时，导入扩展、尚未连接游戏
+		// 的这段时间里，读列表恒为 '[]'、写列表什么都不做——与 JSON 纯计算积木
+		// 之前踩的是同一个坑（它们在构建期已改成直调，不再经过本函数）。
+		if (opcode === 'turbomc_jsonVmGetList') {
+			// 列表不存在给空串，存在但为空给 "[]"——两者语义不同，不能合并
+			const found = findVmList(String((argv || [])[0] === undefined ? '' : argv[0]));
+			return found ? JSON.stringify(found.value || []) : '';
+		}
+		if (opcode === 'turbomc_jsonVmSetList') {
+			writeVmList(String((argv || [])[0] === undefined ? '' : argv[0]),
+				String((argv || [])[1] === undefined ? '' : argv[1]));
+			// 命令积木返回 undefined：VM 不会把它当 Promise 去等
+			return undefined;
+		}
 		if (!S.connected) {
 			if (typeof fallback === 'function') {
 				return fallback.call(this);
@@ -5545,25 +5584,6 @@ function installRemote(Scratch, ext, meta) {
 			return defaultValue(kind);
 		}
 		if (kind === 'reporter' || kind === 'boolean') {
-			// 「把列表读成数组」读的是当前 VM 的列表，只能在浏览器本地取：
-			// 列表不存在给空串，存在但为空给 "[]"——两者语义不同，不能合并
-			if (opcode === 'turbomc_jsonVmGetList') {
-				const found = findVmList(String((argv || [])[0] === undefined ? '' : argv[0]));
-				return found ? JSON.stringify(found.value || []) : '';
-			}
-			// JSON 一族是纯计算，浏览器本地算完就返回：reporter 是同步求值，等不了 RPC
-			if (JSON_LITE) {
-				// 积木表按裸 opcode（jsonGet）建键，这里拿到的是带前缀的 turbomc_jsonGet
-				const local = JSON_LITE.blocks[opcode.replace(/^turbomc_/, '')];
-				if (local) {
-					try {
-						const out = local(Array.isArray(argv) ? argv : []);
-						return kind === 'boolean' ? !!out : out;
-					} catch (e) {
-						return defaultValue(kind);
-					}
-				}
-			}
 			const reader = READERS[opcode];
 			if (!reader) {
 				if (!S.missingReporters.has(opcode)) {
@@ -5581,13 +5601,6 @@ function installRemote(Scratch, ext, meta) {
 			} catch (e) {
 				return defaultValue(kind);
 			}
-		}
-		// 「把列表设为数组」也走本地：写的是浏览器 VM 里的列表，发到游戏再写没有意义
-		if (opcode === 'turbomc_jsonVmSetList') {
-			writeVmList(String((argv || [])[0] === undefined ? '' : argv[0]),
-				String((argv || [])[1] === undefined ? '' : argv[1]));
-			// 命令积木返回 undefined：VM 不会把它当 Promise 去等
-			return undefined;
 		}
 		return callRemote(opcode, argv);
 	};

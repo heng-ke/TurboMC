@@ -26,11 +26,6 @@ function installRemote(Scratch, ext, meta) {
 	/** 扩展期望的快照字段版本；与客户端 RemoteProtocol.SNAPSHOT_SCHEMA 必须一致。 */
 	const SNAP_SCHEMA = 6;
 	/**
-	 * JSON 积木的本地实现（json-lite.js，构建时拼在同一作用域里）。
-	 * 缺失时这些积木退回「返回空值」——不会抛错，也不会误走 RPC。
-	 */
-	const JSON_LITE = typeof createJsonLite === 'function' ? createJsonLite() : null;
-	/**
 	 * 画面：浏览器原生捕获（stage-view.js，构建时拼在同一作用域里）。
 	 * 缺失时面板不显示画面按钮，其余功能不受影响。
 	 */
@@ -1318,6 +1313,22 @@ function installRemote(Scratch, ext, meta) {
 	 * @param {Function} fallback 未连接时的占位行为（原来的预览）
 	 */
 	ext.__tmc = function (opcode, argv, kind, fallback, util) {
+		// 读写当前 VM 列表的两块：碰的是浏览器自己的列表对象，与连接状态无关。
+		//
+		// 必须排在「未连接 → fallback」之前。放在后面时，导入扩展、尚未连接游戏
+		// 的这段时间里，读列表恒为 '[]'、写列表什么都不做——与 JSON 纯计算积木
+		// 之前踩的是同一个坑（它们在构建期已改成直调，不再经过本函数）。
+		if (opcode === 'turbomc_jsonVmGetList') {
+			// 列表不存在给空串，存在但为空给 "[]"——两者语义不同，不能合并
+			const found = findVmList(String((argv || [])[0] === undefined ? '' : argv[0]));
+			return found ? JSON.stringify(found.value || []) : '';
+		}
+		if (opcode === 'turbomc_jsonVmSetList') {
+			writeVmList(String((argv || [])[0] === undefined ? '' : argv[0]),
+				String((argv || [])[1] === undefined ? '' : argv[1]));
+			// 命令积木返回 undefined：VM 不会把它当 Promise 去等
+			return undefined;
+		}
 		if (!S.connected) {
 			if (typeof fallback === 'function') {
 				return fallback.call(this);
@@ -1325,25 +1336,6 @@ function installRemote(Scratch, ext, meta) {
 			return defaultValue(kind);
 		}
 		if (kind === 'reporter' || kind === 'boolean') {
-			// 「把列表读成数组」读的是当前 VM 的列表，只能在浏览器本地取：
-			// 列表不存在给空串，存在但为空给 "[]"——两者语义不同，不能合并
-			if (opcode === 'turbomc_jsonVmGetList') {
-				const found = findVmList(String((argv || [])[0] === undefined ? '' : argv[0]));
-				return found ? JSON.stringify(found.value || []) : '';
-			}
-			// JSON 一族是纯计算，浏览器本地算完就返回：reporter 是同步求值，等不了 RPC
-			if (JSON_LITE) {
-				// 积木表按裸 opcode（jsonGet）建键，这里拿到的是带前缀的 turbomc_jsonGet
-				const local = JSON_LITE.blocks[opcode.replace(/^turbomc_/, '')];
-				if (local) {
-					try {
-						const out = local(Array.isArray(argv) ? argv : []);
-						return kind === 'boolean' ? !!out : out;
-					} catch (e) {
-						return defaultValue(kind);
-					}
-				}
-			}
 			const reader = READERS[opcode];
 			if (!reader) {
 				if (!S.missingReporters.has(opcode)) {
@@ -1361,13 +1353,6 @@ function installRemote(Scratch, ext, meta) {
 			} catch (e) {
 				return defaultValue(kind);
 			}
-		}
-		// 「把列表设为数组」也走本地：写的是浏览器 VM 里的列表，发到游戏再写没有意义
-		if (opcode === 'turbomc_jsonVmSetList') {
-			writeVmList(String((argv || [])[0] === undefined ? '' : argv[0]),
-				String((argv || [])[1] === undefined ? '' : argv[1]));
-			// 命令积木返回 undefined：VM 不会把它当 Promise 去等
-			return undefined;
 		}
 		return callRemote(opcode, argv);
 	};

@@ -14,6 +14,8 @@
  *   2. arguments 引用的 menu 必须存在于 menus 里；
  *   3. 分类标题（LABEL）不能带 opcode 或 arguments，否则面板会出怪东西。
  *
+ * 还有一条行为断言：JSON 一族在**未连接**时必须算出真实结果（纯计算，与游戏无关）。
+ *
  * 用法：node verify-extension.js [路径，默认同目录的 turbomc-extension.js]
  * 退出码 0 表示通过。
  */
@@ -98,6 +100,39 @@ try {
 	structuredClone(info);
 } catch (e) {
 	problems.push('getInfo() 结果无法结构化克隆：' + e.message);
+}
+
+/*
+ * JSON 一族必须与连接状态无关。
+ *
+ * 构建期把纯计算积木生成为直调本地实现（tools/build-extension.js 里 VM_LIST_OPS 之外那批），
+ * 因此这里在没有游戏、没有 WebSocket 的环境下调用它们，就应该得到真实结果。
+ * 这条守的是「导入扩展后、连接游戏前 JSON 全返回假值」的回归——那种失效不报错，
+ * 只是长度恒 0、取键恒空串。
+ */
+const jsonChecks = [
+	['jsonLength', {json: '[1,2,3]'}, 3],
+	['jsonGet', {json: '{"key":"value"}', item: 'key'}, 'value'],
+	['jsonIs', {json: '{a:1}', check: 'valid'}, false],
+	['jsonNew', {json: 'Array'}, '[]'],
+	['jsonArrayJoin', {d: ',', json: '["a","b"]'}, 'a,b'],
+	['jsonMinify', {json: ' {"key" : "value" } '}, '{"key":"value"}']
+];
+for (const [opcode, args, expect] of jsonChecks) {
+	if (typeof instance[opcode] !== 'function') {
+		problems.push(`JSON 积木 ${opcode} 没有生成方法`);
+		continue;
+	}
+	let actual;
+	try {
+		actual = instance[opcode](args, {});
+	} catch (e) {
+		problems.push(`JSON 积木 ${opcode} 在未连接时抛错：${e.message}`);
+		continue;
+	}
+	if (String(actual) !== String(expect)) {
+		problems.push(`JSON 积木 ${opcode} 未连接时返回 ${JSON.stringify(actual)}，期望 ${JSON.stringify(expect)}`);
+	}
 }
 
 const total = Object.values(menus).reduce((n, m) => n + (Array.isArray(m.items) ? m.items.length : 0), 0);

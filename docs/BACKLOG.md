@@ -77,7 +77,7 @@
 | X-01 | 查看器 P4「形状化渲染」 | 自研可写编辑器已整体移除，没有渲染对象 |
 | X-02 | 引擎链路 A（删旧引擎）/ B（并存）二选一 | 已被 `392f5ea`「重建为 sb3 运行时」取代 |
 | X-03 | 局部变量按 `scopeId` 隔离（把脚本塞进不同 Sprite） | 新架构按帽子拆脚本、同角色共享局部变量，目标已达成 |
-| X-05 | 编辑器里 JSON 积木返回占位值，作者无法试算 | 远程调试连上后在浏览器本地实算（`json-lite.js`，134 条对拍），编辑期试算已可用；未连接时仍给占位值，属离线预览的固有限制 |
+| X-05 | 编辑器里 JSON 积木返回占位值，作者无法试算 | 远程调试连上后在浏览器本地实算（`json-lite.js`，134 条对拍）；2026-11-23 起**未连接也实算**——JSON 纯计算积木改为构建期直调，不再经过 `__tmc` 的「未连接 → fallback」短路（`ARCHITECTURE.md` §7.7），`verify-extension.js` 加断言守住 |
 | X-06 | JSON 实现位置：保持 Java / 迁到 VM / 双实现 | 已决定单一实现：29 块全部落在 `json-lite.js`（ES5），游戏内加载 `json-core.es5.js`，Java 副本与注册删除；行为由迁移前 golden 锁住（`ARCHITECTURE.md` §23） |
 | X-04 | `docs/archive/` 下 21 份阶段性报告 | 按 `docs/README.md` 维护约定第 3 条清出仓库，需要回溯时看 `git log -- docs/archive/` |
 | X-07 | AUTO-02「参数契约回归未全量进 CI」 | 已覆盖：`tools/build-mapping-report.js` 做四路比对（中文占位符 ↔ `arguments` ↔ `Blocks.java` 模板 ↔ `BlockParam`，顺序敏感），由 CI「映射表新鲜度」执行；运行期 `argsSelfTest` 另对全部 97 块比占位符个数 |
