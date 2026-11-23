@@ -11,6 +11,10 @@
  *            ├─▶ 内联进编辑器副本（JSON 积木在浏览器本地求值）
  *            └─▶ 原样复制为 src/client/resources/assets/turbomc/vm/json-core.es5.js（游戏内同一份实现）
  *
+ *   编辑器副本的读数表（READERS）同样从这里生成：blocks.data.js 每个 reporter/boolean 的
+ *   `read` 字段序列化进 remote-client.js 的 `/* @tmc-readers *\/` 注入点。
+ *   投影逻辑只允许写一处——以前它是一份手写的 39 条表，漏了不报错，浏览器里恒返回空值。
+ *
  * 两份扩展产物的差异只有四处，其它内容必须逐字一致：
  *   1. 语法：编辑器是 class，运行时是普通对象（Rhino 里不需要 class，也就省掉 Babel 中间层）；
  *   2. 分组标题：只有编辑器渲染（内嵌 vm.es5.js 不支持 label）；
@@ -83,6 +87,121 @@ function assertJsonCoverage() {
 			+ (extra.length ? '；实现无人引用：' + extra.join(', ') : ''));
 	}
 }
+/**
+ * 快照顶层字段集合：从 SnapshotPublisher.java 的 {@code snap.addProperty("x", …)} /
+ * {@code snap.add("x", …)} 提取。
+ *
+ * <p>只取顶层：`aim.block` 这种二级路径由快照对象自己保证，构建期不追进去——
+ * 追进去就要解析 Java 的嵌套方法，容易假失败。一级已经能挡住「改了快照字段名忘了跟」。</p>
+ */
+function snapshotTopLevelKeys() {
+	const file = path.join(ROOT,
+		'src/client/java/xyz/turbomc/client/script/remote/SnapshotPublisher.java');
+	const java = fs.readFileSync(file, 'utf8');
+	const keys = new Set();
+	for (const m of java.matchAll(/snap\.add(?:Property)?\("(\w+)"/g)) {
+		keys.add(m[1]);
+	}
+	if (keys.size === 0) {
+		throw new Error('[build-extension] 从 SnapshotPublisher.java 解析不出快照字段：'
+			+ '提取规则失效，校验会静默变成空转');
+	}
+	return keys;
+}
+
+/** read 函数源码里对 {@code s.<key>} 的引用；read 的第一参数固定叫 s。 */
+function readFieldRefs(source) {
+	const out = new Set();
+	for (const m of String(source).matchAll(/\bs\.(\w+)/g)) {
+		out.add(m[1]);
+	}
+	return out;
+}
+
+/**
+ * 生成浏览器侧的读数表。
+ *
+ * <p>投影逻辑写在 blocks.data.js 的 {@code read} 字段里，这里只做序列化——
+ * remote-client.js 不再维护第二份手写表。迁移前那份表有 39 条、153 行，
+ * 且没有任何校验：漏一条表现为「浏览器里恒返回空值」，构建和 CI 都是绿的。</p>
+ */
+function emitReaders() {
+	const rows = [];
+	for (const block of DATA.blocks) {
+		if (!block.opcode || typeof block.read !== 'function') {
+			continue;
+		}
+		rows.push('\t\t' + q(DATA.id + '_' + block.opcode) + ': ' + block.read.toString() + ',');
+	}
+	return 'const READERS = {\n' + rows.join('\n') + '\n\t};';
+}
+
+/** 把生成的读数表填进 remote-client.js 的注入点。 */
+function withReaders(source) {
+	const marker = '/* @tmc-readers */';
+	if (source.indexOf(marker) < 0) {
+		throw new Error('[build-extension] remote-client.js 缺少 ' + marker + ' 注入点');
+	}
+	return source.replace(marker, emitReaders());
+}
+
+/**
+ * 读数声明的双向校验。
+ *
+ * <p>三条规则：</p>
+ * <ol>
+ *   <li>每个 reporter / boolean 必须能回答——有 {@code read}、标了 {@code unsupported}，
+ *       或者由本地实现兜底（JSON 纯计算与读写 VM 列表）。漏了直接失败；</li>
+ *   <li>{@code read} 里引用的 {@code s.<字段>} 必须真实存在于快照；</li>
+ *   <li>{@code unsupported} 不能同时带 {@code read}——那种自相矛盾会让构建期跳过、
+ *       运行期又有实现，两个信号互相掩盖。</li>
+ * </ol>
+ */
+function assertReads() {
+	const keys = snapshotTopLevelKeys();
+	const missing = [];
+	const badRefs = [];
+	const contradictory = [];
+	for (const block of DATA.blocks) {
+		if (!block.opcode) {
+			continue;
+		}
+		const kind = String(block.blockType || '').toLowerCase();
+		const hasRead = typeof block.read === 'function';
+		if (hasRead && block.unsupported) {
+			contradictory.push(block.opcode);
+		}
+		if (kind !== 'reporter' && kind !== 'boolean') {
+			continue;
+		}
+		if (!hasRead && !block.unsupported
+			&& JSON_BLOCK_KEYS.indexOf(block.opcode) < 0
+			&& !VM_LIST_OPS.has(block.opcode)) {
+			missing.push(block.opcode);
+		}
+		if (hasRead) {
+			for (const field of readFieldRefs(block.read.toString())) {
+				if (!keys.has(field)) {
+					badRefs.push(block.opcode + ' → s.' + field);
+				}
+			}
+		}
+	}
+	const problems = [];
+	if (missing.length) {
+		problems.push('缺少 read 声明（浏览器侧会恒返回空值）：' + missing.join(', '));
+	}
+	if (badRefs.length) {
+		problems.push('read 引用了快照里不存在的字段：' + badRefs.join('; '));
+	}
+	if (contradictory.length) {
+		problems.push('同时标了 unsupported 与 read：' + contradictory.join(', '));
+	}
+	if (problems.length) {
+		throw new Error('[build-extension] 读数声明不一致\n  - ' + problems.join('\n  - '));
+	}
+}
+
 /**
  * 画面：浏览器原生 getDisplayMedia + `<video>` 覆盖舞台（§10）。
  * 与 JSON 一样只进编辑器产物——游戏端不参与画面，这是设计而非省略。
@@ -367,7 +486,7 @@ ${JSON_LITE}
 
 ${STAGE_VIEW}
 
-${REMOTE_CLIENT}
+${withReaders(REMOTE_CLIENT)}
 
 	// 注入远程能力后再注册：installRemote 会给实例挂上 __tmc 与 openRemotePanel。
 	// 未连接时 __tmc 一律走 fallback，所以这份产物同时是「普通编辑器」与「远程调试器」。
@@ -440,6 +559,7 @@ ${emitMenus('runtime')}
 function main() {
 	const check = process.argv.includes('--check');
 	assertJsonCoverage();
+	assertReads();
 	const rendered = {editor: renderEditor(), runtime: renderRuntime()};
 	let stale = 0;
 

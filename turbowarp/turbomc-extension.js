@@ -5254,160 +5254,145 @@ function installRemote(Scratch, ext, meta) {
 
 	// ---- 积木入口 ----
 
-	/** 能从快照直接同步回答的 reporter；不在表里的返回空并由调用方提示一次。 */
+	/**
+	 * 快照读数表：由 tools/build-extension.js 从 blocks.data.js 的 read 声明生成，勿手改。
+	 * 键是带前缀的 opcode，值是 (snapshot, argv, util) => value。
+	 * 新增读数积木只在 blocks.data.js 写一处；这里缺一条，构建会直接失败。
+	 */
 	const READERS = {
-		'turbomc_pos': (s, a) => (s ? s[a[0]] : 0),
-		'turbomc_aimPos': (s, a) => (s && s.aim ? s.aim[a[0]] : 0),
+		'turbomc_mouseDown': (s, a) => {
+				const button = String((a && a[0]) || 'left').trim().toLowerCase();
+				if (!s || !s.mouse) {
+					return false;
+				}
+				if (button === 'any') {
+					return !!(s.mouse.left || s.mouse.right || s.mouse.middle);
+				}
+				return !!s.mouse[button];
+			},
+		'turbomc_isMining': (s) => !!(s && s.mining && s.mining.active),
+		'turbomc_miningProgress': (s) => (s && s.mining ? s.mining.progress : -1),
+		'turbomc_containerSlots': (s) => (s && s.ui ? s.ui.slots : 0),
+		'turbomc_slotField': (s, a) => {
+				const index = Number((a && a[0]) === undefined ? 0 : a[0]);
+				const field = String((a && a[1]) || 'id').trim().toLowerCase();
+				const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
+				const item = items.find((entry) => entry.slot === index) || null;
+				if (field === 'amount') {
+					return item ? item.count : 0;
+				}
+				if (field === 'max_durability') {
+					return item ? item.max_damage : 0;
+				}
+				if (field === 'damage') {
+					return item ? item.damage : 0;
+				}
+				if (field === 'custom_name') {
+					return item ? item.custom_name : '';
+				}
+				return item ? item.id : '';
+			},
+		'turbomc_screenJson': (s) => (s && s.ui ? JSON.stringify(s.ui) : '{}'),
+		'turbomc_firstSlotOf': (s, a) => {
+				const want = itemKey(a && a[0]);
+				const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
+				if (!want) {
+					return -1;
+				}
+				const hit = items.find((entry) => entry.id === want);
+				return hit ? hit.slot : -1;
+			},
 		'turbomc_health': (s) => (s ? s.hp : 0),
 		'turbomc_food': (s) => (s ? s.food : 0),
 		'turbomc_xpLevel': (s) => (s ? s.xpLevel : 0),
-		'turbomc_dimension': (s) => (s ? s.dim : ''),
-		'turbomc_selectedSlot': (s) => (s ? s.slot : 0),
-		'turbomc_heldItem': (s) => (s && s.hand ? s.hand.id : ''),
-
-		// ---- 状态类（快照直出）----
 		'turbomc_onGround': (s) => !!(s && s.onGround),
+		'turbomc_pos': (s, a) => (s ? s[a[0]] : 0),
+		'turbomc_selectedSlot': (s) => (s ? s.slot : 0),
+		'turbomc_heldItemField': (s, a) => {
+				const field = String((a && a[0]) || 'id').trim().toLowerCase();
+				const hand = s && s.hand ? s.hand : {id: '', count: 0, maxDurability: 0, durability: 0};
+				if (field === 'count') {
+					return hand.count;
+				}
+				if (field === 'max_durability') {
+					return hand.maxDurability;
+				}
+				if (field === 'durability') {
+					return hand.durability;
+				}
+				return hand.id;
+			},
+		'turbomc_inventoryJson': (s) => JSON.stringify(s && Array.isArray(s.inv) ? s.inv : []),
+		'turbomc_inventoryFull': (s) => {
+				if (!s || !Array.isArray(s.inv)) {
+					return false;
+				}
+				const filled = new Set(s.inv.map((item) => item.slot));
+				for (let i = 0; i < 36; i++) {
+					if (!filled.has(i)) {
+						return false;
+					}
+				}
+				return true;
+			},
+		'turbomc_playerJson': (s) => JSON.stringify(s && s.me ? s.me : {}),
+		'turbomc_itemCount': (s, a) => {
+				const want = itemKey(a && a[0]);
+				if (!want || !s || !Array.isArray(s.inv)) {
+					return 0;
+				}
+				let total = 0;
+				for (const item of s.inv) {
+					if (item.id === want) {
+						total += item.count;
+					}
+				}
+				return total;
+			},
 		'turbomc_isDay': (s) => !!(s && s.isDay),
+		'turbomc_dimension': (s) => (s ? s.dim : ''),
 		'turbomc_biome': (s) => (s ? s.biome : ''),
 		'turbomc_inWater': (s) => !!(s && s.inWater),
 		'turbomc_inLava': (s) => !!(s && s.inLava),
-		'turbomc_isMining': (s) => !!(s && s.mining && s.mining.active),
-		// 没在挖时是 -1，脚本才能区分「挖到 0%」和「还没开始」
-		'turbomc_miningProgress': (s) => (s && s.mining ? s.mining.progress : -1),
 		'turbomc_blockInFront': (s) => !!(s && s.aim && s.aim.has),
-		'turbomc_frontBlock': (s) => (s && s.aim ? s.aim.block : ''),
 		'turbomc_blockBelow': (s) => (s ? s.below : ''),
-		'turbomc_ping': (s) => (s ? s.ping : 0),
-		'turbomc_mouseDown': (s, a) => {
-			const button = String((a && a[0]) || 'left').trim().toLowerCase();
-			if (!s || !s.mouse) {
-				return false;
-			}
-			if (button === 'any') {
-				return !!(s.mouse.left || s.mouse.right || s.mouse.middle);
-			}
-			return !!s.mouse[button];
-		},
-		'turbomc_heldItemField': (s, a) => {
-			const field = String((a && a[0]) || 'id').trim().toLowerCase();
-			const hand = s && s.hand ? s.hand : {id: '', count: 0, maxDurability: 0, durability: 0};
-			if (field === 'count') {
-				return hand.count;
-			}
-			if (field === 'max_durability') {
-				return hand.maxDurability;
-			}
-			if (field === 'durability') {
-				return hand.durability;
-			}
-			return hand.id;
-		},
-
-		// ---- 背包与容器 ----
-		// 快照里的 inv / ui 就是游戏内 {@code Snapshots.inventoryArray} /
-		// {@code screenObject} 的原样形态，所以两个「快照」积木直接 stringify 就与游戏内逐字一致
-		'turbomc_inventoryJson': (s) => JSON.stringify(s && Array.isArray(s.inv) ? s.inv : []),
-		'turbomc_screenJson': (s) => (s && s.ui ? JSON.stringify(s.ui) : '{}'),
-		'turbomc_containerSlots': (s) => (s && s.ui ? s.ui.slots : 0),
-		'turbomc_itemCount': (s, a) => {
-			const want = itemKey(a && a[0]);
-			if (!want || !s || !Array.isArray(s.inv)) {
-				return 0;
-			}
-			let total = 0;
-			for (const item of s.inv) {
-				if (item.id === want) {
-					total += item.count;
-				}
-			}
-			return total;
-		},
-		'turbomc_inventoryFull': (s) => {
-			if (!s || !Array.isArray(s.inv)) {
-				return false;
-			}
-			// 只看主背包 36 格（0–35），与游戏内「背包已满」同一口径：盔甲与副手不算
-			const filled = new Set(s.inv.map((item) => item.slot));
-			for (let i = 0; i < 36; i++) {
-				if (!filled.has(i)) {
-					return false;
-				}
-			}
-			return true;
-		},
-		'turbomc_slotField': (s, a) => {
-			const index = Number((a && a[0]) === undefined ? 0 : a[0]);
-			const field = String((a && a[1]) || 'id').trim().toLowerCase();
-			const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
-			const item = items.find((entry) => entry.slot === index) || null;
-			if (field === 'amount') {
-				return item ? item.count : 0;
-			}
-			if (field === 'max_durability') {
-				return item ? item.max_damage : 0;
-			}
-			if (field === 'damage') {
-				return item ? item.damage : 0;
-			}
-			if (field === 'custom_name') {
-				return item ? item.custom_name : '';
-			}
-			return item ? item.id : '';
-		},
-		'turbomc_firstSlotOf': (s, a) => {
-			const want = itemKey(a && a[0]);
-			const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
-			if (!want) {
-				return -1;
-			}
-			const hit = items.find((entry) => entry.id === want);
-			return hit ? hit.slot : -1;
-		},
-
-		// ---- 整体快照与键清单 ----
-		// 三个快照同样由游戏侧的 Snapshots 拼好挂进快照，这里 stringify 即逐字一致
-		'turbomc_playerJson': (s) => JSON.stringify(s && s.me ? s.me : {}),
-		'turbomc_worldJson': (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}),
 		'turbomc_playersJson': (s) => JSON.stringify(s && Array.isArray(s.players) ? s.players : []),
 		'turbomc_snapshotKeys': (s, a) => {
-			// 键清单随握手下发（服务端 Snapshots 常量），扩展里不抄第二份
-			const kind = String((a && a[0]) || 'player').trim().toLowerCase();
-			const table = S.welcome && S.welcome.snapshotKeys ? S.welcome.snapshotKeys : null;
-			if (!table) {
-				return '[]';
-			}
-			return JSON.stringify(Array.isArray(table[kind]) ? table[kind] : []);
-		},
-
-		// ---- 聊天与 AI ----
+				const kind = String((a && a[0]) || 'player').trim().toLowerCase();
+				const table = S.welcome && S.welcome.snapshotKeys ? S.welcome.snapshotKeys : null;
+				if (!table) {
+					return '[]';
+				}
+				return JSON.stringify(Array.isArray(table[kind]) ? table[kind] : []);
+			},
+		'turbomc_worldJson': (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}),
+		'turbomc_frontBlock': (s) => (s && s.aim ? s.aim.block : ''),
+		'turbomc_aimPos': (s, a) => (s && s.aim ? s.aim[a[0]] : 0),
+		'turbomc_ping': (s) => (s ? s.ping : 0),
+		'turbomc_nearestEntityField': (s, a) => nearestEntityField(s, a),
+		'turbomc_entityCount': (s, a) => countEntities(s, entityFilter(a && a[0])),
+		'turbomc_entitiesJson': (s, a) => entitiesJson(s, a),
 		'turbomc_lastChat': (s) => (s && s.chat ? s.chat.last : ''),
 		'turbomc_chatHistory': (s, a) => {
-			const count = Math.max(1, Math.min(32, Number((a && a[0]) === undefined ? 10 : a[0]) || 0));
-			const history = s && s.chat && Array.isArray(s.chat.history) ? s.chat.history : [];
-			// 旧的在前，取最近 count 条——与游戏内 ChatState.history 同一顺序
-			return JSON.stringify(history.slice(Math.max(0, history.length - count)));
-		},
+				const count = Math.max(1, Math.min(32, Number((a && a[0]) === undefined ? 10 : a[0]) || 0));
+				const history = s && s.chat && Array.isArray(s.chat.history) ? s.chat.history : [];
+				return JSON.stringify(history.slice(Math.max(0, history.length - count)));
+			},
 		'turbomc_triggerChat': (s, a, util) => {
-			// per-thread 私有副本优先；没有（非聊天触发的线程）就是空串
-			if (util && util.thread && util.thread.tmcChat !== undefined && util.thread.tmcChat !== null) {
-				return String(util.thread.tmcChat);
-			}
-			return '';
-		},
-		'turbomc_aiReply': (s, a) => {
-			const session = String((a && a[0]) || '').trim();
-			const table = s && s.ai ? s.ai : null;
-			if (!table) {
+				if (util && util.thread && util.thread.tmcChat !== undefined && util.thread.tmcChat !== null) {
+					return String(util.thread.tmcChat);
+				}
 				return '';
-			}
-			const key = session || 'default';
-			return table[key] === undefined || table[key] === null ? '' : String(table[key]);
-		},
-
-		// ---- 附近实体 ----
-		'turbomc_entityCount': (s, a) => countEntities(s, entityFilter(a && a[0])),
-		'turbomc_nearestEntityField': (s, a) => nearestEntityField(s, a),
-		'turbomc_entitiesJson': (s, a) => entitiesJson(s, a)
+			},
+		'turbomc_aiReply': (s, a) => {
+				const session = String((a && a[0]) || '').trim();
+				const table = s && s.ai ? s.ai : null;
+				if (!table) {
+					return '';
+				}
+				const key = session || 'default';
+				return table[key] === undefined || table[key] === null ? '' : String(table[key]);
+			},
 	};
 
 	/** 与游戏内 {@code ENTITY_SEARCH_RANGE} 一致：两个统计积木的默认搜索半径。 */
