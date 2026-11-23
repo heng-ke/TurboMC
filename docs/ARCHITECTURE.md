@@ -1029,7 +1029,7 @@ TurboWarp（主 VM）
 | 时机 | 动作 |
 |---|---|
 | 握手成功 | `suspendForRemote()` → `Status.REMOTE`，HUD 青蓝「远程调试中：实例 · 端口」 |
-| 会话期间 | `ScriptEngine.tick()` 命中 `REMOTE` 直接 return，**不再被 `if (!running) start()` 拉起** |
+| 会话期间 | `ScriptEngine.tick()` 命中 `REMOTE` 后**只推进寻路与转向**（`PathFollower.tick` / `TurnSession.tick`），内 VM 不 tick，**不再被 `if (!running) start()` 拉起** |
 | 断开 / 心跳超时 / 被新连接接管 | `endRemoteSession()` → `Status.OFF`，并把 `scriptEngineEnabled` 写回 `false` |
 
 - **让位复用 `stop()`**，不新造暂停态。代价是 `teardown()` 会松开按键、中止寻路与转向、
@@ -1038,13 +1038,18 @@ TurboWarp（主 VM）
 - **断开后一律关闭，不恢复会话前状态**。否则断开下一帧 `start()` 就把脚本拉起来，
   开发者刚在浏览器里调完，游戏里突然开跑，是最坏的意外。
 - **`REMOTE` 期间按 F6 只提示不翻转**——翻了开关但内 VM 不动，HUD 会与浏览器侧对不上。
+- **寻路与转向不跟着内 VM 一起停**。这两个子系统由动作触发、靠 tick 推进，与 VM 无关：
+  `PathFollower.tick` 只读 client、写按键、推进 A* 重算，`finish()` 也只碰 client。
+  远程模式下若一并停掉，「走向」会永久停在 HUD 的「规划中」——`start()` 已建好会话
+  （`nodes == null`），而唯一的推进点被跳过，浏览器那侧的 `poll('move')` 只能一直拿到 `false`。
+  同理适用于「平滑转到视角」（`TurnSession`）。
 - **不碰 `ScriptBridge` 的静态字段**（`current` / `pendingWait` / `pendingCheck`）。远程路径直接
   `NativeRegistry` + 每 tick 新建的 `ScriptContext`，静态状态冲突从设计上消失。
 
 每 tick 的调用顺序（`TurboMCClient.onClientTick`）：
 
 ```
-ScriptEngine.tick      → 内 VM（REMOTE 时直接 return）
+ScriptEngine.tick      → 内 VM（REMOTE 时只推进寻路/转向，VM 不 tick）
 guardFocusPause        → 压住失焦暂停（见 §27）
 TriggerDispatcher.tick → 按键/界面/聊天边沿，REMOTE 时转发给浏览器
 RemoteBridge.tick      → 先执行队列，再采集快照

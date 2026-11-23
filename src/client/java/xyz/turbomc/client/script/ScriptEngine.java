@@ -124,6 +124,12 @@ public final class ScriptEngine {
 		// 本分支必须在开关判断之前——否则玩家一按 F6 就会把 REMOTE 改写成 OFF，
 		// HUD 上「远程调试中」自己消失，而浏览器那侧还在驱动。
 		if (status == Status.REMOTE) {
+			// 内 VM 不推进，但「走向 / 转向」这两个由动作触发、靠 tick 推进的子系统必须继续跑。
+			// 它们不依赖 VM：PathFollower.tick 只读 client、写按键、推进 A* 重算，finish() 也只碰 client。
+			// 曾经跟着一起 return，后果是「走向」永久停在 HUD 的「规划中」——start() 已经建了会话
+			// （nodes == null），而唯一的推进点原本排在那个 return 之后，浏览器那侧的 poll 只能一直拿到 false。
+			PathFollower.tick(client);
+			TurnSession.tick(client);
 			return;
 		}
 		if (!config.masterEnabled || !config.scriptEngineEnabled) {
