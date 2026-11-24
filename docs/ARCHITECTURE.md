@@ -61,6 +61,10 @@ TurboWarp  ──导出──▶  .sb3  ──投放──▶  config/turbomc/im
 
 同时只运行一个 sb3。点另一个包会切换过去，不会合并。
 
+面板上的圆点就是这个开关：点未启用的包切过去；点已启用的包**不改状态**（全部关掉等于
+让引擎空转），但会给一句「已在运行；要停止请按 F6」——静默无反应会被当成按钮坏了。
+重命名 / 删除作用于选中项，未选中时按钮置灰并提示「先选一个包」。
+
 原因：scratch-vm 只有「载入一个工程」这一个入口。要让多个包并存，必须合并它们的
 `targets`，而**舞台（Stage）只能有一个**，合并时其余包的全局变量要并进主 Stage，
 变量 ID 冲突会让另一包的全局变量静默读不到。这个风险与收益不成比例，所以第一版
@@ -124,7 +128,7 @@ src/client/java/xyz/turbomc/client/
     │   └── ViewSmoother.java    视角平滑：写入必须在渲染帧（tick 内写 50 ms 才一步，看得见台阶）
     ├── render/                  世界渲染出口
     │   ├── PathRenderer.java    「走向」的路线：折线（已走金黄 / 未走青色）+ 当前节点框 + 终点框
-    │   ├── FrameOverlay.java    「画框」：最多 128 个线框，按帧从不可变快照重画
+    │   ├── FrameOverlay.java    「画框」：默认最多 128 个线框（`frameMaxBoxes` 可调 16～512），按帧从不可变快照重画
     │   └── FrameBox.java        框的纯数据（坐标归一化 + 颜色解析，不依赖 MC，可纯 JVM 测试）
     ├── sb3/
     │   ├── Sb3Mapping.java      opcode ↔ 内部类型、字段/输入改名（全项目唯一一份）
@@ -794,12 +798,18 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 `assets/turbomc/vm/turbomc-extension.es5.js`（运行时副本）都由
 `node tools/build-extension.js` 渲染，数据源是：
 
-- `turbowarp/src/blocks.data.js` —— 97 块积木、16 个菜单、15 个分组标题、每块的占位方法体；
+- `turbowarp/src/blocks.data.js` —— 97 块积木、18 个菜单、15 个分组标题、每块的占位方法体；
 - `turbowarp/src/items.data.js` —— 1505 条物品（`注册名|中文名|英文名`）。
 
 同一脚本还负责 `json-lite.js` 的运行时副本：源码本身就是 ES5，原样写为
 `assets/turbomc/vm/json-core.es5.js`（独立文件、先于 `vm-bootstrap.js` 加载）。
 `--check` 同时校验这份副本与源码逐字一致。
+
+**生成前会量一遍积木宽度**（`assertBlockWidth`，中英分别算：12px 字号下中文约 12.2px/字、
+英文约 6.9px/字，数字框 32px、文本框 48px、下拉按该语言最长项自适应），任一侧超过 420px
+直接失败并列出 opcode。原因是 Scratch 按文本动态算宽度——积木太长**不会报任何错**，
+只会横向撑出工作区，在 1366×768 一类窗口里拖都拖不动；这类回归没人会主动去量。
+要收窄有两条路：删冗余措辞，或缩短被引用的菜单项（菜单会撑宽所有引用它的积木）。
 
 **直接改产物会在下次生成时被覆盖**，CI 用 `--check` 拦「产物过期」，`verify-extension.js` 继续守
 编辑器契约。两份产物只有四处差异，其余逐字一致：
@@ -831,6 +841,13 @@ Gson 用 Unsafe 建实例、**不执行字段初始化器**，所以 json 缺 `a
 
 段内字段仍用包装类型——缺字段与「配成 0」必须能区分（`accuracy = 0`、`temperature = 0`
 都是合法值，用原始类型会把两者混成一件事）。
+
+**模组菜单按「作用主题」分页，不按配置段分页**：常规 / 脚本引擎 / 显示 / 聊天 / 寻路 /
+AI 对话 / 开发者 / 按键权限，共八页。同一主题的项必须在同一页——「走向」的显示开关与
+精度参数都在「寻路」，HUD 的位置、气泡、列表、画框与 AI 结论都在「显示」；否则使用者
+要在两页之间来回跳。远程桥单独成「开发者」页：普通玩家不该在脚本列表底部撞见 Origin
+白名单，也不该顺手滑到一个会监听本机端口的开关。分类名以 Cloth 的 tab 呈现，八个 tab
+在 GUI Scale 4 下有挤压风险，改分类结构时需实机看一眼。
 
 ### 26. 快照类积木是单向只读出口
 
@@ -979,7 +996,8 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 状态行之下是脚本的「说 / 思考」气泡；寻路进行时再追加两行（目标 / 距离 / 节点进度 /
 规划耗时），受 `showPathHud` 控制。
 
-气泡同时显示几条由 `hudMaxBubbles` 决定（默认 3，范围 1～6）。选取与过期都收在
+气泡同时显示几条由 `hudMaxBubbles` 决定（默认 3，范围 1～6）；每句停留多久由
+`hudBubbleHoldMs` 决定（默认 5000 ms，范围 1～15 秒，渲染时同步，改完不必重启）。选取与过期都收在
 `SpeechBubbleBook` 里：到期时把 `usageId` 记进 `retired`，否则 VM 会一直上报同一句，
 下一帧又被当成新气泡重新登记，形成「删掉即复活」（DEF-06）。被上限挤掉的不静默丢弃，
 末尾补一行「…还有 N 条」——同一 tick 内多个角色说话时，最早登记的那个必然被挤出
@@ -1002,7 +1020,8 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 游戏内原本**没有任何渲染出口**——不补的话脚本永远无法对外表达。
 
 读法是 `target.getCustomState('Scratch.looks')`，用其中的 `usageId` 判断是否是新
-一句（每次说话都会重新生成，比对比文本可靠）。每句停留 5 秒，最多同时 3 条。
+一句（每次说话都会重新生成，比对比文本可靠）。每句停留默认 5 秒（`hudBubbleHoldMs`，
+1～15 秒可调），最多同时 3 条（`hudMaxBubbles`）。
 
 ## 七、远程开发桥
 
@@ -1278,7 +1297,7 @@ opcode(args, util) { return this.__tmc('turbomc_x', [args.A, args.B], 'command',
 | unsandboxed | **硬要求**。sandboxed 扩展跑在扩展 Worker 里，没有 `document`，权限请求直接失败 |
 | LNA（本地网络访问） | https 页面连 `ws://127.0.0.1` 需一次 `loopback-network` 授权，且**首次必须由用户手势触发**（故「保存后自动连接」被禁止）；`file://` 与桌面自定义协议属同地址空间，不触发 |
 | TurboWarp Desktop | RPC **可用**（`tw-editor://.`，p50 0.5ms）；画面 `NotSupportedError`（主进程无 display media handler） |
-| Origin 白名单 | 默认只有 TurboWarp 官方站、桌面版与 `http://localhost:*` / `http://127.0.0.1:*`——**不含任何个人站点，也不含 `null`**（那是 `file://` 页面，等于「下载一个 HTML 双击打开就能接管游戏」，需要时手动加一行）。ModMenu「远程开发桥」下面的列表直接显示这份出厂值，可增删；整份清空后保存回到出厂值。**改动下一 tick 生效，不需要重开监听**：握手读的是主线程维护的快照（`allowedOrigins`），删掉某个来源还会断开它正在用的连接 |
+| Origin 白名单 | 默认只有 TurboWarp 官方站、桌面版与 `http://localhost:*` / `http://127.0.0.1:*`——**不含任何个人站点，也不含 `null`**（那是 `file://` 页面，等于「下载一个 HTML 双击打开就能接管游戏」，需要时手动加一行）。ModMenu「开发者」页的「允许的来源」列表直接显示这份出厂值，可增删；整份清空后保存回到出厂值。**改动下一 tick 生效，不需要重开监听**：握手读的是主线程维护的快照（`allowedOrigins`），删掉某个来源还会断开它正在用的连接 |
 | 绑定 | 只绑 `127.0.0.1`，不做跨机；单控制者，新连接接管时旧连接收 `evicted` |
 
 **`permissions.query` 的状态 ≠ 是否被拦**。Desktop 的 `loopback-network` 报 `denied` 却仍能连——
