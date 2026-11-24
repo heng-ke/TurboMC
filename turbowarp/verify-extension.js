@@ -9,8 +9,9 @@
  * 这两类错误在模组侧冒烟测试里都发现不了，只能靠这个脚本兜住。
  *
  * 另外守三条同样「不报错、只出错」的规则：
- *   1. 每个积木 text 里的 [NAME] 必须与 arguments 同名同序——宿主按 text 的顺序取值，
- *      两边错位就会把坐标灌进颜色；
+ *   1. 每个积木 text 里的 [NAME] 必须与 arguments 的键一一对应（集合相等），
+ *      且产物的 argOrder 必须与 arguments 同序——argOrder 是构建期按中文文案算的，
+ *      宿主按它取值，**顺序只认它**，不认当前界面语言的文案顺序；
  *   2. arguments 引用的 menu 必须存在于 menus 里；
  *   3. 分类标题（LABEL）不能带 opcode 或 arguments，否则面板会出怪东西。
  *
@@ -25,7 +26,15 @@ const path = require('path');
 
 const target = process.argv[2] || path.join(__dirname, 'turbomc-extension.js');
 
-global.navigator = {language: 'zh-CN'};
+// Node 21+ 自带只读的 navigator 全局，`global.navigator = …` 会被静默忽略。那样产物会
+// 回退英文，而这套断言一旦拿「当前语言的文案顺序」去比 arguments，英文语序（value of
+// [item] in [json]）与中文（[json] 中 [item] 的值）相反，就会整片假报错——本地 Node 版本
+// 不同则不复现。用 defineProperty 显式覆盖，并允许 VERIFY_LANG 指定语言，便于中英各跑一遍。
+Object.defineProperty(globalThis, 'navigator', {
+	value: {language: process.env.VERIFY_LANG || 'zh-CN'},
+	configurable: true,
+	writable: true
+});
 let instance = null;
 global.Scratch = {
 	BlockType: {HAT: 'hat', COMMAND: 'command', REPORTER: 'reporter', BOOLEAN: 'boolean',
@@ -85,15 +94,31 @@ for (const block of info.blocks) {
 			problems.push(`积木 ${block.opcode} 的参数 ${argName} 引用了不存在的菜单 ${arg.menu}`);
 		}
 	}
-	// 占位符与 arguments 必须同名同序。
-	// 宿主侧 vm-bootstrap 的 __tmcArgNames 是按 text 里的 [名字] 顺序取值的，
-	// arguments 只用于生成编辑器控件；两边一旦错位不会报任何错，
-	// 只会把坐标灌进颜色、把颜色灌进坐标。
+	// 占位符校验分两件事，不能混成一条：
+	//
+	// 1) 顺序只认产物的 argOrder——它是构建期按**中文文案**算的，与界面语言无关。
+	//    vm-bootstrap 拿 argOrder 里的名字去 args 里取值（ScriptBridge.extract 按名字取，
+	//    不是按位置），所以英文语序与中文相反也不会错位。用当前语言的 text 去比顺序，
+	//    在英文环境下必然假报错——这正是 CI 红灯的成因。
+	// 2) text 里的占位符必须与 arguments 的键一一对应：多一个少一个都会静默错位。
 	const holes = (block.text || '').match(/\[([A-Za-z0-9_]+)\]/g) || [];
 	const fromText = holes.map((h) => h.slice(1, -1));
 	const fromArgs = Object.keys(args);
-	if (fromText.join(',') !== fromArgs.join(',')) {
-		problems.push(`积木 ${block.opcode} 的占位符 [${fromText.join(',')}] 与 arguments [${fromArgs.join(',')}] 不一致`);
+	const unique = [...new Set(fromText)];
+	const missing = fromArgs.filter((name) => !unique.includes(name));
+	const extra = unique.filter((name) => !fromArgs.includes(name));
+	if (missing.length || extra.length) {
+		problems.push(`积木 ${block.opcode} 的占位符 [${fromText.join(',')}] 与 arguments [${fromArgs.join(',')}] 不匹配`
+			+ (missing.length ? `；缺 ${missing.join(',')}` : '')
+			+ (extra.length ? `；多 ${extra.join(',')}` : ''));
+	}
+	if (fromArgs.length) {
+		const order = block.argOrder;
+		if (!Array.isArray(order)) {
+			problems.push(`积木 ${block.opcode} 缺 argOrder：宿主按它取值，没有就会把实参全丢成空串`);
+		} else if (order.join(',') !== fromArgs.join(',')) {
+			problems.push(`积木 ${block.opcode} 的 argOrder [${order.join(',')}] 与 arguments [${fromArgs.join(',')}] 不一致`);
+		}
 	}
 }
 

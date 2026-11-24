@@ -21,6 +21,12 @@ jobs:
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # 固定 Node 版本：runner 镜像自带的 node 会随镜像升级而变，而本仓库的
+      # 校验脚本对 Node 内置全局（navigator）的行为敏感——不钉版本就是在等它某天变红。
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: build
         run: ./gradlew build
       # VM 后端的冒烟：不启动客户端，在纯 JVM 里验证 Rhino + scratch-vm 链路。
@@ -33,8 +39,15 @@ jobs:
         run: node tools/build-extension.js --check
       # 扩展的编辑器契约：getInfo() 必须可结构化克隆（Worker postMessage）。
       # 菜单 items 写成函数会让 TurboWarp 抛 DataCloneError，写成方法名字符串会抛 reading 'call'。
-      - name: 扩展自检
+      #
+      # 下面两条都用 turbowarp/verify-extension.js，差别只在 VERIFY_LANG：
+      # 产物按 navigator.language 选中英两套文案，而两套的占位符**语序相反**
+      # （`set [item] in [json]` 对 `把 [json] 中 [item] 设为`）。只跑中文时，
+      # 英文文案少写一个 [x] 不会被发现，实参照样静默错位。
+      - name: 扩展自检（中文）
         run: node turbowarp/verify-extension.js
+      - name: 扩展自检（英文）
+        run: VERIFY_LANG=en-US node turbowarp/verify-extension.js
       # 映射表同样由代码生成（Sb3Mapping + blocks.data.js），守「文档描述不存在的积木」。
       - name: 映射表新鲜度
         run: node tools/build-mapping-report.js --check
