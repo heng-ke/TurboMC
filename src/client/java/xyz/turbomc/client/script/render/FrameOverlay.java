@@ -8,14 +8,15 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import xyz.turbomc.client.config.TurboMCConfig;
 
 /**
  * 「画框」积木的显示层：保存最近若干次调用的范围，并在每帧把它们画成线框。
  *
  * <p>这一层的语义刻意做得很薄——它不认识"选区"，也不记得是谁画的。积木每调用一次就
  * 往队列里放一个 {@link FrameBox}，画不画、画几个由脚本自己决定。因此脚本里
- * 「重复遍历每个矿点 → 画框」能同屏留下 128 个框（{@link #MAX_FRAMES}），
- * 超出后挤掉最旧的那个。</p>
+ * 「重复遍历每个矿点 → 画框」能同屏留下 128 个框（{@link #DEFAULT_MAX_FRAMES}，
+ * 实际上限走配置 {@code frameMaxBoxes}），超出后挤掉最旧的那个。</p>
  *
  * <p><b>线程约定</b>：写入只发生在客户端主线程（积木经 VM 在主线程执行，引擎停止/断线
  * 收尾也在主线程）；渲染线程只读一次 {@link #snapshot()} 拿到的不可变数组，不遍历可变状态。
@@ -23,8 +24,8 @@ import org.slf4j.LoggerFactory;
  * 的 {@code NodeView} 同一套约定。</p>
  */
 public final class FrameOverlay {
-	/** 同时显示的框上限。128 个框 = 1536 条线段，绘制开销可忽略。 */
-	public static final int MAX_FRAMES = 128;
+	/** 同屏显示的框上限默认值。128 个框 = 1536 条线段，绘制开销可忽略；实际上限可配置。 */
+	public static final int DEFAULT_MAX_FRAMES = 128;
 
 	private static final Logger LOG = LoggerFactory.getLogger("turbomc/script");
 	private static final FrameBox[] EMPTY = new FrameBox[0];
@@ -68,7 +69,8 @@ public final class FrameOverlay {
 				return;
 			}
 			// 只保留最新的一批，再追加：长度到顶时等价于「挤掉最旧的一个」
-			int keep = Math.min(current.length, MAX_FRAMES - 1);
+			int max = TurboMCConfig.get().frameLimit();
+			int keep = Math.min(current.length, max - 1);
 			FrameBox[] next = new FrameBox[keep + 1];
 			System.arraycopy(current, current.length - keep, next, 0, keep);
 			next[keep] = box;
@@ -128,7 +130,10 @@ public final class FrameOverlay {
 			matrices.translate(-camera.x, -camera.y, -camera.z);
 			VertexConsumer vertices = context.consumers().getBuffer(RenderLayers.lines());
 			MatrixStack.Entry entry = matrices.peek();
-			for (FrameBox box : boxes) {
+			// 上限随时可能被调低：只画最新的 limit 个，不必等新的框挤进来才收敛
+			int start = Math.max(0, boxes.length - TurboMCConfig.get().frameLimit());
+			for (int index = start; index < boxes.length; index++) {
+				FrameBox box = boxes[index];
 				if (!inRange(box, camera)) {
 					continue;
 				}

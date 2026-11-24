@@ -102,7 +102,7 @@ public final class TurboMCConfig {
 	 */
 	public Boolean autoReload = true;
 
-	/** 热重载的检查间隔（毫秒）。空值或越界按 2000 处理。 */
+	/** 热重载的检查间隔（毫秒）。越界由 {@link #reloadIntervalMsValue()} 钳到 500–30000。 */
 	public int reloadIntervalMs = 2000;
 
 	/**
@@ -136,6 +136,34 @@ public final class TurboMCConfig {
 	public int hudBubbleLimit() {
 		Integer value = hudMaxBubbles;
 		return value == null ? 3 : Math.max(1, Math.min(6, value));
+	}
+
+	/**
+	 * 每句「说 / 思考」气泡停留多久（毫秒，1～15 秒）。空值按 5000 处理。
+	 *
+	 * <p>原先写死 5 秒：需要看住的提示（坐标、状态播报）不够用，短循环脚本又嫌它占画面。
+	 * 默认值与旧行为一致，升级后观感不变。</p>
+	 */
+	public Integer hudBubbleHoldMs = 5000;
+
+	/** 气泡停留时长的有效值：钳到 1～15 秒，避免配成 0 时一句话都看不见。 */
+	public int hudBubbleHoldMsValue() {
+		Integer value = hudBubbleHoldMs;
+		return value == null ? 5000 : Math.max(1000, Math.min(15_000, value));
+	}
+
+	/**
+	 * 同屏最多保留多少个画框（16～512）。空值按 128 处理。
+	 *
+	 * <p>128 是「绘制开销可忽略」的经验值（1536 条线段）。脚本遍历大片矿点时容易触顶，
+	 * 触顶后最早的框被挤掉；原先上限写死在代码里，画得多的作者只能改源码。</p>
+	 */
+	public Integer frameMaxBoxes = 128;
+
+	/** 画框上限的有效值：钳到 16～512，避免配成 0 时一个框都画不出。 */
+	public int frameLimit() {
+		Integer value = frameMaxBoxes;
+		return value == null ? 128 : Math.max(16, Math.min(512, value));
 	}
 
 	/** 热重载开关的有效值（空值按开）。 */

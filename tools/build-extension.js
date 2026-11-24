@@ -203,6 +203,84 @@ function assertReads() {
 }
 
 /**
+ * 积木宽度守卫。
+ *
+ * <p>Scratch 按文本动态算积木宽度，所以「太长」不会报错，只会让积木横向撑出工作区：
+ * 在 1366×768 一类窗口里拖动、嵌套都费劲，在分类面板里还得横向滚。全屏编辑器里
+ * 一眼能看出不对，但加积木时没人会去量，所以放在构建期守一道。</p>
+ *
+ * <p>宽度是估算：12px 字号下中文约 12.2px/字、英文约 6.9px/字；数字框 32px、
+ * 文本框 48px、下拉按该语言的最长项自适应。因为含估算成分，阈值留了余量。
+ * 超限有两条改法：删冗余措辞，或缩短被引用的菜单项——后者会撑宽所有引用它的积木。</p>
+ */
+const MAX_BLOCK_WIDTH = 420;
+const ARG_WIDTH = {number: 32, string: 48, boolean: 48, color: 40};
+
+function glyphWidth(ch) {
+	const code = ch.codePointAt(0);
+	if (code >= 0x2E80) return 12.2;
+	if (/[iIlj.,:;'!|]/.test(ch)) return 3.2;
+	if (ch === ' ') return 3.5;
+	if (/[mwMW]/.test(ch)) return 10;
+	return 6.9;
+}
+
+function textWidth(text) {
+	let width = 0;
+	for (const ch of text) width += glyphWidth(ch);
+	return width;
+}
+
+function menuWidth(name, lang) {
+	const menu = DATA.menus[name];
+	if (!menu) return 64;
+	if (menu.dynamic) return 96;
+	let width = 0;
+	for (const item of menu.items) {
+		const text = item.text && item.text[lang];
+		if (text) width = Math.max(width, textWidth(text));
+	}
+	return Math.max(64, width + 26);
+}
+
+function blockWidth(block, lang) {
+	let width = 18;
+	for (const part of block.text[lang].split(/(\[[A-Za-z0-9_]+\])/g)) {
+		const hole = /^\[([A-Za-z0-9_]+)\]$/.exec(part);
+		if (!hole) {
+			width += textWidth(part);
+			continue;
+		}
+		const arg = block.arguments && block.arguments[hole[1]];
+		if (!arg) {
+			width += textWidth(part);
+			continue;
+		}
+		width += arg.menu ? menuWidth(arg.menu, lang) : (ARG_WIDTH[arg.type] || 48);
+	}
+	return Math.round(width);
+}
+
+function assertBlockWidth() {
+	const wide = [];
+	for (const block of DATA.blocks) {
+		if (!block.opcode) {
+			continue;
+		}
+		const en = blockWidth(block, 'en');
+		const zh = blockWidth(block, 'zh');
+		if (Math.max(en, zh) > MAX_BLOCK_WIDTH) {
+			wide.push(block.opcode + '（en ' + en + ' / zh ' + zh + '）');
+		}
+	}
+	if (wide.length) {
+		throw new Error('[build-extension] 积木过宽，会横向撑出编辑器工作区（估算上限 '
+			+ MAX_BLOCK_WIDTH + 'px）\n  - ' + wide.join('\n  - ')
+			+ '\n  改法：删冗余措辞，或缩短被引用的菜单项（菜单会撑宽所有引用它的积木）');
+	}
+}
+
+/**
  * 画面：浏览器原生 getDisplayMedia + `<video>` 覆盖舞台（§10）。
  * 与 JSON 一样只进编辑器产物——游戏端不参与画面，这是设计而非省略。
  */
@@ -560,6 +638,7 @@ function main() {
 	const check = process.argv.includes('--check');
 	assertJsonCoverage();
 	assertReads();
+	assertBlockWidth();
 	const rendered = {editor: renderEditor(), runtime: renderRuntime()};
 	let stale = 0;
 

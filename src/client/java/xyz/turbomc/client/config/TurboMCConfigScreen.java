@@ -15,6 +15,11 @@ import java.util.Locale;
  *
  * <p>仅当 Cloth Config 存在时才会被加载（从 {@link ModMenuIntegration} 间接引用），
  * 因此本类可以自由使用 Cloth Config 的 API。</p>
+ *
+ * <p><b>分类按「作用主题」划分</b>，不按代码里的配置段划分：同一主题的设置项必须
+ * 出现在同一个分类里，否则「寻路开关在这一页、寻路参数在那一页」这类分裂会逼迫
+ * 使用者在两页之间来回跳。分类顺序即使用频次：常规 → 脚本引擎 → 显示 → 聊天 →
+ * 寻路 → AI 对话 → 开发者 → 按键权限。</p>
  */
 public final class TurboMCConfigScreen {
 	/**
@@ -30,6 +35,8 @@ public final class TurboMCConfigScreen {
 
 	public static Screen create(Screen parent) {
 		TurboMCConfig config = TurboMCConfig.get();
+		// 一次性补齐 dev 段：下面四个条目都直接写 dev，逐处判空只会重复四遍
+		TurboMCConfig.Dev dev = ensureDev(config);
 
 		ConfigBuilder builder = ConfigBuilder.create()
 				.setParentScreen(parent)
@@ -48,26 +55,9 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.masterEnabled = value)
 				.build());
 
-		// HUD 位置：两个百分比替代原来的「四角」下拉。
-		// 0 = 贴起始边，100 = 贴另一侧，50 = 居中；角落只是这四个端点的特例，
-		// 因此不再需要单独的选择器——两套位置来源并存必然打架。
-		general.addEntry(entries
-				.startIntSlider(Text.translatable("config.turbomc.hud_offset_x"),
-						(int) Math.round(config.hudPercentX()), 0, 100)
-				.setDefaultValue(0)
-				.setTooltip(Text.translatable("config.turbomc.hud_offset_x.tooltip"))
-				.setSaveConsumer(value -> config.hudOffsetX = (double) value)
-				.build());
-
-		general.addEntry(entries
-				.startIntSlider(Text.translatable("config.turbomc.hud_offset_y"),
-						(int) Math.round(config.hudPercentY()), 0, 100)
-				.setDefaultValue(0)
-				.setTooltip(Text.translatable("config.turbomc.hud_offset_y.tooltip"))
-				.setSaveConsumer(value -> config.hudOffsetY = (double) value)
-				.build());
-
 		// ---- 脚本引擎 ----
+		// 只放「引擎怎么跑」：启动/停止策略、时间预算、热重载、失焦行为。
+		// 展示相关的项全部在「显示」，聊天相关全部在「聊天」。
 		ConfigCategory script = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.script"));
 
 		// 放分类第一项：它决定「进世界后要不要手动按 F6」，是其它行为的前提
@@ -87,25 +77,29 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.turbomc.show_path"), config.showPath)
-				.setDefaultValue(true)
-				.setTooltip(Text.translatable("config.turbomc.show_path.tooltip"))
-				.setSaveConsumer(value -> config.showPath = value)
-				.build());
-
-		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.turbomc.show_path_hud"), config.showPathHud)
-				.setDefaultValue(true)
-				.setTooltip(Text.translatable("config.turbomc.show_path_hud.tooltip"))
-				.setSaveConsumer(value -> config.showPathHud = value)
-				.build());
-
-		script.addEntry(entries
 				.startBooleanToggle(Text.translatable("config.turbomc.auto_reload"),
 						config.shouldAutoReload())
 				.setDefaultValue(true)
 				.setTooltip(Text.translatable("config.turbomc.auto_reload.tooltip"))
 				.setSaveConsumer(value -> config.autoReload = value)
+				.build());
+
+		// 间隔与开关同分类：给了「自动重载」却不给「多久查一次」，等于半个开关
+		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.reload_interval"),
+						Math.max(1, Math.round(config.reloadIntervalMsValue() / 1000f)), 1, 30)
+				.setDefaultValue(2)
+				.setTooltip(Text.translatable("config.turbomc.reload_interval.tooltip"))
+				.setSaveConsumer(value -> config.reloadIntervalMs = value * 1000)
+				.build());
+
+		// VM 时间预算直接决定脚本跑多快、挤占多少渲染时间，是最该暴露的性能项
+		script.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.vm_budget"),
+						clampInt(config.scratchVmBudgetMs, 1, 16), 1, 16)
+				.setDefaultValue(4)
+				.setTooltip(Text.translatable("config.turbomc.vm_budget.tooltip"))
+				.setSaveConsumer(value -> config.scratchVmBudgetMs = value)
 				.build());
 
 		script.addEntry(entries
@@ -116,7 +110,45 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.keepRunningWhenUnfocused = value)
 				.build());
 
+		// 等待积木的单位（秒 / tick）。原先只能改 json，且改完要重启；
+		// WaitUnit 每次都读实时配置，所以放在这里改完立即生效。
 		script.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.wait_in_seconds"),
+						config.showWaitInSeconds())
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.wait_in_seconds.tooltip"))
+				.setSaveConsumer(value -> config.waitInSeconds = value)
+				.build());
+
+		// ---- 显示 ----
+		// 所有「画在屏幕上」的项集中在这里：HUD 位置、气泡、列表监视器、画框、
+		// AI 结论。改外观不必再翻脚本引擎或 AI 分类。
+		ConfigCategory display = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.display"));
+
+		display.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.display.hint"))
+				.build());
+
+		// HUD 位置：两个百分比替代原来的「四角」下拉。
+		// 0 = 贴起始边，100 = 贴另一侧，50 = 居中；角落只是这四个端点的特例，
+		// 因此不再需要单独的选择器——两套位置来源并存必然打架。
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.hud_offset_x"),
+						(int) Math.round(config.hudPercentX()), 0, 100)
+				.setDefaultValue(0)
+				.setTooltip(Text.translatable("config.turbomc.hud_offset_x.tooltip"))
+				.setSaveConsumer(value -> config.hudOffsetX = (double) value)
+				.build());
+
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.hud_offset_y"),
+						(int) Math.round(config.hudPercentY()), 0, 100)
+				.setDefaultValue(0)
+				.setTooltip(Text.translatable("config.turbomc.hud_offset_y.tooltip"))
+				.setSaveConsumer(value -> config.hudOffsetY = (double) value)
+				.build());
+
+		display.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.monitor_list_items"),
 						config.monitorListItems, 1, 20)
 				.setDefaultValue(5)
@@ -124,7 +156,7 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.monitorListItems = value)
 				.build());
 
-		script.addEntry(entries
+		display.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.hud_max_bubbles"),
 						config.hudBubbleLimit(), 1, 6)
 				.setDefaultValue(3)
@@ -132,7 +164,58 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.hudMaxBubbles = value)
 				.build());
 
-		script.addEntry(entries
+		// 界面按秒、配置存毫秒：玩家不需要知道 tick/毫秒，夹具与代码那边仍是精确单位
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.hud_bubble_hold"),
+						Math.round(config.hudBubbleHoldMsValue() / 1000f), 1, 15)
+				.setDefaultValue(5)
+				.setTooltip(Text.translatable("config.turbomc.hud_bubble_hold.tooltip"))
+				.setSaveConsumer(value -> config.hudBubbleHoldMs = value * 1000)
+				.build());
+
+		// 画框上限：128 是「绘制开销可忽略」的经验值，脚本画得多时可以往上开
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.frame_max_boxes"),
+						config.frameLimit(), 16, 512)
+				.setDefaultValue(128)
+				.setTooltip(Text.translatable("config.turbomc.frame_max_boxes.tooltip"))
+				.setSaveConsumer(value -> config.frameMaxBoxes = value)
+				.build());
+
+		// AI 的 HUD 展示：只影响界面，不影响请求，因此从 AI 分类移到这里
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_hold_seconds"),
+						config.aiHudHoldMs() / 1000, 1, 20)
+				.setDefaultValue(5)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_hold_seconds.tooltip"))
+				.setSaveConsumer(value -> config.ai.hudHoldSeconds = value)
+				.build());
+
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_max_rows"),
+						config.aiHudMaxRows(), 1, 5)
+				.setDefaultValue(2)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_max_rows.tooltip"))
+				.setSaveConsumer(value -> config.ai.hudMaxRows = value)
+				.build());
+
+		display.addEntry(entries
+				.startIntSlider(Text.translatable("config.turbomc.ai.hud_reply_chars"),
+						config.aiHudReplyChars(), 8, 64)
+				.setDefaultValue(24)
+				.setTooltip(Text.translatable("config.turbomc.ai.hud_reply_chars.tooltip"))
+				.setSaveConsumer(value -> config.ai.hudReplyChars = value)
+				.build());
+
+		// ---- 聊天 ----
+		// 全部是「脚本与聊天栏如何交互」，与引擎启停无关。
+		ConfigCategory chat = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.chat"));
+
+		chat.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.chat.hint"))
+				.build());
+
+		chat.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.chat_interval"),
 						config.chatIntervalTicks == null ? 3 : config.chatIntervalTicks, 1, 20)
 				.setDefaultValue(3)
@@ -140,23 +223,7 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.chatIntervalTicks = value)
 				.build());
 
-		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_messages"),
-						config.chatFromServerMessages)
-				.setDefaultValue(true)
-				.setTooltip(Text.translatable("config.turbomc.chat_server_messages.tooltip"))
-				.setSaveConsumer(value -> config.chatFromServerMessages = value)
-				.build());
-
-		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_any_match"),
-						config.chatServerAnyMatch)
-				.setDefaultValue(false)
-				.setTooltip(Text.translatable("config.turbomc.chat_server_any_match.tooltip"))
-				.setSaveConsumer(value -> config.chatServerAnyMatch = value)
-				.build());
-
-		script.addEntry(entries
+		chat.addEntry(entries
 				.startIntSlider(Text.translatable("config.turbomc.chat_max_segments"),
 						config.chatMaxSegments == null ? 8 : config.chatMaxSegments, 1, 16)
 				.setDefaultValue(8)
@@ -164,56 +231,43 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> config.chatMaxSegments = value)
 				.build());
 
-		// 开发调试：远程桥。默认关，普通玩家保持关闭即可。
-		script.addEntry(entries
-				.startBooleanToggle(Text.translatable("config.turbomc.dev_remote"),
-						config.remoteEnabled())
-				.setDefaultValue(false)
-				.setTooltip(Text.translatable("config.turbomc.dev_remote.tooltip"))
-				.setSaveConsumer(value -> {
-					if (config.dev == null) {
-						config.dev = new TurboMCConfig.Dev();
-					}
-					config.dev.enabled = value;
-				})
+		chat.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_messages"),
+						config.chatFromServerMessages)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.chat_server_messages.tooltip"))
+				.setSaveConsumer(value -> config.chatFromServerMessages = value)
 				.build());
 
-		// 「允许的来源」：远程桥只校验 WebSocket 的 Origin，所以自建 TurboWarp 站点
-		// （https://自己的域名、http://localhost:端口）必须能在这里加，否则只能手改 json。
-		//
-		// 列表里直接显示「当前生效值」：配置为空时就是出厂默认那几条。使用者打开界面看到的是
-		// 实际放行什么，而不是一个空列表 + 一句「留空即用默认值」——后者等于把默认值藏起来。
-		// 重置按钮（Cloth 的 per-entry reset）指向出厂默认，一键回到初始状态。
-		List<String> effectiveOrigins = new ArrayList<>(config.remoteAllowedOrigins());
-		script.addEntry(entries
-				.startStrList(Text.translatable("config.turbomc.dev_origins"), effectiveOrigins)
-				.setDefaultValue(new ArrayList<>(TurboMCConfig.DEFAULT_DEV_ORIGINS))
-				.setExpanded(false)
-				.setTooltip(Text.translatable("config.turbomc.dev_origins.tooltip"))
-				// 拼错的来源不会报错，只会「连不上」，所以在格子里就地标红：
-				// 合法形态是 scheme://host[:*] ，或字面量 null（file:// 页面）
-				.setCellErrorSupplier(value -> isOriginPattern(value)
-						? java.util.Optional.empty()
-						: java.util.Optional.of(Text.translatable("config.turbomc.dev_origins.invalid")))
-				.setSaveConsumer(value -> {
-					if (config.dev == null) {
-						config.dev = new TurboMCConfig.Dev();
-					}
-					// 整份清空仍按「用出厂默认」处理（见 remoteAllowedOrigins），
-					// 所以这里原样保存即可，不需要特判空列表
-					config.dev.allowedOrigins = value == null
-							? new ArrayList<>()
-							: new ArrayList<>(value);
-				})
+		chat.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.chat_server_any_match"),
+						config.chatServerAnyMatch)
+				.setDefaultValue(false)
+				.setTooltip(Text.translatable("config.turbomc.chat_server_any_match.tooltip"))
+				.setSaveConsumer(value -> config.chatServerAnyMatch = value)
 				.build());
 
 		// ---- 寻路 ----
-		// 放在脚本引擎之后：这些是「走向」积木的精度参数，改完下一 tick 即生效，无需重启。
+		// 开关和参数在同一页：调「走向」时不需要跨分类找显示开关。
 		ConfigCategory pathing = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.pathing"));
 		TurboMCConfig.Pathing path = config.pathing;
 
 		pathing.addEntry(entries
 				.startTextDescription(Text.translatable("config.turbomc.pathing.hint"))
+				.build());
+
+		pathing.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.show_path"), config.showPath)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.show_path.tooltip"))
+				.setSaveConsumer(value -> config.showPath = value)
+				.build());
+
+		pathing.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.show_path_hud"), config.showPathHud)
+				.setDefaultValue(true)
+				.setTooltip(Text.translatable("config.turbomc.show_path_hud.tooltip"))
+				.setSaveConsumer(value -> config.showPathHud = value)
 				.build());
 
 		// 小数项用文本框：Cloth 21.11 只有 intSlider，0.6 这类值要么步进太粗，
@@ -280,6 +334,7 @@ public final class TurboMCConfigScreen {
 				.build());
 
 		// ---- AI 对话 ----
+		// 只留请求参数；HUD 三项已移到「显示」。
 		ConfigCategory ai = builder.getOrCreateCategory(Text.translatable("config.turbomc.category.ai"));
 		TurboMCConfig.Ai section = config.ai;
 
@@ -385,29 +440,65 @@ public final class TurboMCConfigScreen {
 				.setSaveConsumer(value -> section.maxConcurrent = value)
 				.build());
 
-		// HUD 展示：只影响界面，不影响请求
-		ai.addEntry(entries
-				.startIntSlider(Text.translatable("config.turbomc.ai.hud_hold_seconds"),
-						section.hudHoldSeconds == null ? 5 : section.hudHoldSeconds, 1, 20)
-				.setDefaultValue(5)
-				.setTooltip(Text.translatable("config.turbomc.ai.hud_hold_seconds.tooltip"))
-				.setSaveConsumer(value -> section.hudHoldSeconds = value)
+		// ---- 开发者 ----
+		// 远程桥单独成页：普通玩家不该在「脚本引擎」列表底部撞见 Origin 白名单，
+		// 也不该因为顺手滑到底就打开一个本机监听端口。
+		ConfigCategory developer =
+				builder.getOrCreateCategory(Text.translatable("config.turbomc.category.developer"));
+
+		developer.addEntry(entries
+				.startTextDescription(Text.translatable("config.turbomc.developer.hint"))
 				.build());
 
-		ai.addEntry(entries
-				.startIntSlider(Text.translatable("config.turbomc.ai.hud_max_rows"),
-						section.hudMaxRows == null ? 2 : section.hudMaxRows, 1, 5)
-				.setDefaultValue(2)
-				.setTooltip(Text.translatable("config.turbomc.ai.hud_max_rows.tooltip"))
-				.setSaveConsumer(value -> section.hudMaxRows = value)
+		developer.addEntry(entries
+				.startBooleanToggle(Text.translatable("config.turbomc.dev_remote"), config.remoteEnabled())
+				.setDefaultValue(false)
+				.setTooltip(Text.translatable("config.turbomc.dev_remote.tooltip"))
+				.setSaveConsumer(value -> dev.enabled = value)
 				.build());
 
-		ai.addEntry(entries
-				.startIntSlider(Text.translatable("config.turbomc.ai.hud_reply_chars"),
-						section.hudReplyChars == null ? 24 : section.hudReplyChars, 8, 64)
-				.setDefaultValue(24)
-				.setTooltip(Text.translatable("config.turbomc.ai.hud_reply_chars.tooltip"))
-				.setSaveConsumer(value -> section.hudReplyChars = value)
+		// 端口用文本框：0 表示自动分配，固定在 HUD 上写着实际端口；
+		// 滑块无法表达「0 = 自动」，还会把 0 与 1 混成一项。
+		developer.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.dev_port"),
+						String.valueOf(dev.port == null ? 0 : dev.port))
+				.setDefaultValue("0")
+				.setTooltip(Text.translatable("config.turbomc.dev_port.tooltip"))
+				.setSaveConsumer(value -> dev.port = parsePort(value, dev.port))
+				.build());
+
+		developer.addEntry(entries
+				.startStrField(Text.translatable("config.turbomc.dev_instance_name"),
+						dev.instanceName == null ? "" : dev.instanceName)
+				.setDefaultValue("")
+				.setTooltip(Text.translatable("config.turbomc.dev_instance_name.tooltip"))
+				.setSaveConsumer(value -> dev.instanceName = value == null ? "" : value.trim())
+				.build());
+
+		// 「允许的来源」：远程桥只校验 WebSocket 的 Origin，所以自建 TurboWarp 站点
+		// （https://自己的域名、http://localhost:端口）必须能在这里加，否则只能手改 json。
+		//
+		// 列表里直接显示「当前生效值」：配置为空时就是出厂默认那几条。使用者打开界面看到的是
+		// 实际放行什么，而不是一个空列表 + 一句「留空即用默认值」——后者等于把默认值藏起来。
+		// 重置按钮（Cloth 的 per-entry reset）指向出厂默认，一键回到初始状态。
+		List<String> effectiveOrigins = new ArrayList<>(config.remoteAllowedOrigins());
+		developer.addEntry(entries
+				.startStrList(Text.translatable("config.turbomc.dev_origins"), effectiveOrigins)
+				.setDefaultValue(new ArrayList<>(TurboMCConfig.DEFAULT_DEV_ORIGINS))
+				.setExpanded(false)
+				.setTooltip(Text.translatable("config.turbomc.dev_origins.tooltip"))
+				// 拼错的来源不会报错，只会「连不上」，所以在格子里就地标红：
+				// 合法形态是 scheme://host[:*] ，或字面量 null（file:// 页面）
+				.setCellErrorSupplier(value -> isOriginPattern(value)
+						? java.util.Optional.empty()
+						: java.util.Optional.of(Text.translatable("config.turbomc.dev_origins.invalid")))
+				.setSaveConsumer(value -> {
+					// 整份清空仍按「用出厂默认」处理（见 remoteAllowedOrigins），
+					// 所以这里原样保存即可，不需要特判空列表
+					dev.allowedOrigins = value == null
+							? new ArrayList<>()
+							: new ArrayList<>(value);
+				})
 				.build());
 
 		// ---- 按键权限 ----
@@ -448,6 +539,37 @@ public final class TurboMCConfigScreen {
 		keys.addEntry(help.build());
 
 		return builder.build();
+	}
+
+	/** 保证 dev 段存在；Gson 用 Unsafe 建实例，缺该段时字段是 {@code null}。 */
+	private static TurboMCConfig.Dev ensureDev(TurboMCConfig config) {
+		if (config.dev == null) {
+			config.dev = new TurboMCConfig.Dev();
+		}
+		return config.dev;
+	}
+
+	/** 整数钳制，用于滑块初值：越界的旧配置不该让滑块显示成 0。 */
+	private static int clampInt(int value, int min, int max) {
+		return Math.max(min, Math.min(max, value));
+	}
+
+	/**
+	 * 解析端口：{@code 0} 表示自动；其余钳到 1–65535。
+	 *
+	 * <p>非法输入保留原值而不是归 0——「我填了 abc」变成「自动分配」会让人误以为配置没保存。
+	 * 与 {@code TurboMCConfig.remotePort()} 的语义保持一致。</p>
+	 */
+	private static int parsePort(String raw, Integer fallback) {
+		try {
+			int value = Integer.parseInt(raw == null ? "" : raw.trim());
+			if (value == 0) {
+				return 0;
+			}
+			return Math.max(1, Math.min(65535, value));
+		} catch (RuntimeException ignored) {
+			return fallback == null ? 0 : fallback;
+		}
 	}
 
 	/** 小数项的显示文本：整数省略小数点后的零，其余原样。 */

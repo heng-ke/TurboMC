@@ -120,16 +120,27 @@ public class ScriptListScreen extends Screen {
 		addDrawableChild(folder);
 		bx += buttonWidth + gap;
 
-		addDrawableChild(ButtonWidget.builder(
+		// 重命名 / 删除作用于「选中的包」。没选中时按钮原本静默 return，
+		// 点下去毫无反应，玩家会以为界面卡了——因此直接置灰并说明原因。
+		boolean hasSelection = selectedPack() != null;
+		ButtonWidget renameButton = addDrawableChild(ButtonWidget.builder(
 				Text.translatable("screen.turbomc.rename"),
 				button -> renameSelected()
 		).dimensions(bx, bottom, buttonWidth, ROW_HEIGHT).build());
+		renameButton.active = hasSelection;
+		if (!hasSelection) {
+			renameButton.setTooltip(Tooltip.of(Text.translatable("screen.turbomc.select_first")));
+		}
 		bx += buttonWidth + gap;
 
-		addDrawableChild(ButtonWidget.builder(
+		ButtonWidget deleteButton = addDrawableChild(ButtonWidget.builder(
 				Text.translatable("screen.turbomc.delete"),
 				button -> confirmDeleteSelected()
 		).dimensions(bx, bottom, buttonWidth, ROW_HEIGHT).build());
+		deleteButton.active = hasSelection;
+		if (!hasSelection) {
+			deleteButton.setTooltip(Tooltip.of(Text.translatable("screen.turbomc.select_first")));
+		}
 		bx += buttonWidth + gap;
 
 		addDrawableChild(ButtonWidget.builder(
@@ -216,18 +227,28 @@ public class ScriptListScreen extends Screen {
 		int y = LIST_TOP;
 
 		// 状态圆点：点击即切换启用（互斥，其余包自动关闭）
-		widgets.add(add(ButtonWidget.builder(
+		ButtonWidget dot = ButtonWidget.builder(
 				Text.literal(pack.enabled ? "\u25CF" : "\u25CB"),
 				button -> {
-					// 点已启用的包不做事：全部关掉等于让引擎空转，用户容易以为坏了。
+					// 点已启用的包不做事——全部关掉等于让引擎空转，用户容易以为坏了。
+					// 但「什么都不发生」同样会被当成按钮坏了，所以给一句明确的回应：
 					// 要停止运行请用 F6 总开关。
-					if (!pack.enabled) {
-						store.setActive(pack);
-						ScriptEngine.get().restart();
-						refresh();
+					if (pack.enabled) {
+						localMessage = Text.translatable("screen.turbomc.pack_running_hint");
+						return;
 					}
+					// 切包成功时清掉上一句提示，否则「已在运行」会留在新包的界面上
+					localMessage = Text.empty();
+					store.setActive(pack);
+					ScriptEngine.get().restart();
+					refresh();
 				}
-		).dimensions(left, y, 20, ROW_HEIGHT).build()));
+		).dimensions(left, y, 20, ROW_HEIGHT).build();
+		// 互斥只写在注释里，玩家看不出来：用 tooltip 说清「点了会发生什么」
+		dot.setTooltip(Tooltip.of(Text.translatable(pack.enabled
+				? "screen.turbomc.toggle_running.tooltip"
+				: "screen.turbomc.toggle_enable.tooltip")));
+		widgets.add(add(dot));
 
 		ButtonWidget nameButton = ButtonWidget.builder(
 				// ↑ 表示 imports 里有内容不同的同名文件，点「导入」即会同步

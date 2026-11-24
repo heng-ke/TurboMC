@@ -27,8 +27,8 @@ final class SpeechBubbleBook {
 	/** 记住多少个已播完的 usageId。VM 只会报当前这一句，留几十个足够，且不会无限涨。 */
 	private static final int MAX_RETIRED = 64;
 
-	/** 一句停留多久。 */
-	private final long holdMs;
+	/** 一句停留多久。可热改：配置项从设置界面改完，下一次判定立刻按新值走。 */
+	private volatile long holdMs;
 	/** 角色名 → 当前气泡。scratch-vm 里气泡按 target 存，同一角色只会有一条。 */
 	private final Map<String, Bubble> current = new LinkedHashMap<>();
 	/** 已经播完（或已被新的覆盖）的 usageId，用于判定「不该复活」。 */
@@ -36,6 +36,16 @@ final class SpeechBubbleBook {
 
 	SpeechBubbleBook(long holdMs) {
 		this.holdMs = holdMs;
+	}
+
+	/**
+	 * 改停留时长（毫秒）。
+	 *
+	 * <p>已经在显示的气泡不会因此立即消失或续命：到期判定用的是「登记时刻 + 当前 holdMs」，
+	 * 调短后下一次 {@link #expire(long)} 就会收掉超时的那些，符合「改完立刻生效」的预期。</p>
+	 */
+	void setHoldMs(long holdMs) {
+		this.holdMs = Math.max(1L, holdMs);
 	}
 
 	/** 显示单位：一行「角色名：内容」。 */

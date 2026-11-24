@@ -215,7 +215,7 @@ final class Blocks {
 				BlockParam.fieldOption("FIELD", "id", "id", "durability", "count", "max_durability"));
 		reg("world.front_block", "world", BlockShape.REPORTER);
 		reg("world.block_below", "world", BlockShape.REPORTER);
-		regT("world.block_at", "world", BlockShape.REPORTER, "({X}, {Y}, {Z}) 的方块",
+		regT("world.block_at", "world", BlockShape.REPORTER, "坐标处方块 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
@@ -236,12 +236,12 @@ final class Blocks {
 		// ---- 快照（游戏状态 → JSON 文本，只读，见 ARCHITECTURE §26）----
 		// 返回的是字符串，可直接接 JSON 那批积木；字段名是契约，只增不删
 		regT("world.player_json", "world", BlockShape.REPORTER, "玩家快照");
-		regT("world.block_json", "world", BlockShape.REPORTER, "方块 x:{X} y:{Y} z:{Z} 的快照",
+		regT("world.block_json", "world", BlockShape.REPORTER, "方块 x{X} y{Y} z{Z} 的快照",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
 		regT("world.entities_json", "world", BlockShape.REPORTER,
-				"附近 {TYPE} 的快照 半径 {RADIUS} 最多 {LIMIT} 个",
+				"附近 {TYPE} 快照 半径{RADIUS} 最多{LIMIT}",
 				BlockParam.text("TYPE", "minecraft:zombie"),
 				BlockParam.number("RADIUS", "16"),
 				BlockParam.number("LIMIT", "32"));
@@ -253,7 +253,7 @@ final class Blocks {
 				BlockParam.fieldOption("KIND", "player", "player", "entity", "item", "screen",
 						"block", "block_entity", "world", "players", "scan", "chat"));
 		regT("world.scan_json", "world", BlockShape.REPORTER,
-				"从 ({X1}, {Y1}, {Z1}) 到 ({X2}, {Y2}, {Z2}) 扫描方块 最多 {LIMIT} 个",
+				"扫描 x{X1} y{Y1} z{Z1} 到 x{X2} y{Y2} z{Z2} 限 {LIMIT}",
 				BlockParam.number("X1", "0"),
 				BlockParam.number("Y1", "64"),
 				BlockParam.number("Z1", "0"),
@@ -265,7 +265,7 @@ final class Blocks {
 		// 画框：只影响画面，不改世界状态。category 只决定查看器里的配色（见 ParamLabels），
 		// 与积木面板的分组标题无关——面板分组由扩展 js 里的 LABEL 决定。
 		regT("region.draw_frame", "region", BlockShape.STACK,
-				"从 x:{X1} y:{Y1} z:{Z1} 到 x:{X2} y:{Y2} z:{Z2} 画框 颜色:{COLOR}",
+				"画框 x{X1} y{Y1} z{Z1} 到 x{X2} y{Y2} z{Z2} {COLOR}",
 				BlockParam.number("X1", "0"),
 				BlockParam.number("Y1", "64"),
 				BlockParam.number("Z1", "0"),
@@ -279,7 +279,7 @@ final class Blocks {
 		regT("action.key", "action", BlockShape.STACK, "按键 {KEY} {PRESSED}",
 				BlockParam.fieldOrExpr("KEY", "w"),
 				BlockParam.bool("PRESSED", "true"));
-		regT("action.open_container_at", "action", BlockShape.STACK, "打开容器 x:{X} y:{Y} z:{Z}",
+		regT("action.open_container_at", "action", BlockShape.STACK, "打开坐标处的容器 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
@@ -289,7 +289,7 @@ final class Blocks {
 		regT("action.quick_move_slot", "action", BlockShape.STACK, "快速移动槽位 {INDEX}",
 				BlockParam.number("INDEX", "0"));
 		regT("action.close_container", "action", BlockShape.STACK, "关闭界面");
-		regT("action.move_toward", "action", BlockShape.STACK, "走向 ({X}, {Y}, {Z})",
+		regT("action.move_toward", "action", BlockShape.STACK, "走向 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
@@ -307,17 +307,17 @@ final class Blocks {
 		// 无参数：等待上限由宿主侧固定（走 requestWaitUntil 的条件等待），
 		// 与扩展里 breakWait 的「等待方块被挖破」一致。
 		regT("action.break_wait", "action", BlockShape.C_SHAPE, "等待方块被挖破");
-		regT("action.look", "action", BlockShape.STACK, "视角转到 ({YAW}, {PITCH})",
+		regT("action.look", "action", BlockShape.STACK, "设置视角 水平{YAW} 俯仰{PITCH}",
 				BlockParam.number("YAW", "0"),
 				BlockParam.number("PITCH", "0"));
-		regT("action.look_at", "action", BlockShape.STACK, "看向 ({X}, {Y}, {Z})",
+		regT("action.look_at", "action", BlockShape.STACK, "看向 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
-		regT("action.look_smooth", "action", BlockShape.STACK, "平滑转到视角 ({YAW}, {PITCH})",
+		regT("action.look_smooth", "action", BlockShape.STACK, "平滑转到视角 水平{YAW} 俯仰{PITCH}",
 				BlockParam.number("YAW", "0"),
 				BlockParam.number("PITCH", "0"));
-		regT("action.look_at_smooth", "action", BlockShape.STACK, "平滑看向 ({X}, {Y}, {Z})",
+		regT("action.look_at_smooth", "action", BlockShape.STACK, "平滑看向 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
@@ -402,88 +402,88 @@ final class Blocks {
 		regT("json.new", "json", BlockShape.REPORTER, "新建 {json}",
 				BlockParam.text("json", "Object"));
 		regT("json.get", "json", BlockShape.REPORTER, "{json} 中 {item} 的值",
-				BlockParam.text("json", "{\"key\":\"value\"}"),
-				BlockParam.text("item", "key"));
+				BlockParam.text("json", "{\"a\":1}"),
+				BlockParam.text("item", "a"));
 		regT("json.set", "json", BlockShape.REPORTER, "把 {json} 中 {item} 设为 {value}",
-				BlockParam.text("json", "{\"key\":\"value\"}"),
-				BlockParam.text("item", "key"),
-				BlockParam.text("value", "new value"));
+				BlockParam.text("json", "{\"a\":1}"),
+				BlockParam.text("item", "a"),
+				BlockParam.text("value", "2"));
 		regT("json.delete", "json", BlockShape.REPORTER, "删除 {json} 中的 {item}",
-				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"),
-				BlockParam.text("item", "key2"));
+				BlockParam.text("json", "{\"a\":1,\"b\":2}"),
+				BlockParam.text("item", "b"));
 		// 「键数量」与「数组长度」原本是同一实现的两种叫法，合并成一块：对对象给键数、对数组给元素数
 		regT("json.length", "json", BlockShape.REPORTER, "{json} 的长度",
-				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"));
+				BlockParam.text("json", "{\"a\":1,\"b\":2}"));
 		regT("json.is", "json", BlockShape.BOOLEAN, "{json} 是 {check} 吗?",
-				BlockParam.text("json", "{\"key\":\"value\"}"),
+				BlockParam.text("json", "{\"a\":1}"),
 				BlockParam.text("check", "valid"));
 		regT("json.has_key", "json", BlockShape.BOOLEAN, "{json} 包含键 {key} 吗?",
-				BlockParam.text("json", "{\"key\":\"value\"}"),
-				BlockParam.text("key", "key2"));
+				BlockParam.text("json", "{\"a\":1}"),
+				BlockParam.text("key", "a"));
 		regT("json.get_path", "json", BlockShape.REPORTER, "{json} 中路径 {path} 的值",
-				BlockParam.text("json", "{\"key\":{\"inner\":[true,false]}}"),
-				BlockParam.text("path", "[\"key\",\"inner\",1]"));
+				BlockParam.text("json", "{\"a\":{\"b\":[1,0]}}"),
+				BlockParam.text("path", "[\"a\",\"b\",1]"));
 		regT("json.set_path", "json", BlockShape.REPORTER, "把 {json} 中路径 {path} 的值设为 {data}",
-				BlockParam.text("json", "{\"key\":{\"inner\":[true,false]}}"),
-				BlockParam.text("path", "[\"key\",\"inner\",1]"),
-				BlockParam.text("data", "value"));
+				BlockParam.text("json", "{\"a\":{\"b\":[1,0]}}"),
+				BlockParam.text("path", "[\"a\",\"b\",1]"),
+				BlockParam.text("data", "2"));
 		regT("json.minify", "json", BlockShape.REPORTER, "压缩 {json}",
-				BlockParam.text("json", " {\"key\" : \"value\" } "));
+				BlockParam.text("json", " { \"a\" : 1 } "));
 		regT("json.err_msg", "json", BlockShape.REPORTER, "{json} 的解析错误",
-				BlockParam.text("json", "{\"key\":\"value\",}"));
+				BlockParam.text("json", "{\"a\":1,}"));
 		regT("json.get_all", "json", BlockShape.REPORTER, "{json} 的全部 {Stype}",
-				BlockParam.text("json", "{\"key\":\"value\",\"key2\":\"value2\"}"),
+				BlockParam.text("json", "{\"a\":1,\"b\":2}"),
 				BlockParam.text("Stype", "keys"));
 		regT("json.array_push", "json", BlockShape.REPORTER, "向数组 {json} 添加 {item}",
-				BlockParam.text("json", "[\"scratch\"]"),
-				BlockParam.text("item", "TurboWarp"));
+				BlockParam.text("json", "[\"a\"]"),
+				BlockParam.text("item", "b"));
 		regT("json.array_set", "json", BlockShape.REPORTER, "把数组 {json} 的第 {pos} 项换成 {item}",
-				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.text("json", "[\"a\",\"b\"]"),
 				BlockParam.number("pos", "2"),
-				BlockParam.text("item", "fav"));
+				BlockParam.text("item", "c"));
 		regT("json.array_insert", "json", BlockShape.REPORTER, "在数组 {json} 的第 {pos} 项插入 {item}",
-				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.text("json", "[\"a\",\"b\"]"),
 				BlockParam.number("pos", "2"),
-				BlockParam.text("item", "pear"));
+				BlockParam.text("item", "c"));
 		regT("json.array_delete", "json", BlockShape.REPORTER, "删除数组 {json} 的第 {item} 项",
-				BlockParam.text("json", "[\"apple\",\"banana\",\"orange\"]"),
+				BlockParam.text("json", "[\"a\",\"b\"]"),
 				BlockParam.number("item", "2"));
 		regT("json.array_remove_all", "json", BlockShape.REPORTER, "删除数组 {json} 中所有 {item}",
-				BlockParam.text("json", "[\"scratch\",\"a\",\"TurboWarp\",\"a\"]"),
+				BlockParam.text("json", "[\"a\",\"b\",\"a\"]"),
 				BlockParam.text("item", "a"));
 		regT("json.array_item_num", "json", BlockShape.REPORTER, "{item} 在数组 {json} 中的项号",
-				BlockParam.text("item", "scratch"),
-				BlockParam.text("json", "[\"scratch\",\"TurboWarp\"]"));
+				BlockParam.text("item", "a"),
+				BlockParam.text("json", "[\"a\",\"b\"]"));
 		regT("json.array_fromto", "json", BlockShape.REPORTER, "数组 {json} 的第 {item} 到第 {item2} 项",
-				BlockParam.text("json", "[1,2,3,4]"),
+				BlockParam.text("json", "[1,2,3]"),
 				BlockParam.number("item", "2"),
 				BlockParam.number("item2", "3"));
 		regT("json.array_concat", "json", BlockShape.REPORTER, "拼接数组 {json} 和 {json2}",
-				BlockParam.text("json", "[\"scratch\"]"),
-				BlockParam.text("json2", "[\"TurboWarp\"]"));
+				BlockParam.text("json", "[\"a\"]"),
+				BlockParam.text("json2", "[\"b\"]"));
 		regT("json.array_map_field", "json", BlockShape.REPORTER, "数组 {json} 中所有对象的 {key} 值",
-				BlockParam.text("json", "[{\"id\":12},{\"id\":24}]"),
-				BlockParam.text("key", "id"));
+				BlockParam.text("json", "[{\"a\":1},{\"a\":2}]"),
+				BlockParam.text("key", "a"));
 		regT("json.array_setlen", "json", BlockShape.REPORTER, "把数组 {json} 的长度设为 {len}",
-				BlockParam.text("json", "[\"scratch\",\"TurboWarp\"]"),
+				BlockParam.text("json", "[\"a\",\"b\"]"),
 				BlockParam.number("len", "1"));
 		regT("json.array_create", "json", BlockShape.REPORTER, "按分隔符 {d} 把文本 {text} 拆成数组",
 				BlockParam.text("d", ","),
-				BlockParam.text("text", "a,b,c"));
+				BlockParam.text("text", "a,b"));
 		regT("json.array_join", "json", BlockShape.REPORTER, "用分隔符 {d} 把数组 {json} 拼成文本",
 				BlockParam.text("d", ","),
-				BlockParam.text("json", "[\"a\",\"b\",\"c\"]"));
+				BlockParam.text("json", "[\"a\",\"b\"]"));
 		regT("json.array_sort", "json", BlockShape.REPORTER, "数组 {list} 按 {order} 排序",
-				BlockParam.text("list", "[5.23,214,522,61,1,0]"),
+				BlockParam.text("list", "[3,1,2]"),
 				BlockParam.text("order", "ascending"));
 		regT("json.array_textfilter", "json", BlockShape.REPORTER,
-				"筛选数组 {list}：文本 {options} {text}，返回 {type}",
-				BlockParam.text("list", "[\"apple\",\"banana\",\"orange\"]"),
+				"筛选 {list} 文本 {options} {text} 返回 {type}",
+				BlockParam.text("list", "[\"a\",\"b\"]"),
 				BlockParam.text("options", "includes"),
-				BlockParam.text("text", "e"),
+				BlockParam.text("text", "a"),
 				BlockParam.text("type", "Array"));
 		regT("json.array_analysis", "json", BlockShape.REPORTER, "数组 {list} 的 {analysis}",
-				BlockParam.text("list", "[17,1,2017,0,120,14]"),
+				BlockParam.text("list", "[1,2,3]"),
 				BlockParam.text("analysis", "average"));
 		// 列表名是普通文本：项目里变量与列表都按名字对应（ARCHITECTURE §17），
 		// 用下拉菜单存 id 反而会在改名后失效
@@ -491,7 +491,7 @@ final class Blocks {
 				BlockParam.text("list", "mylist"));
 		regT("json.vm_setlist", "json", BlockShape.STACK, "把列表 {list} 设为 {json}",
 				BlockParam.text("list", "mylist"),
-				BlockParam.text("json", "[\"apple\",\"banana\"]"));
+				BlockParam.text("json", "[\"a\",\"b\"]"));
 	}
 
 	private static void reg(String id, String category, BlockShape shape, BlockParam... params) {

@@ -11,8 +11,9 @@ import java.math.BigDecimal;
  * <p>脚本里 {@code control.wait} 的 {@code TICKS} 是 tick 数（Scratch 的「等待 1 秒」导入后是 20）。
  * 直接显示 {@code 20 tick} 会让照着 Scratch 写脚本的人以为换算错了，所以默认按秒显示。</p>
  *
- * <p>单位由配置项 {@code waitInSeconds} 决定。脚本只读之后界面不再提供切换按钮——
- * 需要改就改配置文件，代价是重启才生效，但这项设置几乎不会变。</p>
+ * <p>单位由配置项 {@code waitInSeconds} 决定，入口在模组菜单的「脚本引擎」分类
+ * （「等待积木按秒显示」）。{@link TurboMCConfig#get()} 返回的是活实例，开关改完
+ * 立即影响后续绘制，不需要重启。</p>
  *
  * <p><b>换算用 {@link BigDecimal} 而不是 {@code double}</b>：除以 20 在十进制下总是有限小数
  * （20 = 2² × 5），所以「tick → 秒」可以做到完全无损，不会出现

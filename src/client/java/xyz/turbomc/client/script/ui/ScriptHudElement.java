@@ -163,6 +163,8 @@ public final class ScriptHudElement implements HudElement {
 		}
 
 		TurboMCConfig config = TurboMCConfig.get();
+		// 停留时长可热改：每次渲染同步一次，设置界面改完不必重启
+		bubbles.setHoldMs(config.hudBubbleHoldMsValue());
 		if (config.showPathHud) {
 			addPathRows(rows);
 		}
