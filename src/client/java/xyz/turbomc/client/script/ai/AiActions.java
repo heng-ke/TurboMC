@@ -3,7 +3,7 @@ package xyz.turbomc.client.script.ai;
 import xyz.turbomc.client.config.TurboMCConfig;
 import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.runtime.ScriptContext;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 
 /**
  * AI 对话积木的动作层。
@@ -66,6 +66,6 @@ public final class AiActions {
 	}
 
 	private static String arg(Object[] args, int index) {
-		return args != null && index < args.length ? Values.asString(args[index]) : "";
+		return args != null && index < args.length ? ScratchCast.toString(args[index]) : "";
 	}
 }

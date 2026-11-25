@@ -127,7 +127,6 @@ public final class ParamLabels {
 	static String translationKey(String key, String value) {
 		return switch (key) {
 			case "SCOPE" -> "value.turbomc.scope." + normalize(value);
-			case "DIRECTION" -> "value.turbomc.direction." + normalize(value);
 			case "KEY" -> "value.turbomc.key." + normalize(value);
 			// 实体类型：any / hostile / player 有中文名，具体 id（minecraft:zombie）回落原值
 			case "TYPE" -> "value.turbomc.entity." + normalize(value);

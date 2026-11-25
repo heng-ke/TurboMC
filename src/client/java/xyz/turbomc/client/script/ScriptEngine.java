@@ -32,7 +32,6 @@ import xyz.turbomc.client.script.vm.ScriptBridge;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * 脚本引擎门面。
@@ -80,10 +79,12 @@ public final class ScriptEngine {
 		if (initialized) {
 			return;
 		}
-		initialized = true;
 		BlockRegistry.bootstrapOnce();
 		NativeRegistry.bootstrapOnce();
+		// 成功后才置位：load() 抛 RuntimeException 时下一次 tick 还能重试，
+		// 否则引擎会以「未初始化」的半个状态永久卡住，只能重启客户端
 		PackStore.get().load();
+		initialized = true;
 		LOG.info("[script] 引擎就绪：积木定义 {} 个，脚本包 {} 个",
 				BlockRegistry.all().size(), PackStore.get().packs().size());
 	}
@@ -162,8 +163,12 @@ public final class ScriptEngine {
 		if (!running) {
 			start();
 		}
+		if (status == Status.NO_PACK) {
+			// 没有可推进的工程：不要每帧空跑 vm.tick（B6）。导入/重启会先 restart() 改状态
+			return;
+		}
 		RhinoVm vm = RhinoVm.get();
-		vm.setBudgetMs(config.scratchVmBudgetMs);
+		vm.setBudgetMs(config.vmBudgetMs());
 		vm.tick(client);
 
 		// 运行期异常被 VM 内部 catch 掉了，不主动拉取的话界面上只会显示「已停止」，
@@ -341,7 +346,6 @@ public final class ScriptEngine {
 		return Set.copyOf(keys);
 	}
 
-	/** 停止并记录原因：界面靠 {@link #statusText()} 区分「没开」「包坏了」「跑崩了」。 */
 	/**
 	 * 远程会话建立：内 VM 让位给浏览器那侧。
 	 *
@@ -423,6 +427,7 @@ public final class ScriptEngine {
 		LOG.info("[script] 远程会话结束，脚本引擎保持关闭");
 	}
 
+	/** 停止并记录原因：界面靠 {@link #statusText()} 区分「没开」「包坏了」「跑崩了」。 */
 	private void stop(Status status, Text detail) {
 		teardown();
 		setStatus(status, detail);
@@ -436,6 +441,10 @@ public final class ScriptEngine {
 	 * 具体原因覆盖成「已停止」，等于把唯一的诊断信息抹掉。</p>
 	 */
 	private void teardown() {
+		teardown("引擎停止");
+	}
+
+	private void teardown(String reason) {
 		running = false;
 		scriptCount = 0;
 		// 键表与包名一起清：分发器只看 triggerKeys()，留着旧键表就等于「引擎关了
@@ -443,8 +452,8 @@ public final class ScriptEngine {
 		activeName = "";
 		cachedTriggerKeys = Set.of();
 		// 移动会话要先停：它下一 tick 会把前进键按回去，光松键没用
-		PathFollower.abort("引擎停止");
-		TurnSession.abort("引擎停止");
+		PathFollower.abort(reason);
+		TurnSession.abort(reason);
 		// 规划器的静态字段抓着当前 ClientWorld；停止后不再规划，就该放开它
 		PathPlanner.reset();
 		// 必须在这里松手：脚本按住的键由 KeyBindingMixin 从读取端接管，只要表里还登记着
@@ -489,9 +498,12 @@ public final class ScriptEngine {
 	 *
 	 * <p>缺了这道判断，引擎关闭后按键与聊天仍会 {@code startHat}：线程被压进
 	 * {@code runtime.threads} 但 {@code _step} 不再调用，表现为只进不出的堆积。</p>
+	 *
+	 * <p>{@code status} 必须是 {@link Status#RUNNING}：没有启用包时 {@code running}
+	 * 仍为真（留着等导入），但那一刻没有任何工程可派发，算「活跃」会让触发空跑（B6）。</p>
 	 */
 	public boolean active() {
-		return running && !halted && healthy;
+		return running && !halted && healthy && status == Status.RUNNING;
 	}
 
 	/**
@@ -506,12 +518,12 @@ public final class ScriptEngine {
 	}
 
 	/**
-	 * 分发一次触发事件。
+	 * 分发一次边沿事件（受伤 / 死亡）。
 	 *
-	 * <p>{@code matcher} 参数已不参与过滤——过滤发生在 VM 内部（字段匹配）或由宿主
-	 * 直接调用 {@link #fireKey}。保留该参数是为了不改动既有调用点。</p>
+	 * <p>其余触发各有入口：{@link #fireKey}、{@link #fireScreen}、{@link #fireChat}。
+	 * 过滤发生在 VM 内部（字段匹配），这里只负责把事件翻译成帽子 opcode。</p>
 	 */
-	public void fire(String trigger, Predicate<BlockNode> matcher) {
+	public void fire(String trigger) {
 		if (status == Status.REMOTE) {
 			// 远程会话：内 VM 是停的，帽子由浏览器那侧按 §7.5 的帽子表起
 			switch (trigger) {
@@ -527,10 +539,8 @@ public final class ScriptEngine {
 			return;
 		}
 		String opcode = switch (trigger) {
-			case "event.chat" -> "turbomc_whenChat";
 			case "event.damage" -> "turbomc_whenDamaged";
 			case "event.death" -> "turbomc_whenDeath";
-			case "event.tick", "event.start" -> "event_whenflagclicked";
 			default -> null;
 		};
 		if (opcode != null) {
@@ -824,26 +834,15 @@ public final class ScriptEngine {
 
 	/** 重启：下次 tick 重新载入当前启用的包。 */
 	public void restart() {
-		running = false;
+		// 收尾与「停止」同一条路径（键表、寻路、转向、监视器、AI、聊天队列、画框），
+		// 这里只补重启独有的状态复位
+		teardown("切换工程");
 		halted = false;
 		healthy = true;
 		// 故障标志复位后，状态也要跟着复位：下一次 tick 会重新判定成运行中/无包
 		setStatus(Status.NO_WORLD, null);
-		// 换工程等于上一批线程全部消失，它们的移动会话与按键同样没人来收
-		PathFollower.abort("切换工程");
-		TurnSession.abort("切换工程");
-		ScriptKeys.releaseEveryKey();
 		// 旧工程收过的消息不该挡住新工程
 		ChatGate.reset();
-		// 监视器与未交付的回答同属「上一份工程的状态」，一并清掉
-		MonitorStore.clear();
-		ScriptBridge.clearPendingAnswer();
-		// AI 会话与在途请求同理：换工程后接着上一份的对话只会让模型前后矛盾
-		AiService.get().cancelAll();
-		ChatState.clear();
-		GameActions.clearChatQueue();
-		// 旧工程画的框不该留到新工程里：坐标可能来自另一套脚本、甚至另一个维度
-		FrameOverlay.clear();
 	}
 
 	/**
@@ -868,10 +867,6 @@ public final class ScriptEngine {
 		restart();
 		LOG.info("[script] 从「停止全部」直接重开");
 		return true;
-	}
-
-	public boolean isRunning() {
-		return running;
 	}
 
 	public int scriptCount() {

@@ -122,10 +122,6 @@ function __tmcWaitUntil(checkKey, maxTicks) {
 	});
 }
 
-function __tmcPendingCount() {
-	return __tmcPending.length;
-}
-
 /*
  * 覆盖方法体。
  * - 帽子积木补一个恒真实现：startHats 会调用其方法判断条件，
@@ -752,15 +748,7 @@ function __tmcStartHatField(opcode, fieldName, value) {
 			if (actual === null || String(actual) !== want) {
 				continue;
 			}
-			var busy = false;
-			for (var i = 0; i < runtime.threads.length; i++) {
-				var thread = runtime.threads[i];
-				if (thread.target === target && thread.topBlock === id && thread.status !== 4) {
-					busy = true;
-					break;
-				}
-			}
-			if (busy) {
+			if (__tmcHatBusy(runtime, target, id)) {
 				continue;
 			}
 			var pushed = runtime._pushThread(id, target);
@@ -769,6 +757,17 @@ function __tmcStartHatField(opcode, fieldName, value) {
 		}
 	}
 	return started;
+}
+
+/** 同一顶帽子在 target 上是否已有未结束的线程（status 4 = DONE）。 */
+function __tmcHatBusy(runtime, target, id) {
+	for (var i = 0; i < runtime.threads.length; i++) {
+		var thread = runtime.threads[i];
+		if (thread.target === target && thread.topBlock === id && thread.status !== 4) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /** 取字段文本：兼容 {name,value,id} 对象与 [value, id] 数组两种形态。 */
@@ -912,15 +911,7 @@ function __tmcStartHatFiltered(opcode, inputName, matchText, mode) {
 				}
 			}
 			// 同一顶块已有线程在跑则跳过，避免聊天连发时叠加
-			var busy = false;
-			for (var i = 0; i < runtime.threads.length; i++) {
-				var thread = runtime.threads[i];
-				if (thread.target === target && thread.topBlock === id && thread.status !== 4) {
-					busy = true;
-					break;
-				}
-			}
-			if (busy) {
+			if (__tmcHatBusy(runtime, target, id)) {
 				continue;
 			}
 			var pushed = runtime._pushThread(id, target);
@@ -1090,15 +1081,6 @@ function __tmcDumpVars() {
 		}
 	}
 	return parts.join(';');
-}
-
-function __tmcDescribe() {
-	var list = [];
-	for (var k = 0; k < __tmcInfo.blocks.length; k++) {
-		var b = __tmcInfo.blocks[k];
-		list.push(b.opcode + ':' + b.blockType + ':' + (__tmcOrder[b.opcode] || []).join('|'));
-	}
-	return list.join(';');
 }
 
 /**

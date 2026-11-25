@@ -25,13 +25,4 @@ public record BlockType(String id, String category, BlockShape shape, List<Block
 	public boolean hasTemplate() {
 		return template != null && !template.isEmpty();
 	}
-
-	public BlockParam param(String name) {
-		for (BlockParam param : params) {
-			if (param.name().equals(name)) {
-				return param;
-			}
-		}
-		return null;
-	}
 }

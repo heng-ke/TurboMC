@@ -160,14 +160,33 @@ public final class PathMath {
 	// ---- 内部 ----
 
 	/** 语义与 {@code MathHelper.clamp(int,int,int)} 一致；自己写一份是为了不引 MC 类型。 */
-	static int clamp(int value, int min, int max) {
+	public static int clamp(int value, int min, int max) {
 		return value < min ? min : Math.min(value, max);
 	}
 
-	private static double horizontal(double ax, double az, double bx, double bz) {
+	/** 坐标/参数钳制：NaN（参数缺失或填了非数字）落到下限，其余夹在区间内。 */
+	public static double clamp(double value, double min, double max) {
+		if (Double.isNaN(value)) {
+			return min;
+		}
+		return Math.max(min, Math.min(max, value));
+	}
+
+	/** 两点间的水平距离（忽略 y）。 */
+	public static double horizontal(double ax, double az, double bx, double bz) {
 		double dx = ax - bx;
 		double dz = az - bz;
 		return Math.sqrt(dx * dx + dz * dz);
+	}
+
+	/**
+	 * 从 (ax, az) 看向 (bx, bz) 的 yaw（度）。
+	 *
+	 * <p>两点重合时返回 0；需要「保持当前朝向」的调用方自己先判距离
+	 * （见 {@code TurnSession.yawTo} 的 {@code MIN_AIM_DISTANCE}）。</p>
+	 */
+	public static float yawTo(double ax, double az, double bx, double bz) {
+		return (float) Math.toDegrees(Math.atan2(-(bx - ax), bz - az));
 	}
 
 	private static double distance(double ax, double ay, double az,

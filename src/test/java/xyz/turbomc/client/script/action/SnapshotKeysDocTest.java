@@ -1,6 +1,7 @@
 package xyz.turbomc.client.script.action;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -61,14 +62,14 @@ class SnapshotKeysDocTest {
 		assertEquals(Snapshots.WORLD_KEYS,
 				keysOf(stubOf(js, "worldJson")), "世界骨架的键与代码不一致");
 
-		JsonObject block = JsonText.parse(stubOf(js, "blockJson")).getAsJsonObject();
+		JsonObject block = JsonParser.parseString(stubOf(js, "blockJson")).getAsJsonObject();
 		assertEquals(Snapshots.BLOCK_KEYS, List.copyOf(block.keySet()));
 		assertEquals(Snapshots.BLOCK_ENTITY_KEYS,
 				List.copyOf(block.getAsJsonObject("block_entity").keySet()));
 	}
 
 	private static List<String> keysOf(String json) {
-		JsonObject object = JsonText.parse(json).getAsJsonObject();
+		JsonObject object = JsonParser.parseString(json).getAsJsonObject();
 		return List.copyOf(object.keySet());
 	}
 
@@ -91,7 +92,7 @@ class SnapshotKeysDocTest {
 		int close = raw.lastIndexOf('}');
 		assertTrue(open >= 0 && close > open, opcode + " 的骨架不是对象字面量：" + raw);
 		String json = raw.substring(open, close + 1);
-		assertNotNull(JsonText.parse(json), opcode + " 的骨架不是合法 JSON：" + json);
+		assertNotNull(JsonParser.parseString(json), opcode + " 的骨架不是合法 JSON：" + json);
 		return json;
 	}
 

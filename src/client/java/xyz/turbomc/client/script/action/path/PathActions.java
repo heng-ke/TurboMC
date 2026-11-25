@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.action.GameActions;
 import xyz.turbomc.client.script.action.NativeRegistry;
 import xyz.turbomc.client.script.runtime.ScriptContext;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 
 /**
  * 「走向 x y z」的入口：解析三个参数，然后交给 {@link PathFollower} 挂起执行。
@@ -44,9 +44,9 @@ public final class PathActions {
 		}
 
 		BlockPos pos = new BlockPos(
-				GameActions.clampCoord(Values.asNumber(args[0])),
-				clampY(Values.asNumber(args[1])),
-				GameActions.clampCoord(Values.asNumber(args[2])));
+				GameActions.clampCoord(ScratchCast.toNumber(args[0])),
+				clampY(ScratchCast.toNumber(args[1])),
+				GameActions.clampCoord(ScratchCast.toNumber(args[2])));
 		MoveTarget target = new MoveTarget(pos);
 
 		if (!PathFollower.start(client, target)) {
@@ -56,8 +56,11 @@ public final class PathActions {
 	}
 
 	private static int clampY(double value) {
-		double clamped = Math.max(-Y_LIMIT, Math.min(Y_LIMIT, value));
-		return (int) Math.floor(clamped);
+		// NaN 走 (int) 转换会静默变成 0（世界中部），先挡掉
+		if (Double.isNaN(value)) {
+			return 0;
+		}
+		return (int) Math.floor(PathMath.clamp(value, -Y_LIMIT, Y_LIMIT));
 	}
 
 	/** 缺失的 input 在桥里是 null 或空串。 */

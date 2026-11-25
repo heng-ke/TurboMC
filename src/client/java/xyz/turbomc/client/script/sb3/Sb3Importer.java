@@ -65,9 +65,9 @@ public final class Sb3Importer {
 				return parse(JsonParser.parseReader(reader));
 			}
 		} catch (IOException e) {
-			return new Result(List.of(), List.of(), "读取失败：" + e.getMessage());
+			return new Result(List.of(), List.of(), "读取失败：" + brief(e));
 		} catch (RuntimeException e) {
-			return new Result(List.of(), List.of(), "解析失败：" + e.getMessage());
+			return new Result(List.of(), List.of(), "解析失败：" + brief(e));
 		} catch (StackOverflowError e) {
 			// 深度保护失效时的最后一道保险：错误必须变成一条可读提示，
 			// 而不是让 Error 冒到 GUI 的点击回调里把客户端带崩。
@@ -229,7 +229,11 @@ public final class Sb3Importer {
 
 			BlockNode node = new BlockNode(editorType(opcode, block));
 			if (!BlockRegistry.exists(node.type)) {
-				unsupported.add(opcode + " → " + node.type);
+				String warning = opcode + " → " + node.type;
+				// 同一个未知积木在工程里可能出现几十次，只报一条
+				if (!unsupported.contains(warning)) {
+					unsupported.add(warning);
+				}
 			}
 
 			// 字段：变量/列表保存的是名字，其余取首元素
@@ -526,13 +530,20 @@ public final class Sb3Importer {
 				return body.isEmpty() ? 0 : body.split(",").length;
 			}
 		}
+		// 按实际存在的 P<n> 求最大序号：早先硬编码 1..5，参数 ≥6 会被静默算成 5
 		int count = 0;
-		for (int i = 1; i <= 5; i++) {
-			if (node.inputs.containsKey("P" + i)) {
-				count = i;
+		for (String key : node.inputs.keySet()) {
+			if (key.matches("P\\d{1,3}")) {
+				count = Math.max(count, Integer.parseInt(key.substring(1)));
 			}
 		}
 		return count;
+	}
+
+	/** 异常转一句人能读的原因；{@code getMessage()} 为空的异常不在少数。 */
+	private static String brief(Throwable e) {
+		String message = e.getMessage();
+		return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
 	}
 
 	private static String nextId(JsonObject block) {

@@ -28,7 +28,7 @@ public final class TurnSession {
 	private static final double MIN_AIM_DISTANCE = 1e-4;
 
 	public enum State {
-		IDLE, TURNING, DONE, ABORTED
+		IDLE, TURNING, DONE, TIMEOUT, ABORTED
 	}
 
 	private static Session session;
@@ -52,12 +52,16 @@ public final class TurnSession {
 		}
 		// 折成最短路径，并且不归一化：yaw 保持连续累加，服务端看到的就是小增量。
 		// 若在这里 wrap 成 [-180,180]，yaw 从 370 变 10 会被反作弊看成一次 360° 瞬转。
-		float targetYaw = player.getYaw() + TurnMath.yawDiff(player.getYaw(), yaw);
+		float yawDiff = TurnMath.yawDiff(player.getYaw(), yaw);
+		float targetYaw = player.getYaw() + yawDiff;
 		float targetPitch = MathHelper.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
 
-		if (Math.abs(TurnMath.yawDiff(player.getYaw(), targetYaw)) <= TurnMath.DEAD_ZONE
+		if (Math.abs(yawDiff) <= TurnMath.DEAD_ZONE
 				&& Math.abs(targetPitch - player.getPitch()) <= TurnMath.DEAD_ZONE) {
-			lastState = State.DONE;
+			// 只在没有会话在转时才改 lastState：否则会把另一个脚本正在等的 turn 提前放行
+			if (session == null) {
+				lastState = State.DONE;
+			}
 			return false;
 		}
 		if (session != null && session.state == State.TURNING
@@ -89,7 +93,8 @@ public final class TurnSession {
 			return;
 		}
 		if (s.ticks > MAX_TICKS) {
-			finish(s, State.DONE, "超时（剩 yaw " + Math.round(yawDiff) + "°, pitch " + Math.round(pitchDiff) + "°）");
+			// 超时也放行（否则阻塞积木挂死），但状态与日志必须如实说「超时」
+			finish(s, State.TIMEOUT, "剩 yaw " + Math.round(yawDiff) + "°, pitch " + Math.round(pitchDiff) + "°");
 			return;
 		}
 
@@ -100,7 +105,7 @@ public final class TurnSession {
 
 	/** poll 的返回值：终态为真，保持到下一次 start()。 */
 	public static boolean finished() {
-		return lastState == State.DONE || lastState == State.ABORTED;
+		return lastState == State.DONE || lastState == State.TIMEOUT || lastState == State.ABORTED;
 	}
 
 	/** 是否正在转——寻路用它决定要不要让出 yaw。 */
@@ -157,6 +162,8 @@ public final class TurnSession {
 		ViewSmoother.clear("转向结束");
 		if (state == State.DONE) {
 			LOG.info("[turn] 到达目标视角：{} tick{}", s.ticks, note == null ? "" : "（" + note + "）");
+		} else if (state == State.TIMEOUT) {
+			LOG.info("[turn] 超时：{} tick（{}）", s.ticks, note == null ? "" : note);
 		} else {
 			LOG.info("[turn] 中止：{}", note == null ? "未知" : note);
 		}

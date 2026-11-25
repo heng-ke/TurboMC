@@ -1,6 +1,8 @@
 package xyz.turbomc.client.script.runtime;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,7 +19,12 @@ public final class MonitorStore {
 		VARIABLE, LIST
 	}
 
-	private static final Map<String, Kind> VISIBLE = new LinkedHashMap<>();
+	/** 一条可见监视器：名字 + 类型。变量与列表分开登记，同名不会互相顶掉。 */
+	public record Entry(String name, Kind kind) {
+	}
+
+	/** 键是「类型 + 分隔符 + 名字」：同名变量与列表各占一条（P3）。 */
+	private static final Map<String, Entry> VISIBLE = new LinkedHashMap<>();
 
 	private MonitorStore() {
 	}
@@ -26,18 +33,29 @@ public final class MonitorStore {
 		if (name == null || name.isBlank()) {
 			return;
 		}
+		String key = kind.name() + "|" + name;
 		if (visible) {
-			VISIBLE.put(name, kind);
+			VISIBLE.put(key, new Entry(name, kind));
 		} else {
-			VISIBLE.remove(name);
+			VISIBLE.remove(key);
 		}
 	}
 
 	/**
 	 * 快照：渲染时遍历，不与脚本线程的登记动作互相影响。
 	 */
-	public static synchronized Map<String, Kind> snapshot() {
-		return new LinkedHashMap<>(VISIBLE);
+	public static synchronized List<Entry> snapshot() {
+		return new ArrayList<>(VISIBLE.values());
+	}
+
+	/** 按名字查类型；同名变量与列表都存在时返回先登记的那条。 */
+	public static synchronized Kind kindOf(String name) {
+		for (Entry entry : VISIBLE.values()) {
+			if (entry.name().equals(name)) {
+				return entry.kind();
+			}
+		}
+		return null;
 	}
 
 	/** 引擎停止或切换工程时清空——上一份工程的监视器不该留在画面上。 */

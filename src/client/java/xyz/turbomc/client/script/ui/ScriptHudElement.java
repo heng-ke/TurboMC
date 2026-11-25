@@ -194,15 +194,15 @@ public final class ScriptHudElement implements HudElement {
 	 * 主线程，和 {@link #pollSpeech} 取气泡是同一条路，不存在并发读写。</p>
 	 */
 	private void addMonitorRows(List<Row> rows, TextRenderer textRenderer) {
-		Map<String, MonitorStore.Kind> monitors = MonitorStore.snapshot();
+		List<MonitorStore.Entry> monitors = MonitorStore.snapshot();
 		if (monitors.isEmpty()) {
 			return;
 		}
 		RhinoVm vm = RhinoVm.get();
-		int limit = Math.max(1, TurboMCConfig.get().monitorListItems);
-		for (Map.Entry<String, MonitorStore.Kind> entry : monitors.entrySet()) {
-			String name = entry.getKey();
-			if (entry.getValue() == MonitorStore.Kind.LIST) {
+		int limit = TurboMCConfig.get().monitorListItems();
+		for (MonitorStore.Entry entry : monitors) {
+			String name = entry.name();
+			if (entry.kind() == MonitorStore.Kind.LIST) {
 				rows.add(new Row(listRow(textRenderer, name, vm, limit), 0xFFFFD54F));
 				continue;
 			}

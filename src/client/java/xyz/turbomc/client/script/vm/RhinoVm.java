@@ -288,24 +288,6 @@ public final class RhinoVm {
 	}
 
 	/**
-	 * 读 Scratch 列表为 JSON 数组文本；列表不存在返回 {@code null}。
-	 *
-	 * <p>与 {@link #getVariable} 同一层：都是宿主读 VM 内部状态的出口，
-	 * 供「JSON」那两块列表积木使用。{@code null} 与 {@code "[]"} 的差别是「找不到」与
-	 * 「找到但为空」，积木据此区分空串与空数组。</p>
-	 */
-	public String readList(String name) {
-		Object value = callQuietly("__tmcReadList", new Object[]{name});
-		return value == null ? null : value.toString();
-	}
-
-	/** 用 JSON 数组覆盖 Scratch 列表；返回是否成功（列表不存在或不是数组时为假）。 */
-	public boolean writeList(String name, String json) {
-		Object value = callQuietly("__tmcSetList", new Object[]{name, json});
-		return Boolean.TRUE.equals(value);
-	}
-
-	/**
 	 * 所有角色当前的气泡（「说 / 思考」积木的结果），JSON 数组；VM 未就绪返回空串。
 	 */
 	public String speechJson() {

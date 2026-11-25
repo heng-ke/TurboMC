@@ -36,7 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.runtime.ChatState;
 import xyz.turbomc.client.script.runtime.ScriptContext;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.action.path.PathMath;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -273,7 +274,7 @@ public final class WorldQueries {
 	private static Object nearestEntityField(ScriptContext ctx, Object[] args) {
 		Entity entity = nearestEntityOrNull(ctx, args);
 		String field = args.length > 1
-				? Values.asString(args[1]).trim().toLowerCase(Locale.ROOT) : "distance";
+				? ScratchCast.toString(args[1]).trim().toLowerCase(Locale.ROOT) : "distance";
 		MinecraftClient client = client(ctx);
 		return switch (field) {
 			case "x" -> coordinateOf(entity, 0);
@@ -292,7 +293,7 @@ public final class WorldQueries {
 
 	private static Object heldItemField(ScriptContext ctx, Object[] args) {
 		String field = args.length > 0
-				? Values.asString(args[0]).trim().toLowerCase(Locale.ROOT) : "id";
+				? ScratchCast.toString(args[0]).trim().toLowerCase(Locale.ROOT) : "id";
 		MinecraftClient client = client(ctx);
 		// 数量与最大耐久：判断「这一组还剩几个」「这工具还能修几次」，都是背包类脚本的常用判断。
 		// 空手时数量给 0、最大耐久给 0（不可损坏物品的耐久百分比另由 durability 给 100）
@@ -311,7 +312,7 @@ public final class WorldQueries {
 
 	/** 菜单值 x/y/z → 轴序号；未知值按 x 处理。 */
 	private static int axisOf(Object[] args) {
-		String axis = args.length > 0 ? Values.asString(args[0]).trim().toLowerCase(Locale.ROOT) : "x";
+		String axis = args.length > 0 ? ScratchCast.toString(args[0]).trim().toLowerCase(Locale.ROOT) : "x";
 		return switch (axis) {
 			case "y" -> 1;
 			case "z" -> 2;
@@ -334,7 +335,7 @@ public final class WorldQueries {
 		if (client.player == null) {
 			return 0d;
 		}
-		Item item = ItemIds.resolve(Values.asString(args[0]));
+		Item item = ItemIds.resolve(ScratchCast.toString(args[0]));
 		if (item == null) {
 			return 0d;
 		}
@@ -415,9 +416,9 @@ public final class WorldQueries {
 			return "";
 		}
 		BlockPos pos = new BlockPos(
-				GameActions.clampCoord(Values.asNumber(args[0])),
-				GameActions.clampCoord(Values.asNumber(args[1])),
-				GameActions.clampCoord(Values.asNumber(args[2])));
+				GameActions.clampCoord(ScratchCast.toNumber(args[0])),
+				GameActions.clampCoord(ScratchCast.toNumber(args[1])),
+				GameActions.clampCoord(ScratchCast.toNumber(args[2])));
 		return Registries.BLOCK.getId(client.world.getBlockState(pos).getBlock()).toString();
 	}
 
@@ -471,7 +472,7 @@ public final class WorldQueries {
 		if (client.world == null || client.player == null) {
 			return 0d;
 		}
-		EntityFilter.Parsed filter = EntityFilter.parse(Values.asString(args[0]));
+		EntityFilter.Parsed filter = EntityFilter.parse(ScratchCast.toString(args[0]));
 		int count = 0;
 		for (Entity entity : nearbyEntities(ctx)) {
 			if (EntityFilter.matches(entity, filter)) {
@@ -538,7 +539,11 @@ public final class WorldQueries {
 				return List.of();
 			}
 			return client.world.getOtherEntities(client.player,
-					client.player.getBoundingBox().expand(radius));
+							client.player.getBoundingBox().expand(radius)).stream()
+					// expand 出来的是方盒，对角可达 1.73r；这里再按真实距离过一遍，
+					// 否则积木上写的「半径」与实际范围不符（B15）
+					.filter(entity -> client.player.distanceTo(entity) <= radius)
+					.toList();
 		});
 	}
 
@@ -556,7 +561,7 @@ public final class WorldQueries {
 
 	/** 读积木的「实体类型」参数；菜单必有值，缺失时按空串进解析（匹配不到）。 */
 	private static EntityFilter.Parsed filterOf(Object[] args) {
-		return EntityFilter.parse(Values.asString(args[0]));
+		return EntityFilter.parse(ScratchCast.toString(args[0]));
 	}
 
 	static Entity nearestEntityOrNull(ScriptContext ctx, Predicate<Entity> filter, String cacheKey) {
@@ -650,9 +655,9 @@ public final class WorldQueries {
 		if (client == null || client.player == null || client.world == null) {
 			return "[]";
 		}
-		EntityFilter.Parsed filter = EntityFilter.parse(args.length > 0 ? Values.asString(args[0]) : "");
-		double radius = args.length > 1 ? clamp(Values.asNumber(args[1]), 1d, 64d) : ENTITY_SEARCH_RANGE;
-		int limit = args.length > 2 ? (int) clamp(Values.asNumber(args[2]), 1d, 256d) : 32;
+		EntityFilter.Parsed filter = EntityFilter.parse(args.length > 0 ? ScratchCast.toString(args[0]) : "");
+		double radius = args.length > 1 ? PathMath.clamp(ScratchCast.toNumber(args[1]), 1d, 64d) : ENTITY_SEARCH_RANGE;
+		int limit = args.length > 2 ? (int) PathMath.clamp(ScratchCast.toNumber(args[2]), 1d, 256d) : 32;
 		String key = "entities_json:" + filter.cacheKey() + ':' + radius + ':' + limit;
 		return ctx.cached(key, () -> buildEntitiesJson(ctx, filter, radius, limit));
 	}
@@ -669,18 +674,7 @@ public final class WorldQueries {
 			if (!entity.isAlive() || !EntityFilter.matches(entity, filter)) {
 				continue;
 			}
-			out.add(new Snapshots.Entity(
-					Registries.ENTITY_TYPE.getId(entity.getType()).toString(),
-					entity.getType().getName().getString(),
-					entity.getCustomName() == null ? "" : entity.getCustomName().getString(),
-					entity.getUuidAsString(),
-					(double) player.distanceTo(entity),
-					position(entity),
-					motion(entity),
-					(double) healthOf(entity),
-					(double) maxHealthOf(entity),
-					entity instanceof LivingEntity living && living.isBaby(),
-					entity.isOnGround()));
+			out.add(entityEntry(player, entity));
 		}
 		out.sort(Comparator.comparingDouble(Snapshots.Entity::distance));
 		if (out.size() > limit) {
@@ -696,9 +690,9 @@ public final class WorldQueries {
 			return "{}";
 		}
 		BlockPos pos = new BlockPos(
-				GameActions.clampCoord(Values.asNumber(args.length > 0 ? args[0] : 0)),
-				GameActions.clampCoord(Values.asNumber(args.length > 1 ? args[1] : 0)),
-				GameActions.clampCoord(Values.asNumber(args.length > 2 ? args[2] : 0)));
+				GameActions.clampCoord(ScratchCast.toNumber(args.length > 0 ? args[0] : 0)),
+				GameActions.clampCoord(ScratchCast.toNumber(args.length > 1 ? args[1] : 0)),
+				GameActions.clampCoord(ScratchCast.toNumber(args.length > 2 ? args[2] : 0)));
 		BlockState state = client.world.getBlockState(pos);
 		Map<String, String> properties = new LinkedHashMap<>();
 		for (var entry : state.getEntries().entrySet()) {
@@ -839,7 +833,7 @@ public final class WorldQueries {
 	 * 接到「说」或「日志」上就能一次看全，不必翻文档。</p>
 	 */
 	private static Object snapshotKeys(ScriptContext ctx, Object[] args) {
-		return Snapshots.stringArray(Snapshots.keysOf(args.length > 0 ? Values.asString(args[0]) : ""));
+		return Snapshots.stringArray(Snapshots.keysOf(args.length > 0 ? ScratchCast.toString(args[0]) : ""));
 	}
 
 	/** 在线玩家快照：uuid / 名称 / 延迟 / 游戏模式。顺序由服务端给出（tab 列表顺序）。 */
@@ -873,8 +867,8 @@ public final class WorldQueries {
 	 */
 	private static Object chatHistory(ScriptContext ctx, Object[] args) {
 		int count = args.length > 0
-				? (int) clamp(Values.asNumber(args[0]), 1d, ChatState.CAPACITY) : 10;
-		return Snapshots.chat(ChatState.history(count));
+				? (int) PathMath.clamp(ScratchCast.toNumber(args[0]), 1d, ChatState.CAPACITY) : 10;
+		return Snapshots.stringArray(ChatState.history(count));
 	}
 
 	/**
@@ -893,13 +887,13 @@ public final class WorldQueries {
 		if (client == null || client.world == null) {
 			return "{}";
 		}
-		int x1 = GameActions.clampCoord(Values.asNumber(args.length > 0 ? args[0] : 0));
-		int y1 = GameActions.clampCoord(Values.asNumber(args.length > 1 ? args[1] : 0));
-		int z1 = GameActions.clampCoord(Values.asNumber(args.length > 2 ? args[2] : 0));
-		int x2 = GameActions.clampCoord(Values.asNumber(args.length > 3 ? args[3] : 0));
-		int y2 = GameActions.clampCoord(Values.asNumber(args.length > 4 ? args[4] : 0));
-		int z2 = GameActions.clampCoord(Values.asNumber(args.length > 5 ? args[5] : 0));
-		int limit = args.length > 6 ? (int) clamp(Values.asNumber(args[6]), 1d, 16384d) : 4096;
+		int x1 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 0 ? args[0] : 0));
+		int y1 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 1 ? args[1] : 0));
+		int z1 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 2 ? args[2] : 0));
+		int x2 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 3 ? args[3] : 0));
+		int y2 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 4 ? args[4] : 0));
+		int z2 = GameActions.clampCoord(ScratchCast.toNumber(args.length > 5 ? args[5] : 0));
+		int limit = args.length > 6 ? (int) PathMath.clamp(ScratchCast.toNumber(args[6]), 1d, 16384d) : 4096;
 		int minX = Math.min(x1, x2);
 		int minY = Math.min(y1, y2);
 		int minZ = Math.min(z1, z2);
@@ -1106,14 +1100,6 @@ public final class WorldQueries {
 	private static String biomeAt(MinecraftClient client, BlockPos pos) {
 		return client.world == null
 				? "" : client.world.getBiome(pos).getKey().map(key -> key.getValue().toString()).orElse("");
-	}
-
-	/** 参数钳制：NaN（参数缺失或填了非数字）落到下限，其余夹在区间内。 */
-	private static double clamp(double value, double min, double max) {
-		if (Double.isNaN(value)) {
-			return min;
-		}
-		return Math.max(min, Math.min(max, value));
 	}
 
 	private static MinecraftClient client(ScriptContext ctx) {

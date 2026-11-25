@@ -17,8 +17,6 @@ public record MoveTarget(BlockPos pos) {
 
 	/** 玩家到目标（格中心）的水平距离。 */
 	public double horizontalDistanceTo(ClientPlayerEntity player) {
-		double dx = pos.getX() + 0.5 - player.getX();
-		double dz = pos.getZ() + 0.5 - player.getZ();
-		return Math.sqrt(dx * dx + dz * dz);
+		return PathMath.horizontal(player.getX(), player.getZ(), pos.getX() + 0.5, pos.getZ() + 0.5);
 	}
 }

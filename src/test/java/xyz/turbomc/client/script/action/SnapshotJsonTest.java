@@ -2,6 +2,7 @@ package xyz.turbomc.client.script.action;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,12 +27,12 @@ class SnapshotJsonTest {
 	@Test
 	@DisplayName("玩家快照：坐标与运动量是扁平键，没有 pos 子对象")
 	void playerIsFlat() {
-		JsonObject json = parseObject(Snapshots.player(new Snapshots.Player(
+		JsonObject json = parseObject(JsonText.stringify(Snapshots.playerObject(new Snapshots.Player(
 				"Steve", "uuid-1", 20f, 20f, 0f, 18, 3.5f, 7, 0.25f, 4, 300,
 				"survival", "minecraft:overworld",
 				new Snapshots.Vec(10.5, 64, -3), new Snapshots.Vec(0, -0.0784, 0.25),
 				90f, -10f, true, false, false, 2,
-				List.of(new Snapshots.Effect("minecraft:speed", 1, 400)))));
+				List.of(new Snapshots.Effect("minecraft:speed", 1, 400))))));
 
 		assertEquals(10.5, json.get("x").getAsDouble());
 		assertEquals(64, json.get("y").getAsDouble());
@@ -41,11 +42,11 @@ class SnapshotJsonTest {
 		assertFalse(json.has("pos"), "扁平契约：坐标不能包进 pos 子对象");
 		assertFalse(json.has("motion"), "扁平契约：运动量不能包进 motion 子对象");
 		// 整数写成 20 而不是 20.0——与 JSON.stringify 一致（ARCHITECTURE §23）
-		assertTrue(Snapshots.player(new Snapshots.Player(
+		assertTrue(JsonText.stringify(Snapshots.playerObject(new Snapshots.Player(
 				"Steve", "u", 20f, 20f, 0f, 20, 5f, 0, 0f, 0, 300,
 				"survival", "minecraft:overworld",
 				new Snapshots.Vec(0, 0, 0), new Snapshots.Vec(0, 0, 0), 0f, 0f,
-				true, false, false, 1, List.of()))
+				true, false, false, 1, List.of())))
 				.contains("\"health\":20,"), "整数不能写成 20.0");
 		assertEquals(18, json.get("food").getAsInt());
 		assertEquals(2, json.get("selected_slot").getAsInt());
@@ -60,8 +61,9 @@ class SnapshotJsonTest {
 	@Test
 	@DisplayName("无玩家时给空对象而不是空串：空串会让 json 积木解析失败")
 	void playerWithoutPlayer() {
-		assertEquals("{}", Snapshots.player(null));
-		assertNotNull(JsonText.parse(Snapshots.player(null)), "空对象必须是合法 JSON");
+		String text = JsonText.stringify(Snapshots.playerObject(null));
+		assertEquals("{}", text);
+		assertNotNull(JsonParser.parseString(text), "空对象必须是合法 JSON");
 	}
 
 	@Test
@@ -73,7 +75,7 @@ class SnapshotJsonTest {
 				new Snapshots.Entity("minecraft:creeper", "苦力怕", "闪电", "u2", 5,
 						new Snapshots.Vec(4, 5, 6), new Snapshots.Vec(0.1, 0, -0.1), 20f, 20f, true, false)));
 
-		JsonArray array = JsonText.parse(text).getAsJsonArray();
+		JsonArray array = JsonParser.parseString(text).getAsJsonArray();
 		assertEquals(2, array.size(), "裸数组才能直接接 json.length / array_map_field");
 		JsonObject first = array.get(0).getAsJsonObject();
 		assertEquals("minecraft:zombie", first.get("type").getAsString());
@@ -132,27 +134,27 @@ class SnapshotJsonTest {
 	@Test
 	@DisplayName("背包快照：裸数组，只列非空槽位，槽位号保留 inventory 索引")
 	void inventoryArray() {
-		JsonArray array = JsonText.parse(Snapshots.inventory(List.of(
+		JsonArray array = JsonParser.parseString(JsonText.stringify(Snapshots.inventoryArray(List.of(
 				new Snapshots.Item(0, "minecraft:iron_sword", 1, 10, 250, "", Map.of()),
 				new Snapshots.Item(36, "minecraft:diamond_helmet", 1, 0, 363, "", Map.of()),
-				new Snapshots.Item(40, "minecraft:shield", 1, 0, 336, "", Map.of())))).getAsJsonArray();
+				new Snapshots.Item(40, "minecraft:shield", 1, 0, 336, "", Map.of()))))).getAsJsonArray();
 
 		assertEquals(3, array.size());
 		assertEquals(0, array.get(0).getAsJsonObject().get("slot").getAsInt());
 		// 盔甲与副手不是 1、2：槽位号必须是 inventory 索引，否则脚本按 36/40 取甲会落空
 		assertEquals(36, array.get(1).getAsJsonObject().get("slot").getAsInt());
 		assertEquals(40, array.get(2).getAsJsonObject().get("slot").getAsInt());
-		assertEquals("[]", Snapshots.inventory(List.of()));
+		assertEquals("[]", JsonText.stringify(Snapshots.inventoryArray(List.of())));
 	}
 
 	@Test
 	@DisplayName("界面快照：带 type/slots，玩家格有 player_slot 标记")
 	void screenShape() {
-		JsonObject json = parseObject(Snapshots.screen("minecraft:generic_9x3", 63, List.of(
+		JsonObject json = parseObject(JsonText.stringify(Snapshots.screenObject("minecraft:generic_9x3", 63, List.of(
 				new Snapshots.ScreenItem(
 						new Snapshots.Item(0, "minecraft:gold_ingot", 64, 0, 0, "", Map.of()), false),
 				new Snapshots.ScreenItem(
-						new Snapshots.Item(27, "minecraft:bread", 3, 0, 0, "", Map.of()), true))));
+						new Snapshots.Item(27, "minecraft:bread", 3, 0, 0, "", Map.of()), true)))));
 
 		assertEquals("minecraft:generic_9x3", json.get("type").getAsString());
 		assertEquals(63, json.get("slots").getAsInt(), "slots 是界面槽位总数，不是非空条目数");
@@ -160,15 +162,15 @@ class SnapshotJsonTest {
 		assertEquals(2, items.size());
 		assertFalse(items.get(0).getAsJsonObject().get("player_slot").getAsBoolean());
 		assertTrue(items.get(1).getAsJsonObject().get("player_slot").getAsBoolean());
-		assertTrue(JsonText.parse(Snapshots.screen("", 0, List.of()))
+		assertTrue(JsonParser.parseString(JsonText.stringify(Snapshots.screenObject("", 0, List.of())))
 				.getAsJsonObject().getAsJsonArray("items").isEmpty());
 	}
 
 	@Test
 	@DisplayName("世界快照：时间/天数/月相/天气/光照都在这八个键里")
 	void worldShape() {
-		JsonObject json = parseObject(Snapshots.world(new Snapshots.WorldFacts(
-				13000, 12, 3, true, false, "minecraft:overworld", "minecraft:plains", 7)));
+		JsonObject json = parseObject(JsonText.stringify(Snapshots.worldObject(new Snapshots.WorldFacts(
+				13000, 12, 3, true, false, "minecraft:overworld", "minecraft:plains", 7))));
 
 		assertEquals(13000, json.get("time").getAsInt());
 		assertEquals(12, json.get("day").getAsInt());
@@ -177,15 +179,15 @@ class SnapshotJsonTest {
 		assertFalse(json.get("thundering").getAsBoolean());
 		assertEquals("minecraft:plains", json.get("biome").getAsString());
 		assertEquals(7, json.get("light").getAsInt());
-		assertEquals("{}", Snapshots.world(null));
+		assertEquals("{}", JsonText.stringify(Snapshots.worldObject(null)));
 	}
 
 	@Test
 	@DisplayName("在线玩家：只有 uuid/名称/延迟/模式四项，裸数组")
 	void playersArray() {
-		JsonArray array = JsonText.parse(Snapshots.players(List.of(
+		JsonArray array = JsonParser.parseString(JsonText.stringify(Snapshots.playersArray(List.of(
 				new Snapshots.PlayerEntry("uuid-a", "Alice", 35, "survival"),
-				new Snapshots.PlayerEntry("", "Bob", 0, "")))).getAsJsonArray();
+				new Snapshots.PlayerEntry("", "Bob", 0, ""))))).getAsJsonArray();
 
 		assertEquals(2, array.size());
 		JsonObject first = array.get(0).getAsJsonObject();
@@ -195,17 +197,17 @@ class SnapshotJsonTest {
 		assertEquals("survival", first.get("gamemode").getAsString());
 		// 模式缺失时给空串而不是 null，脚本不用判 null
 		assertEquals("", array.get(1).getAsJsonObject().get("gamemode").getAsString());
-		assertEquals("[]", Snapshots.players(null));
+		assertEquals("[]", JsonText.stringify(Snapshots.playersArray(null)));
 	}
 
 	@Test
 	@DisplayName("聊天历史：字符串裸数组，顺序原样保留（旧的在前由调用方保证）")
 	void chatArray() {
-		JsonArray array = JsonText.parse(Snapshots.chat(List.of("第一句", "第二句")))
+		JsonArray array = JsonParser.parseString(Snapshots.stringArray(List.of("第一句", "第二句")))
 				.getAsJsonArray();
 		assertEquals("第一句", array.get(0).getAsString());
 		assertEquals("第二句", array.get(1).getAsString());
-		assertEquals("[]", Snapshots.chat(null));
+		assertEquals("[]", Snapshots.stringArray(null));
 	}
 
 	@Test
@@ -232,51 +234,51 @@ class SnapshotJsonTest {
 				new Snapshots.Entity("minecraft:zombie", "僵尸", "他说\"你好\"\n换行", "u", 1,
 						new Snapshots.Vec(0, 0, 0), new Snapshots.Vec(0, 0, 0), 1f, 1f, false, true)));
 
-		assertNotNull(JsonText.parse(text), "输出必须是合法 JSON");
+		assertNotNull(JsonParser.parseString(text), "输出必须是合法 JSON");
 		assertEquals("他说\"你好\"\n换行",
-				JsonText.parse(text).getAsJsonArray().get(0).getAsJsonObject().get("custom_name").getAsString());
+				JsonParser.parseString(text).getAsJsonArray().get(0).getAsJsonObject().get("custom_name").getAsString());
 	}
 
 	@Test
 	@DisplayName("每块快照的键顺序必须与 Snapshots 里的清单一致（清单是唯一事实来源）")
 	void keysMatchDeclaredLists() {
-		JsonObject player = parseObject(Snapshots.player(new Snapshots.Player(
+		JsonObject player = parseObject(JsonText.stringify(Snapshots.playerObject(new Snapshots.Player(
 				"n", "u", 1f, 1f, 0f, 1, 0f, 0, 0f, 0, 0, "survival", "minecraft:overworld",
 				new Snapshots.Vec(0, 0, 0), new Snapshots.Vec(0, 0, 0), 0f, 0f,
-				false, false, false, 1, List.of())));
+				false, false, false, 1, List.of()))));
 		assertEquals(Snapshots.PLAYER_KEYS, List.copyOf(player.keySet()));
 
-		JsonObject entity = JsonText.parse(Snapshots.entities(List.of(
+		JsonObject entity = JsonParser.parseString(Snapshots.entities(List.of(
 				new Snapshots.Entity("t", "n", "", "u", 1,
 						new Snapshots.Vec(0, 0, 0), new Snapshots.Vec(0, 0, 0), 1f, 1f, false, true))))
 				.getAsJsonArray().get(0).getAsJsonObject();
 		assertEquals(Snapshots.ENTITY_KEYS, List.copyOf(entity.keySet()));
 
-		JsonObject item = JsonText.parse(Snapshots.inventory(List.of(
-				new Snapshots.Item(0, "minecraft:stone", 1, 0, 0, "", Map.of()))))
+		JsonObject item = JsonParser.parseString(JsonText.stringify(Snapshots.inventoryArray(List.of(
+				new Snapshots.Item(0, "minecraft:stone", 1, 0, 0, "", Map.of())))))
 				.getAsJsonArray().get(0).getAsJsonObject();
 		assertEquals(Snapshots.ITEM_KEYS, List.copyOf(item.keySet()));
 
-		JsonObject screen = parseObject(Snapshots.screen("minecraft:generic_9x3", 63, List.of(
+		JsonObject screen = parseObject(JsonText.stringify(Snapshots.screenObject("minecraft:generic_9x3", 63, List.of(
 				new Snapshots.ScreenItem(
-						new Snapshots.Item(0, "minecraft:stone", 1, 0, 0, "", Map.of()), true))));
+						new Snapshots.Item(0, "minecraft:stone", 1, 0, 0, "", Map.of()), true)))));
 		assertEquals(Snapshots.SCREEN_KEYS, List.copyOf(screen.keySet()));
 		assertEquals(Snapshots.SCREEN_ITEM_KEYS,
 				List.copyOf(screen.getAsJsonArray("items").get(0).getAsJsonObject().keySet()));
 
 		JsonObject block = parseObject(Snapshots.block(new Snapshots.Block(
-				"minecraft:chest", 0, 0, 0, Map.of(), 1f, false, true, false, 0, "", 
+				"minecraft:chest", 0, 0, 0, Map.of(), 1f, false, true, false, 0, "",
 				new Snapshots.BlockEntity("minecraft:chest", List.of(), 27, Map.of(), "", ""))));
 		assertEquals(Snapshots.BLOCK_KEYS, List.copyOf(block.keySet()));
 		assertEquals(Snapshots.BLOCK_ENTITY_KEYS,
 				List.copyOf(block.getAsJsonObject("block_entity").keySet()));
 
-		JsonObject world = parseObject(Snapshots.world(new Snapshots.WorldFacts(
-				0, 1, 0, false, false, "minecraft:overworld", "", 0)));
+		JsonObject world = parseObject(JsonText.stringify(Snapshots.worldObject(new Snapshots.WorldFacts(
+				0, 1, 0, false, false, "minecraft:overworld", "", 0))));
 		assertEquals(Snapshots.WORLD_KEYS, List.copyOf(world.keySet()));
 
-		JsonObject entry = JsonText.parse(Snapshots.players(List.of(
-				new Snapshots.PlayerEntry("u", "n", 0, "survival"))))
+		JsonObject entry = JsonParser.parseString(JsonText.stringify(Snapshots.playersArray(List.of(
+				new Snapshots.PlayerEntry("u", "n", 0, "survival")))))
 				.getAsJsonArray().get(0).getAsJsonObject();
 		assertEquals(Snapshots.PLAYER_ENTRY_KEYS, List.copyOf(entry.keySet()));
 
@@ -301,8 +303,7 @@ class SnapshotJsonTest {
 	}
 
 	private static JsonObject parseObject(String text) {
-		var element = JsonText.parse(text);
-		assertNotNull(element, "输出必须是合法 JSON：" + text);
-		return element.getAsJsonObject();
+		assertNotNull(text, "输出不能为空");
+		return JsonParser.parseString(text).getAsJsonObject();
 	}
 }

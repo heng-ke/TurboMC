@@ -96,6 +96,8 @@ public final class ChatQueue {
 	public static void clear() {
 		QUEUE.clear();
 		cooldown = 0;
+		// 「队列已满」只提示一次；不清掉的话换工程后这个诊断就永久沉默
+		warnedOverflow = false;
 	}
 
 	public static int pending() {

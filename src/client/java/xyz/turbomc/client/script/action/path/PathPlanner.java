@@ -125,7 +125,7 @@ public final class PathPlanner {
 			return null;
 		}
 		Vec3d center = Vec3d.ofCenter(target);
-		double distance = Math.sqrt(squaredHorizontal(player, center));
+		double distance = PathMath.horizontal(player.getX(), player.getZ(), center.x, center.z);
 		int maxDistance = config.pathMaxDistance();
 		if (distance > maxDistance) {
 			LOG.info("[path] 目标太远 {} 格（上限 {}）", (int) distance, maxDistance);
@@ -289,12 +289,6 @@ public final class PathPlanner {
 			}
 		}
 		return true;
-	}
-
-	private static double squaredHorizontal(ClientPlayerEntity player, Vec3d target) {
-		double dx = player.getX() - target.x;
-		double dz = player.getZ() - target.z;
-		return dx * dx + dz * dz;
 	}
 
 	/** 两个方块中心的 3D 距离，只用于日志；任一为空时返回 -1。 */

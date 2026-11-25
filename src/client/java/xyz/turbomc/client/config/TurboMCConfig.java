@@ -221,7 +221,11 @@ public final class TurboMCConfig {
 		if (configured == null || configured.isEmpty()) {
 			return DEFAULT_DEV_ORIGINS;
 		}
-		return List.copyOf(configured);
+		// 手改 json 写成 [null] 会让 List.copyOf 每 tick 抛 NPE（B8）：先滤掉空项
+		return configured.stream()
+				.filter(origin -> origin != null && !origin.isBlank())
+				.map(String::trim)
+				.toList();
 	}
 
 	/**
@@ -373,8 +377,7 @@ public final class TurboMCConfig {
 			"https://turbowarp.org",
 			"http://localhost:*",
 			"http://127.0.0.1:*",
-			"tw-editor://.",
-			"tw-editor://./"
+			"tw-editor://."
 	);
 
 	private TurboMCConfig() {
@@ -452,6 +455,28 @@ public final class TurboMCConfig {
 		return Math.max(MIN_MAX_TOKENS, Math.min(MAX_MAX_TOKENS, value));
 	}
 
+	public static final int MIN_TIMEOUT_MS = 1000;
+	public static final int MAX_TIMEOUT_MS = 300000;
+
+	/**
+	 * 把请求超时钳到 1–300 秒。
+	 *
+	 * <p>界面保存与运行时归一化都走这里：只钳一边会让界面显示的值与实际生效值不一致（B9）。</p>
+	 */
+	public static int clampTimeout(int ms) {
+		return Math.max(MIN_TIMEOUT_MS, Math.min(MAX_TIMEOUT_MS, ms));
+	}
+
+	/** 生效的 VM 每 tick 预算（毫秒）：手改 json 写成 500 会让每帧卡半秒（B10）。 */
+	public int vmBudgetMs() {
+		return Math.max(1, Math.min(16, scratchVmBudgetMs));
+	}
+
+	/** 生效的 HUD 列表行数：界面滑块钳 1–20，手改 json 也要有上限（B10）。 */
+	public int monitorListItems() {
+		return Math.max(1, Math.min(20, monitorListItems));
+	}
+
 	/**
 	 * 归一化后的大模型配置。
 	 *
@@ -465,7 +490,7 @@ public final class TurboMCConfig {
 				trim(section.model),
 				section.temperature == null ? 0.7 : Math.max(0.0, Math.min(2.0, section.temperature)),
 				section.maxTokens == null ? DEFAULT_MAX_TOKENS : clampMaxTokens(section.maxTokens),
-				section.timeoutMs == null ? 30000 : Math.max(1000, Math.min(300000, section.timeoutMs)),
+				section.timeoutMs == null ? 30000 : clampTimeout(section.timeoutMs),
 				section.historyTurns == null ? 8 : Math.max(0, Math.min(50, section.historyTurns)),
 				section.maxConcurrent == null ? 2 : Math.max(1, Math.min(16, section.maxConcurrent)));
 	}
@@ -547,7 +572,7 @@ public final class TurboMCConfig {
 		/**
 		 * 最远目标距离（格）。
 		 *
-		 * <p>会话超时按这个距离缩放（见 {@code PathFollower.maxTicksFor}），改大不会
+		 * <p>会话超时按这个距离缩放（见 {@code PathMath.sessionTicks}），改大不会
 		 * 让远距离目标被判超时早退。但超过约 67 格起会被覆盖半径上限削成半截路，
 		 * 转为「走一段算一段」的分段接近，实际耗时与卡顿都会上升。</p>
 		 */
@@ -656,11 +681,19 @@ public final class TurboMCConfig {
 	public static void save() {
 		try {
 			Files.createDirectories(PATH.getParent());
+			// 非有限温度（手改 json 或旧版本留下的）会让 Gson 直接抛 IllegalArgumentException，
+			// 表现为「点保存就炸」；写盘前先收敛成默认值
+			if (instance.ai != null && instance.ai.temperature != null
+					&& !Double.isFinite(instance.ai.temperature)) {
+				instance.ai.temperature = 0.7;
+			}
 			try (Writer writer = Files.newBufferedWriter(PATH, StandardCharsets.UTF_8)) {
 				GSON.toJson(instance, writer);
 			}
 		} catch (IOException e) {
 			TurboMC.LOGGER.error("配置写入失败: {}", PATH, e);
+		} catch (IllegalArgumentException e) {
+			TurboMC.LOGGER.error("配置序列化失败（含非法数值）: {}", PATH, e);
 		}
 	}
 }

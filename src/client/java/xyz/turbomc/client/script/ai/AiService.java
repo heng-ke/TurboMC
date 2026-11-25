@@ -146,11 +146,16 @@ public final class AiService {
 	private volatile Supplier<Settings> settingsProvider = () -> Settings.DISABLED;
 	/** 是否调用过 {@link #ask}。用来区分「从没用过 AI」和「用了但没配好」。 */
 	private volatile boolean attempted;
-	private HttpClient http;
+	private volatile HttpClient http;
 	private ExecutorService executor;
-	/** 当前 client 的线程池大小与连接超时，用于判断配置变了要不要重建。 */
-	private int poolSize;
-	private int connectTimeoutMs;
+	/**
+	 * 当前 client 的线程池大小与连接超时，用于判断配置变了要不要重建。
+	 *
+	 * <p>必须在锁外读（快速路径），所以要和 {@code http} 一起 {@code volatile}：
+	 * 否则一个线程看到新 client、另一个看到旧参数，双重检查就失效了（B14）。</p>
+	 */
+	private volatile int poolSize;
+	private volatile int connectTimeoutMs;
 	private int counter;
 
 	/** 构造时所在的线程，也就是「唯一允许调用 {@link #ask} 的线程」。 */
@@ -658,7 +663,8 @@ public final class AiService {
 			if (http != null && wantedPool == poolSize && wantedConnect == connectTimeoutMs) {
 				return http;
 			}
-			ExecutorService previous = executor;
+			ExecutorService previousExecutor = executor;
+			HttpClient previousClient = http;
 			executor = Executors.newFixedThreadPool(wantedPool, runnable -> {
 				Thread thread = new Thread(runnable, "turbomc-ai");
 				// 守护线程：冒烟测试结束时不该被它挂住
@@ -671,8 +677,13 @@ public final class AiService {
 					.build();
 			poolSize = wantedPool;
 			connectTimeoutMs = wantedConnect;
-			if (previous != null) {
-				previous.shutdown();
+			// 旧 client 也要收掉，否则每改一次配置就漏一个选择器线程；
+			// 用 shutdown() 而不是 close()：close() 会等所有在途请求结束，脚本线程不能卡在这里
+			if (previousClient != null) {
+				previousClient.shutdown();
+			}
+			if (previousExecutor != null) {
+				previousExecutor.shutdown();
 			}
 			return http;
 		}

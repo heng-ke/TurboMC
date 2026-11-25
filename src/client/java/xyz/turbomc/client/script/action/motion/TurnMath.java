@@ -12,24 +12,15 @@ import net.minecraft.util.math.MathHelper;
  * <p>死区不只是为了省事：节点方向在贴近时会有噪声，没有死区就会左右微摆。</p>
  */
 public final class TurnMath {
-	/** 比例系数：每 tick 走掉剩余角度的 45%。 */
-	public static final float GAIN = 0.45f;
-	/** 一 tick 最多转多少度。12°/tick = 240°/s，接近正常人快速回头。 */
-	public static final float MAX_YAW_STEP = 12f;
-	/** 俯仰变化视觉上更敏感，限得更低。 */
-	public static final float MAX_PITCH_STEP = 10f;
-	/** 保底步长：大角度时别因为 gain 小而拖尾。 */
-	public static final float MIN_STEP = 1.2f;
 	/** 死区：剩余角度小于它就不再转，避免噪声导致的微摆。 */
 	public static final float DEAD_ZONE = 1.5f;
 
 	// ---- 渲染帧级参数（见 ViewSmoother）----
 	//
-	// 上面那组是「每 tick 步进」，用于 tick 内必须当场写视角的场合。但原版第一人称
-	// 的 getYaw(float) 不插值，每 tick 写一次就是 20 Hz 台阶；改为每渲染帧写一次，
-	// 步长按帧间隔算，台阶才会消失。两组参数单位不同（度/tick 与 度/秒），不要混用。
+	// 原版第一人称的 getYaw(float) 不插值，每 tick 写一次视角就是 20 Hz 台阶；
+	// 改为每渲染帧写一次，步长按帧间隔算，台阶才会消失。单位是度/秒。
 
-	/** 帧级角速度上限（度/秒）。与 {@link #MAX_YAW_STEP} 等价：12°/tick × 20 tick/s。 */
+	/** 帧级角速度上限（度/秒）：12°/tick × 20 tick/s。 */
 	public static final float MAX_YAW_SPEED = 240f;
 	/** 帧级俯仰速度上限（度/秒）。 */
 	public static final float MAX_PITCH_SPEED = 300f;
@@ -42,32 +33,9 @@ public final class TurnMath {
 	private TurnMath() {
 	}
 
-	/** 这一 tick 应该加在 yaw 上的增量（度，带符号）。 */
-	public static float yawStep(float diffDegrees) {
-		return step(diffDegrees, MAX_YAW_STEP);
-	}
-
-	/** 这一 tick 应该加在 pitch 上的增量（度，带符号）。 */
-	public static float pitchStep(float diffDegrees) {
-		return step(diffDegrees, MAX_PITCH_STEP);
-	}
-
 	/** 目标角度与当前角度之差，yaw 需要按最短路径折回 [-180, 180]。 */
 	public static float yawDiff(float current, float want) {
 		return MathHelper.wrapDegrees(want - current);
-	}
-
-	private static float step(float diff, float maxStep) {
-		// setYaw 遇到 NaN 会走 Util.logErrorOrPause（开发环境直接抛异常），必须先挡掉
-		if (!Float.isFinite(diff)) {
-			return 0f;
-		}
-		float magnitude = Math.abs(diff);
-		if (magnitude <= DEAD_ZONE) {
-			return 0f;
-		}
-		float wanted = MathHelper.clamp(magnitude * GAIN, Math.min(MIN_STEP, magnitude), maxStep);
-		return diff > 0 ? wanted : -wanted;
 	}
 
 	/**

@@ -16,7 +16,7 @@ import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.turbomc.client.script.runtime.ScriptContext;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 
 import java.util.Locale;
 
@@ -70,9 +70,9 @@ public final class ContainerActions {
 			return;
 		}
 		BlockPos pos = new BlockPos(
-				GameActions.clampCoord(Values.asNumber(args[0])),
-				GameActions.clampCoord(Values.asNumber(args[1])),
-				GameActions.clampCoord(Values.asNumber(args[2])));
+				GameActions.clampCoord(ScratchCast.toNumber(args[0])),
+				GameActions.clampCoord(ScratchCast.toNumber(args[1])),
+				GameActions.clampCoord(ScratchCast.toNumber(args[2])));
 		if (!(client.world.getBlockEntity(pos) instanceof Inventory)) {
 			return;
 		}
@@ -113,7 +113,7 @@ public final class ContainerActions {
 	 */
 	private static void clickSlot(ScriptContext ctx, Object[] args) {
 		// 菜单值是 left / right / middle，不是数字
-		String raw = args.length > 1 ? Values.asString(args[1]).trim() : "";
+		String raw = args.length > 1 ? ScratchCast.toString(args[1]).trim() : "";
 		if ("middle".equalsIgnoreCase(raw)) {
 			perform(ctx, args, SlotActionType.CLONE, 2);
 			return;
@@ -150,7 +150,7 @@ public final class ContainerActions {
 		if (handler == null) {
 			return;
 		}
-		int index = (int) Math.round(Values.asNumber(args[0]));
+		int index = (int) Math.round(ScratchCast.toNumber(args[0]));
 		if (index < 0 || index >= handler.slots.size()) {
 			return;
 		}
@@ -189,7 +189,7 @@ public final class ContainerActions {
 	 */
 	private static Object slotField(ScriptContext ctx, Object[] args) {
 		String field = args.length > 1
-				? Values.asString(args[1]).trim().toLowerCase(Locale.ROOT) : "id";
+				? ScratchCast.toString(args[1]).trim().toLowerCase(Locale.ROOT) : "id";
 		ItemStack stack = stackAt(ctx, args);
 		boolean empty = stack == null || stack.isEmpty();
 		switch (field) {
@@ -229,7 +229,7 @@ public final class ContainerActions {
 		if (handler == null) {
 			return -1d;
 		}
-		Item wanted = ItemIds.resolve(Values.asString(args.length > 0 ? args[0] : ""));
+		Item wanted = ItemIds.resolve(ScratchCast.toString(args.length > 0 ? args[0] : ""));
 		if (wanted == null) {
 			return -1d;
 		}
@@ -260,7 +260,7 @@ public final class ContainerActions {
 		if (handler == null) {
 			return null;
 		}
-		int index = (int) Math.round(Values.asNumber(args.length > 0 ? args[0] : 0));
+		int index = (int) Math.round(ScratchCast.toNumber(args.length > 0 ? args[0] : 0));
 		if (index < 0 || index >= handler.slots.size()) {
 			return null;
 		}

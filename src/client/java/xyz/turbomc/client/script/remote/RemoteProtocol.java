@@ -54,7 +54,6 @@ public final class RemoteProtocol {
 
 	public static final String E_UNMAPPED = "unmapped";
 	public static final String E_RATE = "rate";
-	public static final String E_BUDGET = "budget";
 	public static final String E_NOTFOUND = "notfound";
 	public static final String E_INTERNAL = "internal";
 

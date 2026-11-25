@@ -50,11 +50,9 @@ public final class ChatText {
 	}
 
 	/**
-	 * 只做清洗，<b>不截断</b>。
-	 *
-	 * <p>发给 {@link #split} 之前必须先走这一步，但**不能**用 {@link #sanitize}——
-	 * 那个会按单条上限截断，长文本在分段之前就被砍掉，结果永远只有一段
-	 * （真机踩过：1000 字的回复只发出 256 字，日志里没有「已分成 N 段」）。</p>
+	 * 只做清洗，<b>不截断</b>：长文本要先完整清洗、再交给 {@link #split} 分段，
+	 * 在分段之前砍到 256 字会让它永远只有一段（真机踩过：1000 字的回复只发出 256 字，
+	 * 日志里没有「已分成 N 段」）。
 	 */
 	public static String clean(String raw) {
 		if (raw == null || raw.isEmpty()) {
@@ -91,46 +89,6 @@ public final class ChatText {
 		return text.replaceAll(" {2,}", " ");
 	}
 
-	/**
-	 * 清洗并压到单条上限内（超长部分截断，末尾补 {@code …}）。
-	 *
-	 * <p><b>只适用于「就发一条」的场景。</b>需要分段的调用方必须先用 {@link #clean} +
-	 * {@link #split}，直接用它会把长文本砍成一段。</p>
-	 */
-	public static String sanitize(String raw) {
-		return truncate(clean(raw));
-	}
-
-	/**
-	 * 按字符数与字节数双重截断，留一个省略号。
-	 *
-	 * <p>先算预算再逐码点填，而不是先 {@code substring} 再补救——后者会切掉代理对的一半
-	 * （半截 emoji 服务端判非法），也没法同时满足两个上限。</p>
-	 */
-	private static String truncate(String text) {
-		if (text.length() <= MAX_LENGTH && utf8Bytes(text) <= MAX_BYTES) {
-			return text;
-		}
-		int charBudget = MAX_LENGTH - ELLIPSIS.length();
-		int byteBudget = MAX_BYTES - utf8Bytes(ELLIPSIS);
-		StringBuilder out = new StringBuilder(charBudget);
-		int chars = 0;
-		int bytes = 0;
-		for (int i = 0; i < text.length(); ) {
-			int codePoint = text.codePointAt(i);
-			int width = Character.charCount(codePoint);
-			int size = utf8Bytes(codePoint);
-			if (chars + width > charBudget || bytes + size > byteBudget) {
-				break;
-			}
-			out.appendCodePoint(codePoint);
-			chars += width;
-			bytes += size;
-			i += width;
-		}
-		return out.append(ELLIPSIS).toString();
-	}
-
 	/** 一个码点按 UTF-8 编码后的字节数。 */
 	private static int utf8Bytes(int codePoint) {
 		if (codePoint < 0x80) {
@@ -152,17 +110,12 @@ public final class ChatText {
 		return total;
 	}
 
-	/** 清洗是否会改动原文。用于决定要不要打一条提示。 */
-	public static boolean needsSanitize(String raw) {
-		return raw != null && !raw.equals(sanitize(raw));
-	}
-
 	/**
 	 * 按单条上限切段。
 	 *
-	 * <p>输入必须是 {@link #clean} 的结果（已无换行、<b>未截断</b>）。<b>千万不要传
-	 * {@link #sanitize} 的结果</b>：那个已经压到单条上限，切出来永远只有一段——
-	 * 真机上表现为「1000 字的回复只发出 256 字，日志里也没有『已分成 N 段』」。</p>
+	 * <p>输入必须是 {@link #clean} 的结果（已无换行、<b>未截断</b>）。先截断再切段
+	 * 会让长文本永远只有一段——真机上表现为「1000 字的回复只发出 256 字，
+	 * 日志里也没有『已分成 N 段』」。</p>
 	 *
 	 * <p>切点优先落在标点上，
 	 * 让每段读起来还是完整的句子；找不到标点才硬切。</p>

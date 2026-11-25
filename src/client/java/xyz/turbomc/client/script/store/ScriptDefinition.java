@@ -24,7 +24,6 @@ public final class ScriptDefinition {
 		ScriptDefinition definition = new ScriptDefinition();
 		definition.name = name;
 		definition.hat = hat;
-		definition.scopeId = name;
 		return definition;
 	}
 }

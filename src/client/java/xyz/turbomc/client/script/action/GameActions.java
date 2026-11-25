@@ -14,7 +14,7 @@ import xyz.turbomc.client.script.action.motion.TurnSession;
 import xyz.turbomc.client.script.action.path.PathFollower;
 import xyz.turbomc.client.script.runtime.ScriptContext;
 import xyz.turbomc.client.script.runtime.SelfChatEcho;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 import xyz.turbomc.client.script.view.ViewSmoother;
 
 import java.util.Locale;
@@ -119,7 +119,7 @@ public final class GameActions {
 	 * <p>不做边沿检测——按住期间持续为真；也不受界面是否打开影响。</p>
 	 */
 	private static Object mouseButtonDown(ScriptContext ctx, Object[] args) {
-		String raw = args.length > 0 ? Values.asString(args[0]) : "";
+		String raw = args.length > 0 ? ScratchCast.toString(args[0]) : "";
 		boolean down = InputKeys.isMouseDown(client(ctx), raw);
 		// 状态翻转时留一行日志：鼠标判断出问题时，这行能区分「参数没传进来」
 		// 「键名没解析」「GLFW 没读到」三种情况，比逐层加打印快
@@ -163,7 +163,7 @@ public final class GameActions {
 		}
 		// 直接写值并占用视角：与「走向 / 平滑转向」的帧层控制互斥，否则每 tick 会互相掰
 		ViewSmoother.applyManual(client,
-				(float) Values.asNumber(args[0]), (float) Values.asNumber(args[1]));
+				(float) ScratchCast.toNumber(args[0]), (float) ScratchCast.toNumber(args[1]));
 	}
 
 	private static void lookAt(ScriptContext ctx, Object[] args) {
@@ -172,9 +172,9 @@ public final class GameActions {
 			return;
 		}
 		Vec3d target = new Vec3d(
-				Values.asNumber(args[0]),
-				Values.asNumber(args[1]),
-				Values.asNumber(args[2]));
+				ScratchCast.toNumber(args[0]),
+				ScratchCast.toNumber(args[1]),
+				ScratchCast.toNumber(args[2]));
 		// 目标与眼睛重合时方向向量为零，归一化得到 NaN，而 setYaw 遇到 NaN 会走
 		// Util.logErrorOrPause（开发环境直接抛异常）。这种输入直接忽略。
 		Vec3d eye = client.player.getEyePos();
@@ -189,7 +189,7 @@ public final class GameActions {
 
 
 	private static void log(ScriptContext ctx, Object[] args) {
-		LOG.info("{}", Values.asString(args[0]));
+		LOG.info("{}", ScratchCast.toString(args[0]));
 	}
 
 	/**
@@ -242,7 +242,7 @@ public final class GameActions {
 		if (client(ctx).getNetworkHandler() == null) {
 			return;
 		}
-		String raw = Values.asString(args[0]);
+		String raw = ScratchCast.toString(args[0]);
 		if (raw.isBlank()) {
 			return;
 		}
@@ -338,7 +338,7 @@ public final class GameActions {
 		if (client.getNetworkHandler() == null) {
 			return;
 		}
-		String text = Values.asString(args[0]).trim();
+		String text = ScratchCast.toString(args[0]).trim();
 		if (text.isEmpty()) {
 			return;
 		}
@@ -386,32 +386,34 @@ public final class GameActions {
 	 * <p>键名写法见 {@link KeyNames}：{@code w}、{@code left shift}、{@code mouse.left} 都行。</p>
 	 */
 	private static void key(ScriptContext ctx, Object[] args) {
-		applyKey(ctx, Values.asString(args[0]), Values.asBool(args[1]));
+		applyKey(ctx, ScratchCast.toString(args[0]), ScratchCast.toBoolean(args[1]) ? -1 : 0);
 	}
 
 	/**
 	 * 点按键盘键：按下后按住若干 tick 自动松开。
 	 */
 	private static void tap(ScriptContext ctx, Object[] args) {
-		int hold = (int) Math.round(Values.asNumber(args[1]));
-		applyTap(ctx, Values.asString(args[0]), hold);
-		// 按住期间脚本必须挂起，否则后面的积木会在松手之前就执行完
-		if (hold > 0) {
-			ctx.requestWait(hold);
-		}
+		int hold = (int) Math.round(ScratchCast.toNumber(args[1]));
+		// 按住与挂起必须用同一个值：早先按住时长被钳到 [1, 200]，挂起却用原始值，
+		// hold=1000 时键 200 tick 后已松、脚本还要白等 800 tick
+		int ticks = Math.max(1, Math.min(200, hold));
+		applyKey(ctx, ScratchCast.toString(args[0]), ticks);
+		ctx.requestWait(ticks);
 	}
 
 	/**
 	 * 点击鼠标键：按下 1 tick 后自动松开。
 	 */
 	private static void click(ScriptContext ctx, Object[] args) {
-		applyTap(ctx, "mouse." + Values.asString(args[0]).toLowerCase(Locale.ROOT), 1);
+		applyKey(ctx, "mouse." + ScratchCast.toString(args[0]).toLowerCase(Locale.ROOT), 1);
 	}
 
 	/**
 	 * 按键的公共实现：键盘与鼠标共用，区别只在键名怎么拼出来。
+	 *
+	 * @param ticks {@code < 0} 一直按住；{@code 0} 松开；{@code > 0} 按住指定 tick 后自动松开
 	 */
-	private static void applyKey(ScriptContext ctx, String raw, boolean pressed) {
+	private static void applyKey(ScriptContext ctx, String raw, int ticks) {
 		MinecraftClient client = client(ctx);
 		String translationKey = KeyNames.toTranslationKey(raw);
 		InputUtil.Key physical = InputUtil.fromTranslationKey(translationKey);
@@ -431,52 +433,14 @@ public final class GameActions {
 				continue;
 			}
 			matched++;
-			if (pressed) {
-				// 只在「松开 → 按下」的边沿伪造一次按下事件，否则循环里每 tick
-				// 调用都会让「开背包」「切视角」这类动作重复触发
-				boolean alreadyHeld = ScriptKeys.isForced(binding);
-				ScriptKeys.hold(ctx.currentInstance(), binding, -1);
-				if (!alreadyHeld) {
-					binding.onKeyPressed(physical);
-				}
-			} else {
-				ScriptKeys.release(ctx.currentInstance(), binding);
-			}
-		}
-		if (matched == 0) {
-			warnKey(raw, blocked > 0
-					? "该键用于打开游戏界面，脚本不会按下它"
-					: "没有任何游戏动作绑定在这个键上（可先在「选项 → 控制」里绑定）");
-		}
-	}
-
-	/**
-	 * 点按的公共实现：按住 {@code hold} tick 后由 {@link ScriptKeys#tick()} 松开。
-	 */
-	private static void applyTap(ScriptContext ctx, String raw, int hold) {
-		MinecraftClient client = client(ctx);
-		int ticks = Math.max(1, Math.min(200, hold));
-
-		String translationKey = KeyNames.toTranslationKey(raw);
-		InputUtil.Key physical = InputUtil.fromTranslationKey(translationKey);
-		if (physical == InputUtil.UNKNOWN_KEY) {
-			warnKey(raw, "不是有效的按键名");
-			return;
-		}
-
-		int matched = 0;
-		int blocked = 0;
-		for (KeyBinding binding : client.options.allKeys) {
-			if (!translationKey.equals(binding.getBoundKeyTranslationKey())) {
+			if (ticks == 0) {
+				ScriptKeys.release(binding);
 				continue;
 			}
-			if (isBlocked(binding, translationKey)) {
-				blocked++;
-				continue;
-			}
-			matched++;
+			// 只在「松开 → 按下」的边沿伪造一次按下事件，否则循环里每 tick
+			// 调用都会让「开背包」「切视角」这类动作重复触发
 			boolean alreadyHeld = ScriptKeys.isForced(binding);
-			ScriptKeys.hold(ctx.currentInstance(), binding, ticks);
+			ScriptKeys.hold(binding, ticks < 0 ? -1 : ticks);
 			if (!alreadyHeld) {
 				binding.onKeyPressed(physical);
 			}

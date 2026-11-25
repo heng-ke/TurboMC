@@ -42,10 +42,6 @@ public record BlockParam(String name, boolean field, ParamKind kind, String defa
 		return new BlockParam(name, false, ParamKind.BOOLEAN, defaultValue, List.of(), false);
 	}
 
-	public static BlockParam option(String name, String defaultValue, String... options) {
-		return new BlockParam(name, false, ParamKind.ENUM, defaultValue, List.of(options), false);
-	}
-
 	public static BlockParam fieldOption(String name, String defaultValue, String... options) {
 		return new BlockParam(name, true, ParamKind.ENUM, defaultValue, List.of(options), false);
 	}

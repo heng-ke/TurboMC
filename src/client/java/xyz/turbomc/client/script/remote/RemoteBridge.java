@@ -49,8 +49,9 @@ public final class RemoteBridge {
 
 	private Server server;
 	private int port;
+	/** 本次监听使用的配置端口（{@code 0} = 自动）。运行中配置变了要重开监听（B12）。 */
+	private int wantedPort;
 	private volatile WebSocket controller;
-	private String lastRejectedOrigin = "";
 	/**
 	 * 启动失败后的冷却截止时刻（{@link System#currentTimeMillis()}）。
 	 *
@@ -123,6 +124,7 @@ public final class RemoteBridge {
 		}
 		TurboMCConfig config = TurboMCConfig.get();
 		int wanted = config.remotePort();
+		wantedPort = wanted;
 		// 先把白名单拍一份快照：监听可能在下一 tick 之前就收到连接，那时 tick 还没来得及刷新
 		allowedOrigins = config.remoteAllowedOrigins();
 
@@ -165,6 +167,7 @@ public final class RemoteBridge {
 	/** 停止监听并断开当前控制者。幂等。 */
 	public void stop() {
 		Server current = server;
+		boolean hadController = controller != null;
 		server = null;
 		port = 0;
 		controller = null;
@@ -172,6 +175,13 @@ public final class RemoteBridge {
 		// 关掉再开（或改了端口）应当立刻重试，不继承上一次失败的冷却
 		retryAfter = 0L;
 		lastError = "";
+		// 断线前积压的按键/移动请求不能带到下一次连接
+		executor.clear();
+		// controller 已置空，onClose 的「controller == conn」不再成立；这里必须显式收尾，
+		// 否则引擎会永久停在 REMOTE（HUD 一直写「远程调试中」，F6 也改不回来）
+		if (hadController) {
+			onMainThread(() -> ScriptEngine.get().endRemoteSession());
+		}
 		if (current == null) {
 			return;
 		}
@@ -201,6 +211,13 @@ public final class RemoteBridge {
 				return false;
 			}
 		} catch (InterruptedException e) {
+			// 不等了也不能把刚起来（或正在起来）的服务端丢下：否则线程与端口泄漏，
+			// 之后每 5 秒都会在同一个端口再失败一次（B13）
+			try {
+				instance.stop(0);
+			} catch (InterruptedException ignored) {
+				// stop() 内部也会响应中断；这里本来就在中断路径上
+			}
 			Thread.currentThread().interrupt();
 			return false;
 		} catch (RuntimeException e) {
@@ -223,6 +240,13 @@ public final class RemoteBridge {
 	 * 会与 tick 并发。而 {@code send()} 本身是异步入队的，主线程调用不会阻塞网络。</p>
 	 */
 	public void tick(MinecraftClient client) {
+		// 端口只在 start() 时读一次（bind 会阻塞），这里补一次变化检测：运行中改了端口，
+		// 不重开监听的话 HUD 还显示旧端口、新端口永远不生效（B12）
+		if (running() && TurboMCConfig.get().remotePort() != wantedPort) {
+			LOG.info("[remote] 端口配置已变更，重启监听");
+			stop();
+			start();
+		}
 		// 每 tick 采一次握手要用的字段（主线程）。放在「没有连接就 return」之前：
 		// 断线期间世界可能换了，下一次握手不能拿着断开时的旧值。
 		cachedWorld = client == null || client.world == null
@@ -310,6 +334,8 @@ public final class RemoteBridge {
 		WebSocket socket = controller;
 		controller = null;
 		controllerOrigin = null;
+		// 会话结束后队列里的请求已无人认领，继续执行只会在新会话里按下旧按键
+		executor.clear();
 		// 会话没了，内 VM 的让位也要撤：否则引擎永远停在 REMOTE，玩家按 F6 也没反应
 		onMainThread(() -> ScriptEngine.get().endRemoteSession());
 		if (socket == null) {
@@ -327,9 +353,10 @@ public final class RemoteBridge {
 	}
 
 	/**
-	 * 每分钟的心跳检查由 Java-WebSocket 内置的 connection-lost 机制承担：
-	 * 服务端发 WS ping 帧，浏览器自动回 pong 帧。浏览器无法主动发 ping 帧，
-	 * 所以不走「客户端定时 ping」那条路。快照本身也在每 tick 出数据，断线一目了然。
+	 * 探活交给 Java-WebSocket 内置的 connection-lost 机制：服务端发 WS ping 帧、
+	 * 浏览器自动回 pong 帧，超时窗口见 {@link RemoteProtocol#HEARTBEAT_TIMEOUT_MS}（3 秒）。
+	 * 浏览器无法主动发 ping 帧，所以不走「客户端定时 ping」那条路。
+	 * 快照本身也在每 tick 出数据，断线一目了然。
 	 */
 	private void onText(String text) {
 		JsonElement parsed;
@@ -352,6 +379,8 @@ public final class RemoteBridge {
 				// 浏览器点了红停止：线程在那边清了，游戏侧的动作（按住的键、寻路、待发聊天）
 				// 只有这里能收。先回包再收手，扩展侧才不会等
 				reply("{\"t\":\"" + RemoteProtocol.T_STOPPED + "\"}");
+				// 红停止等于「全部撤回」：已入队但还没执行的按键/移动同样要丢掉
+				executor.clear();
 				onMainThread(() -> ScriptEngine.get().abortForRemote("浏览器停止全部"));
 			}
 			case RemoteProtocol.T_CALL -> {
@@ -416,7 +445,8 @@ public final class RemoteBridge {
 		client.execute(task);
 	}
 
-	/** 版本 / opcode 自检用的清单：与扩展产物比对，不一致时两侧同时提示。 */	private static JsonArray opcodes() {
+	/** 版本 / opcode 自检用的清单：与扩展产物比对，不一致时两侧同时提示。 */
+	private static JsonArray opcodes() {
 		JsonArray array = new JsonArray();
 		for (String opcode : Sb3Mapping.extensionOpcodes()) {
 			array.add(opcode);
@@ -468,7 +498,8 @@ public final class RemoteBridge {
 		return array;
 	}
 
-	private static JsonObject hat(String event, String opcode, String match, String kind, boolean alsoAny) {		JsonObject entry = new JsonObject();
+	private static JsonObject hat(String event, String opcode, String match, String kind, boolean alsoAny) {
+		JsonObject entry = new JsonObject();
 		entry.addProperty("ev", event);
 		entry.addProperty("op", opcode);
 		if (match != null) {
@@ -556,8 +587,7 @@ public final class RemoteBridge {
 			String origin = request.getFieldValue("origin");
 			// 读主线程维护的快照而不是配置本体：模组菜单里改完，这里下一次握手就用新的
 			if (!RemoteProtocol.originAllowed(origin, allowedOrigins)) {
-				lastRejectedOrigin = origin == null ? "null" : origin;
-				LOG.warn("[remote] 拒绝握手：Origin 不在白名单（{}）", lastRejectedOrigin);
+				LOG.warn("[remote] 拒绝握手：Origin 不在白名单（{}）", origin == null ? "null" : origin);
 				throw new InvalidDataException(1008, "origin not allowed");
 			}
 			return super.onWebsocketHandshakeReceivedAsServer(conn, draft, request);

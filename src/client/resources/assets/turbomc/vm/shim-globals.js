@@ -16,30 +16,35 @@ if (typeof console === 'undefined') {
 
 /* ---- 定时器：单线程同步泵，按到期时间顺序执行 ---- */
 var __timers = [];
+/* 稳定 id：数组会因执行/取消而 splice 压缩，不能再用下标当句柄 */
+var __timerSeq = 0;
 var setTimeout = function (fn, ms) {
-	__timers.push({fn: fn, at: Date.now() + (ms || 0)});
-	return __timers.length;
+	__timerSeq++;
+	__timers.push({id: __timerSeq, fn: fn, at: Date.now() + (ms || 0)});
+	return __timerSeq;
 };
 var clearTimeout = function (id) {
-	if (id > 0 && __timers[id - 1]) { __timers[id - 1].fn = null; }
+	for (var i = 0; i < __timers.length; i++) {
+		if (__timers[i].id === id) { __timers.splice(i, 1); return; }
+	}
 };
-var setInterval = function (fn, ms) {
-	__timers.push({fn: fn, at: Date.now() + (ms || 0), repeat: ms || 1});
-	return __timers.length;
-};
-var clearInterval = clearTimeout;
+/* setInterval 不提供：scratch-vm 里唯一的裸用点是 Runtime.start() 的 setInterval 步进，
+   而本项目由 Java 侧直接调 runtime._step()，从不调 runtime.start()；
+   其余用到 setInterval 的地方都是蓝牙设备（window.setInterval），本 VM 不会走到。
+   留一个「只执行一次」的实现反而会让依赖它的代码静默失效。 */
 
 /** 执行最早到期的一个任务；返回是否还有任务。忽略真实时间，避免忙等卡死。 */
 function __pumpTimerOnce() {
 	var idx = -1;
 	for (var i = 0; i < __timers.length; i++) {
-		if (__timers[i] && __timers[i].fn) {
+		if (__timers[i].fn) {
 			if (idx < 0 || __timers[i].at < __timers[idx].at) { idx = i; }
 		}
 	}
 	if (idx < 0) { return false; }
 	var task = __timers[idx];
-	__timers[idx] = null;
+	// splice 而不是置 null：长跑时数组不再单调增长、每次泵也不必扫过一长串空洞
+	__timers.splice(idx, 1);
 	try {
 		task.fn();
 	} catch (e) {

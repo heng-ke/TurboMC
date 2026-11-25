@@ -202,11 +202,6 @@ public final class Snapshots {
 
 	// ---- 玩家 ----
 
-	/** 玩家快照；{@code null} 表示当前没有玩家（无客户端），返回空对象而不是空串——空串解析会失败。 */
-	public static String player(Player p) {
-		return JsonText.stringify(playerObject(p));
-	}
-
 	/** 玩家快照对象；远程桥直接挂进快照，游戏内再序列化。 */
 	public static JsonObject playerObject(Player p) {
 		if (p == null) {
@@ -251,11 +246,6 @@ public final class Snapshots {
 	}
 
 	// ---- 实体 ----
-
-	/** 实体快照（单个）。 */
-	public static String entity(Entity entity) {
-		return JsonText.stringify(entityObject(entity));
-	}
 
 	/**
 	 * 实体快照（数组）。
@@ -304,10 +294,6 @@ public final class Snapshots {
 	 * 「哪些格是空的」用 41 减去数组长度即可。槽位号 0–35 主背包、36–39 盔甲、40 副手，
 	 * 与游戏内 inventory 索引一致。</p>
 	 */
-	public static String inventory(List<Item> items) {
-		return JsonText.stringify(inventoryArray(items));
-	}
-
 	/**
 	 * 背包快照的数组形态。
 	 *
@@ -331,10 +317,6 @@ public final class Snapshots {
 	 * 而不复用方块实体内容的原因（方块实体是容器内部索引，且同步有延迟）。
 	 * {@code slots} 是界面槽位总数，{@code items} 只列非空格，两者相减得空格数。</p>
 	 */
-	public static String screen(String type, int slots, List<ScreenItem> items) {
-		return JsonText.stringify(screenObject(type, slots, items));
-	}
-
 	/** 界面快照的对象形态；远程桥直接挂进快照，游戏内再序列化成字符串。 */
 	public static JsonObject screenObject(String type, int slots, List<ScreenItem> items) {
 		JsonObject o = new JsonObject();
@@ -353,11 +335,6 @@ public final class Snapshots {
 	}
 
 	// ---- 世界 ----
-
-	/** 世界快照；{@code null} 表示没有世界，返回空对象。 */
-	public static String world(WorldFacts facts) {
-		return JsonText.stringify(worldObject(facts));
-	}
 
 	/** 世界快照对象；{@code null} 表示没有世界，返回空对象。 */
 	public static JsonObject worldObject(WorldFacts facts) {
@@ -397,11 +374,6 @@ public final class Snapshots {
 
 	// ---- 在线玩家 / 聊天 ----
 
-	/** 在线玩家快照：裸数组，顺序由服务端给出（即 tab 列表顺序），不做重排。 */
-	public static String players(List<PlayerEntry> list) {
-		return JsonText.stringify(playersArray(list));
-	}
-
 	/** 在线玩家快照的数组形态；远程桥直接挂进快照。 */
 	public static JsonArray playersArray(List<PlayerEntry> list) {
 		JsonArray array = new JsonArray();
@@ -418,23 +390,12 @@ public final class Snapshots {
 		return array;
 	}
 
-	/** 字符串裸数组：聊天历史与「快照字段」共用。 */
+	/** 字符串裸数组：聊天历史（旧的在前，可直接喂 {@code json.array_join}）与「快照字段」共用。 */
 	public static String stringArray(List<String> values) {
 		JsonArray array = new JsonArray();
 		if (values != null) {
 			for (String value : values) {
 				array.add(value == null ? "" : value);
-			}
-		}
-		return JsonText.stringify(array);
-	}
-
-	/** 聊天历史：字符串裸数组，旧的在前，可直接喂 {@code json.array_join} 拼上下文。 */
-	public static String chat(List<String> messages) {
-		JsonArray array = new JsonArray();
-		if (messages != null) {
-			for (String message : messages) {
-				array.add(message == null ? "" : message);
 			}
 		}
 		return JsonText.stringify(array);

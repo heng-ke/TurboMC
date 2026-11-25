@@ -57,7 +57,7 @@ public final class TriggerDispatcher {
 	private void dispatchDeath(MinecraftClient client) {
 		boolean dead = client.player.isDead();
 		if (dead && !wasDead) {
-			ScriptEngine.get().fire("event.death", hat -> true);
+			ScriptEngine.get().fire("event.death");
 			if (TurboMCConfig.get().autoRespawn) {
 				GameActions.requestRespawn(client);
 			}
@@ -122,7 +122,7 @@ public final class TriggerDispatcher {
 		}
 		float health = client.player.getHealth();
 		if (lastHealth >= 0f && health < lastHealth - 0.01f) {
-			ScriptEngine.get().fire("event.damage", hat -> true);
+			ScriptEngine.get().fire("event.damage");
 		}
 		lastHealth = health;
 	}

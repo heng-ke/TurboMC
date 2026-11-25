@@ -2,12 +2,9 @@ package xyz.turbomc.client.script.action;
 
 import net.minecraft.client.option.KeyBinding;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 脚本持有的按键状态：统一管理「强制按下」与「到期自动松开」。
@@ -28,8 +25,6 @@ public final class ScriptKeys {
 	}
 
 	private static final Map<KeyBinding, Hold> HELD = new LinkedHashMap<>();
-	/** owner → 它按下的键。**当前恒为空**：动作层传进来的归属标识一直是 {@code null}。 */
-	private static final Map<Object, Set<KeyBinding>> OWNED = new HashMap<>();
 
 	private ScriptKeys() {
 	}
@@ -38,16 +33,15 @@ public final class ScriptKeys {
 	 * 按住某个键。{@code ticks < 0} 表示不自动松开。
 	 *
 	 * <p><b>幂等</b>：键已在表里时不累加计数，只延长到期时间。早先这里是引用计数
-	 * （每次 {@code +1}、每次 {@link #release} 减一），但动作层的 owner 恒为 {@code null}
-	 * （见 {@code ScriptContext#currentInstance()}），既分不清是谁按的，也保证不了
-	 * 「N 次按下配 N 次松开」——「重复执行 { 按下 W }」会在一秒内累积二十次引用，
-	 * 而「松开 W」只抵消一次，键就再也抬不起来。改成幂等后，重复按下等价于
-	 * 「继续保持按下」，一次松开即抬起。</p>
+	 * （每次 {@code +1}、每次 {@link #release} 减一），但动作层拿不到稳定的脚本实例标识，
+	 * 既分不清是谁按的，也保证不了「N 次按下配 N 次松开」——「重复执行 { 按下 W }」
+	 * 会在一秒内累积二十次引用，而「松开 W」只抵消一次，键就再也抬不起来。改成幂等后，
+	 * 重复按下等价于「继续保持按下」，一次松开即抬起。</p>
 	 *
 	 * <p>代价：两个脚本同时按住同一个键时只算一次，其中一个松开就会抬键。旧实现虽然
-	 * 计数，但因为 owner 为空，任意一次 release 同样分不清归属——幂等至少不会无限增长。</p>
+	 * 计数，但因为归属不明，任意一次 release 同样分不清归属——幂等至少不会无限增长。</p>
 	 */
-	public static void hold(Object owner, KeyBinding key, int ticks) {
+	public static void hold(KeyBinding key, int ticks) {
 		if (key == null) {
 			return;
 		}
@@ -64,9 +58,6 @@ public final class ScriptKeys {
 			ticksLeft = Math.max(current.ticksLeft(), ticks);
 		}
 		HELD.put(key, new Hold(ticksLeft));
-		if (owner != null) {
-			OWNED.computeIfAbsent(owner, ignored -> new HashSet<>()).add(key);
-		}
 		key.setPressed(true);
 	}
 
@@ -75,36 +66,8 @@ public final class ScriptKeys {
 	 *
 	 * <p>因为 {@link #hold} 已幂等，这里直接整条移除，不再做「减少一次引用」。</p>
 	 */
-	public static void release(Object owner, KeyBinding key) {
-		if (owner != null) {
-			Set<KeyBinding> keys = OWNED.get(owner);
-			if (keys != null) {
-				keys.remove(key);
-				if (keys.isEmpty()) {
-					OWNED.remove(owner);
-				}
-			}
-		}
+	public static void release(KeyBinding key) {
 		dropOne(key);
-	}
-
-	/**
-	 * 收回某个 owner 按下的全部键。
-	 *
-	 * <p>当前没有调用方，也命中不了任何条目——动作层传的归属标识恒为 {@code null}
-	 * （见 {@code ScriptContext#currentInstance()}），而 {@link #hold} 对 null 不登记归属。
-	 * 保留它是为了将来能从 JS 侧带线程 id 进来，实现「单个脚本结束时只松自己按的键」。</p>
-	 *
-	 * <p>现在真正起作用的是 {@link #releaseEveryKey()}。</p>
-	 */
-	public static void releaseAll(Object owner) {
-		Set<KeyBinding> keys = OWNED.remove(owner);
-		if (keys == null) {
-			return;
-		}
-		for (KeyBinding key : keys) {
-			dropOne(key);
-		}
 	}
 
 	/**
@@ -122,7 +85,6 @@ public final class ScriptKeys {
 			key.setPressed(false);
 		}
 		HELD.clear();
-		OWNED.clear();
 	}
 
 	/**
@@ -141,24 +103,15 @@ public final class ScriptKeys {
 				entry.setValue(new Hold(left));
 				continue;
 			}
-			KeyBinding key = entry.getKey();
-			key.setPressed(false);
+			entry.getKey().setPressed(false);
 			iterator.remove();
-			forget(key);
 		}
 	}
 
 	private static void dropOne(KeyBinding key) {
-		if (HELD.remove(key) == null) {
+		if (key == null || HELD.remove(key) == null) {
 			return;
 		}
 		key.setPressed(false);
-		forget(key);
-	}
-
-	/** 键盘表里已不再持有该键，把它从各 owner 的归属列表中摘掉（归属表当前为空，等于空转）。 */
-	private static void forget(KeyBinding key) {
-		OWNED.values().forEach(keys -> keys.remove(key));
-		OWNED.entrySet().removeIf(entry -> entry.getValue().isEmpty());
 	}
 }

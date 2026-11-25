@@ -3,7 +3,7 @@ package xyz.turbomc.client.script.action;
 import xyz.turbomc.client.script.render.FrameBox;
 import xyz.turbomc.client.script.render.FrameOverlay;
 import xyz.turbomc.client.script.runtime.ScriptContext;
-import xyz.turbomc.client.script.runtime.Values;
+import xyz.turbomc.client.script.runtime.ScratchCast;
 
 /**
  * 画框类动作：把脚本算出来的范围交给显示层。
@@ -38,9 +38,9 @@ public final class FrameActions {
 			return;
 		}
 		FrameOverlay.add(FrameBox.of(
-				Values.asNumber(args[0]), Values.asNumber(args[1]), Values.asNumber(args[2]),
-				Values.asNumber(args[3]), Values.asNumber(args[4]), Values.asNumber(args[5]),
-				Values.asString(args[6])));
+				ScratchCast.toNumber(args[0]), ScratchCast.toNumber(args[1]), ScratchCast.toNumber(args[2]),
+				ScratchCast.toNumber(args[3]), ScratchCast.toNumber(args[4]), ScratchCast.toNumber(args[5]),
+				ScratchCast.toString(args[6])));
 	}
 
 	private static void clearFrames(ScriptContext ctx, Object[] args) {

@@ -50,7 +50,8 @@ final class Blocks {
 
 		// 控制
 		regT("control.if", "control", BlockShape.C_SHAPE, "如果 {CONDITION}",
-				BlockParam.bool("CONDITION", "false"));		regT("control.if_else", "control", BlockShape.C_SHAPE, "如果 {CONDITION} 否则",
+				BlockParam.bool("CONDITION", "false"));
+		regT("control.if_else", "control", BlockShape.C_SHAPE, "如果 {CONDITION} 否则",
 				BlockParam.bool("CONDITION", "false"));
 		regT("control.repeat", "control", BlockShape.C_SHAPE, "重复 {TIMES} 次",
 				BlockParam.number("TIMES", "10"));

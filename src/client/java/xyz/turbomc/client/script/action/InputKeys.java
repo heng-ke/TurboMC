@@ -36,7 +36,7 @@ public final class InputKeys {
 		if (scratchName == null) {
 			return InputUtil.UNKNOWN_KEY;
 		}
-		String key = scratchName.trim().toLowerCase();
+		String key = scratchName.trim().toLowerCase(Locale.ROOT);
 		if (key.isEmpty() || "any".equals(key)) {
 			return InputUtil.UNKNOWN_KEY;
 		}

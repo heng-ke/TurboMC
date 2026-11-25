@@ -47,7 +47,7 @@ public final class ListMonitorSmokeTest {
 			vm.tick(null);
 		}
 
-		MonitorStore.Kind kind = MonitorStore.snapshot().get(LIST_NAME);
+		MonitorStore.Kind kind = MonitorStore.kindOf(LIST_NAME);
 		int items = countItems(vm.getList(LIST_NAME));
 		// 传了外部工程时不假定条目数（工程的产出量由它自己决定），只要求「非空且读得到」
 		int expected = custom ? -1 : EXPECTED_ITEMS;

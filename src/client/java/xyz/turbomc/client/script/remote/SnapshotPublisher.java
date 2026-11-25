@@ -273,6 +273,8 @@ public final class SnapshotPublisher {
 			// 「前方有方块吗」判的是这个位置是不是空气，不是「有没有 block 字段」
 			aim.addProperty("has", !state.isAir());
 			aim.addProperty("entity", "");
+			// 字段只增：实体分支才有 uuid，其余分支也得有这个键，脚本不必先判断
+			aim.addProperty("entityUuid", "");
 			return aim;
 		}
 		if (target instanceof EntityHitResult entityHit && target.getType() == HitResult.Type.ENTITY) {
@@ -292,6 +294,7 @@ public final class SnapshotPublisher {
 		aim.addProperty("block", "");
 		aim.addProperty("has", false);
 		aim.addProperty("entity", "");
+		aim.addProperty("entityUuid", "");
 		return aim;
 	}
 

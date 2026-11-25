@@ -459,8 +459,11 @@ public final class PathFollower {
 			stopSurface();
 			return;
 		}
-		if (!surfaceHeld) {
-			ScriptKeys.hold(null, client.options.jumpKey, -1);
+		// 每 tick 都确认一次，而不是只在「从未按住」时按一次：跳跃键是共用的，
+		// 寻路的 setJump(false) 会把它整条从键表移走，而 surfaceHeld 还是 true，
+		// 结果上浮静默失效、玩家继续下沉（B4）。
+		if (!ScriptKeys.isForced(client.options.jumpKey)) {
+			ScriptKeys.hold(client.options.jumpKey, -1);
 			surfaceHeld = true;
 		}
 		surfaceTicks++;
@@ -471,7 +474,7 @@ public final class PathFollower {
 		if (surfaceHeld) {
 			MinecraftClient client = MinecraftClient.getInstance();
 			if (client != null) {
-				ScriptKeys.release(null, client.options.jumpKey);
+				ScriptKeys.release(client.options.jumpKey);
 			}
 			surfaceHeld = false;
 		}
@@ -519,9 +522,9 @@ public final class PathFollower {
 			return;
 		}
 		if (want) {
-			ScriptKeys.hold(null, client.options.forwardKey, -1);
+			ScriptKeys.hold(client.options.forwardKey, -1);
 		} else {
-			ScriptKeys.release(null, client.options.forwardKey);
+			ScriptKeys.release(client.options.forwardKey);
 		}
 		s.forwardHeld = want;
 	}
@@ -531,9 +534,9 @@ public final class PathFollower {
 			return;
 		}
 		if (want) {
-			ScriptKeys.hold(null, client.options.jumpKey, -1);
+			ScriptKeys.hold(client.options.jumpKey, -1);
 		} else {
-			ScriptKeys.release(null, client.options.jumpKey);
+			ScriptKeys.release(client.options.jumpKey);
 		}
 		s.jumpHeld = want;
 	}
@@ -605,15 +608,11 @@ public final class PathFollower {
 	}
 
 	private static double horizontalTo(ClientPlayerEntity player, BlockPos pos) {
-		double dx = pos.getX() + 0.5 - player.getX();
-		double dz = pos.getZ() + 0.5 - player.getZ();
-		return Math.sqrt(dx * dx + dz * dz);
+		return PathMath.horizontal(player.getX(), player.getZ(), pos.getX() + 0.5, pos.getZ() + 0.5);
 	}
 
 	private static float yawTo(ClientPlayerEntity player, BlockPos pos) {
-		double dx = pos.getX() + 0.5 - player.getX();
-		double dz = pos.getZ() + 0.5 - player.getZ();
-		return (float) Math.toDegrees(Math.atan2(-dx, dz));
+		return PathMath.yawTo(player.getX(), player.getZ(), pos.getX() + 0.5, pos.getZ() + 0.5);
 	}
 
 	// ---- 会话数据 ----

@@ -48,6 +48,8 @@ public final class PackStore {
 	private final Map<String, Cache> cache = new HashMap<>();
 	private Path directory;
 	private boolean loaded;
+	/** 防止 {@link #reload()} 内部的读取再次回到 {@link #load()} 造成递归。 */
+	private boolean loading;
 	/**
 	 * 上一次同步时的 {@code imports/} 指纹，用于热重载判定。
 	 *
@@ -100,22 +102,28 @@ public final class PackStore {
 	}
 
 	public void load() {
-		if (loaded) {
+		if (loaded || loading) {
 			return;
 		}
-		loaded = true;
-		reload();
-		// 升级路径：老版本把 sb3 放在 imports/ 里当整体工程跑，从未建过包目录。
-		// 首次没有包时自动搬一次，免得用户以为「升级后脚本全没了」。
-		if (packs.isEmpty()) {
-			int added = importFrom(importsDir(), new ArrayList<>());
-			if (added > 0) {
-				LOG.info("[pack] 首次启动：从 imports 自动接管 {} 个 sb3", added);
-				reload();
+		loading = true;
+		try {
+			reload();
+			// 升级路径：老版本把 sb3 放在 imports/ 里当整体工程跑，从未建过包目录。
+			// 首次没有包时自动搬一次，免得用户以为「升级后脚本全没了」。
+			if (packs.isEmpty()) {
+				int added = importFrom(importsDir(), new ArrayList<>());
+				if (added > 0) {
+					LOG.info("[pack] 首次启动：从 imports 自动接管 {} 个 sb3", added);
+					reload();
+				}
 			}
+			// 热重载的基线：以启动时的 imports 状态为起点，避免开局就白跑一次同步
+			lastImportsFingerprint = importsFingerprint();
+			// 全部成功后才置位：中途抛异常时下次调用能重试，而不是永久停在半载入状态
+			loaded = true;
+		} finally {
+			loading = false;
 		}
-		// 热重载的基线：以启动时的 imports 状态为起点，避免开局就白跑一次同步
-		lastImportsFingerprint = importsFingerprint();
 	}
 
 	/** 重新扫描目录并恢复启用状态。 */
@@ -419,6 +427,12 @@ public final class PackStore {
 		if (!safe.toLowerCase(Locale.ROOT).endsWith(".sb3")) {
 			safe = safe + ".sb3";
 		}
+		// 改成同名不该生成 name_2.sb3：那不是重命名，只是确认
+		if (safe.equalsIgnoreCase(pack.fileName)) {
+			lastMessage = Text.translatable("message.turbomc.pack.renamed", pack.fileName);
+			lastDetail = Text.empty();
+			return true;
+		}
 		Path from = pathOf(pack);
 		Path to = directory().resolve(uniqueName(safe));
 		try {
@@ -446,11 +460,13 @@ public final class PackStore {
 	}
 
 	private String uniqueName(String name) {
-		String base = name.substring(0, name.length() - 4);
+		int dot = name.lastIndexOf('.');
+		String base = dot > 0 ? name.substring(0, dot) : name;
+		String ext = dot > 0 ? name.substring(dot) : "";
 		String candidate = name;
 		int index = 2;
 		while (Files.exists(directory().resolve(candidate))) {
-			candidate = base + "_" + index + ".sb3";
+			candidate = base + "_" + index + ext;
 			index++;
 		}
 		return candidate;
@@ -465,14 +481,9 @@ public final class PackStore {
 			lastDetail = Text.empty();
 			return false;
 		}
-		boolean wasActive = pack.enabled;
 		cache.remove(pack.fileName);
+		// reload 在「没有任何启用包」时会自动接管第一个并写索引，这里不再重复一次
 		reload();
-		// 删掉的是启用中的包：自动接管下一个，避免引擎跑空
-		if (wasActive && !packs.isEmpty()) {
-			packs.get(0).enabled = true;
-			writeIndex();
-		}
 		lastMessage = Text.translatable("message.turbomc.pack.deleted", pack.fileName);
 		lastDetail = Text.empty();
 		return true;

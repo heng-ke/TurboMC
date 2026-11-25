@@ -387,7 +387,12 @@ public final class TurboMCConfigScreen {
 				.setTooltip(Text.translatable("config.turbomc.ai.temperature.tooltip"))
 				.setSaveConsumer(value -> {
 					try {
-						section.temperature = Double.parseDouble(value.trim());
+						double parsed = Double.parseDouble(value.trim());
+						// "NaN" / "Infinity" 也能被 parseDouble 接受，但 Gson 序列化时会抛异常，
+						// 表现为「点保存直接炸」；运行时还会用非法值请求
+						if (Double.isFinite(parsed)) {
+							section.temperature = Math.max(0.0, Math.min(2.0, parsed));
+						}
 					} catch (RuntimeException ignored) {
 						// 输入不是数字：保留原值，不回写 0（0 是合法温度，会把输出变成死板复读）
 					}
@@ -417,7 +422,10 @@ public final class TurboMCConfigScreen {
 				.setTooltip(Text.translatable("config.turbomc.ai.timeout.tooltip"))
 				.setSaveConsumer(value -> {
 					try {
-						section.timeoutMs = Integer.parseInt(value.trim()) * 1000;
+						// 保存时就钳到有效范围：否则界面会显示 600 秒，实际生效仍是 300 秒（B9）
+						long ms = (long) Integer.parseInt(value.trim()) * 1000L;
+						section.timeoutMs = TurboMCConfig.clampTimeout(
+								ms > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ms);
 					} catch (RuntimeException ignored) {
 						// 同上
 					}

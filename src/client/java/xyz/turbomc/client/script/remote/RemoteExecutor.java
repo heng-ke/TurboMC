@@ -252,10 +252,4 @@ public final class RemoteExecutor {
 		return values;
 	}
 
-	/** 供诊断用：当前队列长度。 */
-	public int pending() {
-		synchronized (queue) {
-			return queue.size();
-		}
 	}
-}
