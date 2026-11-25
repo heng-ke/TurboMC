@@ -368,13 +368,18 @@ scratch-vm 的 `installTargets` **不读**工程里的 `extensions` 数组，它
 同一帧读到的仍是旧值。脚本里每次点击后要等一 tick 再读状态。
 槽位编号与其余时序细节见 [CONTAINER.md](CONTAINER.md)。
 
-### 9. 按键归属标识恒为 `null`
+### 9. 按键没有脚本归属，`hold` 改为幂等
 
 `ScriptContext.currentInstance()` 目前恒返回 `null`——scratch-vm 里没有稳定的脚本句柄
-可以传出来（线程 id 会复用）。后果是所有按键都记在同一个归属上：两个脚本按同一个键时，
-一个松手会连带松开另一个。单脚本场景无影响。
+可以传出来（线程 id 会复用）。因此按键表不记「谁按的」，只记「这个键要按住多久」。
 
-`ScriptKeys.releaseAll(owner)` 因此也没有调用方，真正兜底的是引擎停止时的
+早期实现用引用计数（每次按下 `+1`、每次松开 `-1`），但归属不明时根本无法保证
+「N 次按下配 N 次松开」：`重复执行 { 按下 W }` 会在一秒内累积二十次引用，
+而「松开 W」只抵消一次，键就再也抬不起来。现在 `ScriptKeys.hold` 是**幂等**的：
+重复按下只延长到期时间，一次松开即抬起；「一直按住」不会被后续点按降级成限时。
+
+代价与取舍：两个脚本同时按同一个键只算一次，其中一个松开仍会抬键。这是可接受的——
+旧实现同样分不清归属，却多了一个会无限增长的计数器。真正兜底的是引擎停止/切换工程时的
 `releaseEveryKey()`。要做按脚本精确回收，得先让 JS 侧把线程标识带进桥。
 
 ### 10. 扩展 id 是 `turbomc`，opcode 前缀随之固定
@@ -436,6 +441,10 @@ TurboWarp 扩展的 opcode 由「扩展 id + 下划线 + 积木名」组成，�
 同理，「平滑转向」也是会话：`TurnSession` 每 tick 判定一次进度，脚本用
 `requestWaitUntil("turn", …)` 挂起。它与 `PathFollower` 共享 `TurnMath`——两份平滑实现迟早会走偏。
 `TurnSession.isActive()` 为真时 `PathFollower` 让出 yaw，否则两边各写一次、互相抵消。
+
+转向结束有三种终态：`DONE`（到位）、`TIMEOUT`（超过 40 tick 仍未到位）、`ABORTED`（离世界/被中止）。
+**超时也放行等待**，否则阻塞积木会永久挂住；但状态与日志必须如实写「超时」，不冒充到达，
+否则 HUD 与排查都会指向错误结论。
 
 **视角的实际写入在渲染帧上，不在 tick 里**（`script/view/ViewSmoother`，注册于
 `WorldRenderEvents.START_MAIN`）。原因：`ClientPlayerEntity.getYaw(float)` 在非骑乘时直接返回原始 yaw，
@@ -842,6 +851,10 @@ Gson 用 Unsafe 建实例、**不执行字段初始化器**，所以 json 缺 `a
 段内字段仍用包装类型——缺字段与「配成 0」必须能区分（`accuracy = 0`、`temperature = 0`
 都是合法值，用原始类型会把两者混成一件事）。
 
+**边界值在读取时统一钳制**，界面与手改 json 两条入口不各写一遍：AI 超时走 `clampTimeout`，
+VM 单帧预算 `vmBudgetMs()`（1–16 ms），HUD 监视器列表行数 `monitorListItems()`（1–20），
+AI 温度保存时归一（非有限值 → 0.7，范围 `[0,2]`）；Origin 白名单读取时去空白、丢弃空项。
+
 **模组菜单按「作用主题」分页，不按配置段分页**：常规 / 脚本引擎 / 显示 / 聊天 / 寻路 /
 AI 对话 / 开发者 / 按键权限，共八页。同一主题的项必须在同一页——「走向」的显示开关与
 精度参数都在「寻路」，HUD 的位置、气泡、列表、画框与 AI 结论都在「显示」；否则使用者
@@ -985,6 +998,10 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 判据收在 `Status.staleWhenEngineOff()` 里，只认 `NO_WORLD` 与 `OFF_WORLD_EXIT`——
 `LOAD_FAILED` / `RUNTIME_ERROR` 必须保留，改成「已关闭」等于抹掉唯一的诊断信息。
 
+**`NO_PACK` 不空跑 VM**：没有可推进的工程时，`tick()` 在状态判断处直接返回，不进入
+`RhinoVm.tick`。导入、重载或重启会先改状态，不会被这个提前返回挡住。`active()` 也要求
+`status == RUNNING`，避免「没有工程却报告正在运行」。
+
 **故障状态不被覆盖**：`stop(status, detail)` 内部拆成 `teardown()` + `setStatus()`，
 `teardown()` 只收尾（会话、按键表、聊天队列、AI 请求），不改状态。否则「载入失败」
 会在下一 tick 被 `!healthy` 分支改写成普通的「已停止」，原因丢掉。
@@ -1007,6 +1024,7 @@ HUD 的第一行是引擎状态，由 `ScriptEngine.Status` 单一来源决定�
 缓存（VM 每帧返回同一份 JSON 是常态），AI 快照 250 ms 采一次，寻路两行按内容变化才重建 `Text`。
 **监视器的数值仍然每帧读 VM**——`vm.getVariable` 是这条路径上最贵的一次反射，
 但缓存它会让数字滞后，调脚本时看着「不跟手」，所以宁可留着。
+**同名变量与列表分开登记**：登记键包含类型，二者的显示互不覆盖；渲染时按稳定的登记顺序输出。
 判断要不要优化的依据是 `hud.read` 的 PerfProbe 窗口（`avg` 长期为 0，`max` 才是有意义的那一列）。
 
 **位置用两个百分比，不用四角枚举**：`hudOffsetX/Y`（0–100）映射到「可放置区间」而不是
@@ -1050,6 +1068,10 @@ TurboWarp（主 VM）
 | 握手成功 | `suspendForRemote()` → `Status.REMOTE`，HUD 青蓝「远程调试中：实例 · 端口」 |
 | 会话期间 | `ScriptEngine.tick()` 命中 `REMOTE` 后**只推进寻路与转向**（`PathFollower.tick` / `TurnSession.tick`），内 VM 不 tick，**不再被 `if (!running) start()` 拉起** |
 | 断开 / 心跳超时 / 被新连接接管 | `endRemoteSession()` → `Status.OFF`，并把 `scriptEngineEnabled` 写回 `false` |
+| 停止 / 断开 / 被新连接接管 | 执行队列立即清空，未执行的 `call` / `poll` 不会串进下一次会话 |
+
+- **端口配置变更自动重启监听**：`start()` 记下本次实际监听的端口，`tick()` 发现配置里的
+  `remotePort` 变了就 `stop()` + `start()`。只在监听中比较，绑定失败不会形成重启循环。
 
 - **让位复用 `stop()`**，不新造暂停态。代价是 `teardown()` 会松开按键、中止寻路与转向、
   清空监视器与画框、**取消进行中的 AI 会话**——最后一条与原「AI 收手不取消会话」的决议相反，
@@ -1082,7 +1104,7 @@ RemoteBridge.tick      → 先执行队列，再采集快照
 
 ```
 C→S {"t":"hello","v":1,"client":"turbowarp"}
-S→C {"t":"welcome","v":1,"build":"1.6.0-beta","instance":"run","world":"...","port":35671,
+S→C {"t":"welcome","v":1,"build":"1.6.1","instance":"run","world":"...","port":35671,
      "tickRate":20,"snapshotHz":20,"schema":6,"maxCallsPerTick":64,"queue":1024,
      "opcodes":[...],"hats":[...],"snapshotKeys":{...}}
 
