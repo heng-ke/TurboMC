@@ -83,6 +83,8 @@ src/client/java/xyz/turbomc/client/
 │   ├── TurboMCConfig.java      配置数据与持久化
 │   ├── TurboMCConfigScreen.java 模组菜单（需 Cloth Config）
 │   └── PathEffort.java         「走向」的 A* 搜索强度档位（轻量 / 标准 / 重量）
+├── ui/
+│   └── EnchantPenaltyTooltip.java F3+H 高级浮窗：读 repair_cost，追加「当前 → 下次」铁砧惩罚行
 └── script/
     ├── ScriptEngine.java        门面：取启用包 → 载入 → 绿旗 → 事件转发
     ├── action/                  动作层（Java 侧真正操作游戏的地方）

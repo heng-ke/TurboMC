@@ -36,6 +36,7 @@ import xyz.turbomc.client.script.ui.ScriptHudElement;
 import xyz.turbomc.client.script.ui.ScriptListScreen;
 import xyz.turbomc.client.script.view.ViewSmoother;
 import xyz.turbomc.client.script.vm.ExtensionExporter;
+import xyz.turbomc.client.ui.EnchantPenaltyTooltip;
 
 public class TurboMCClient implements ClientModInitializer {
 	private static KeyBinding toggleScriptKey;
@@ -80,6 +81,10 @@ public class TurboMCClient implements ClientModInitializer {
 		// 脚本 HUD：引擎状态 + 「说 / 思考」气泡。scratch-vm 的 say/think 在游戏内
 		// 没有任何渲染出口，不在这里补，脚本的话就没人看得见。
 		HudElementRegistry.addLast(TurboMC.id("script_hud"), new ScriptHudElement());
+
+		// F3+H 高级浮窗里的铁砧惩罚：只在 advanced 模式追加，F3+H 本身就是开关，
+		// 不额外占配置项；普通浮窗一行都不加。
+		EnchantPenaltyTooltip.register();
 
 		ClientReceiveMessageEvents.CHAT.register(
 				(message, signedMessage, sender, params, receptionTimestamp) -> {

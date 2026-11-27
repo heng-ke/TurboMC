@@ -535,5 +535,7 @@
   "param.turbomc.TYPE": "entity type",
   "value.turbomc.entity.any": "any entity",
   "value.turbomc.entity.hostile": "hostile mob",
-  "value.turbomc.entity.player": "player"
+  "value.turbomc.entity.player": "player",
+  "tooltip.turbomc.repair_cost": "Anvil penalty %s → next %s",
+  "tooltip.turbomc.repair_cost.none": "No anvil penalty → next %s"
 }

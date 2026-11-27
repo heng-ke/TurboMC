@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -95,6 +96,22 @@ class ParamLabelsTest {
 		assertNotNull(key, "未构造出语言键：" + param + "=" + value);
 		assertTranslated("zh_cn", key);
 		assertTranslated("en_us", key);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("语言文件的参数占位符必须是 %s —— 项目统一走 String.format")
+	@CsvSource({"zh_cn", "en_us"})
+	void languagePlaceholdersUsePercentS(String locale) {
+		JsonObject lang = loadLang(locale);
+		lang.entrySet().forEach(entry -> {
+			if (!entry.getValue().isJsonPrimitive()) {
+				return;
+			}
+			String text = entry.getValue().getAsString();
+			assertFalse(text.contains("{0}") || text.contains("{1}"),
+					locale + " 的 " + entry.getKey() + " 用了 MessageFormat 占位符 {0}/{1}，"
+							+ "Text.translatable 走 String.format，必须写成 %s");
+		});
 	}
 
 	private static void assertTranslated(String locale, String key) {

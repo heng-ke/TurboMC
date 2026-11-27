@@ -535,5 +535,7 @@
   "param.turbomc.TYPE": "实体类型",
   "value.turbomc.entity.any": "任意实体",
   "value.turbomc.entity.hostile": "敌对生物",
-  "value.turbomc.entity.player": "玩家"
+  "value.turbomc.entity.player": "玩家",
+  "tooltip.turbomc.repair_cost": "铁砧惩罚 %s → 下次 %s",
+  "tooltip.turbomc.repair_cost.none": "无铁砧惩罚 → 下次 %s"
 }
