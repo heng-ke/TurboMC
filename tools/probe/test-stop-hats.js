@@ -249,15 +249,15 @@ setTimeout(() => {
 	// 背包与容器：快照里的 inv / ui 就是游戏内那两个快照积木的原样形态
 	check(read('turbomc_inventoryJson') === JSON.stringify(snapMsg.inv), '背包快照逐字一致');
 	check(read('turbomc_screenJson') === JSON.stringify(snapMsg.ui), '界面快照逐字一致');
-	check(read('turbomc_itemCount', ['stone']) === 64, '物品计数（短名）');
-	check(read('turbomc_itemCount', ['minecraft:diamond_pickaxe']) === 1, '物品计数（注册名）');
+	check(read('turbomc_inventoryQuery', ['backpack', 'stone', 'count']) === 64, '物品计数（短名）');
+	check(read('turbomc_inventoryQuery', ['backpack', 'minecraft:diamond_pickaxe', 'count']) === 1, '物品计数（注册名）');
 	check(read('turbomc_inventoryFull') === false, '背包未满');
 	check(read('turbomc_containerSlots') === 63, '容器槽位数');
 	check(read('turbomc_slotField', [0, 'amount']) === 32
 		&& read('turbomc_slotField', [27, 'id']) === 'minecraft:apple'
 		&& read('turbomc_slotField', [5, 'amount']) === 0, '槽位字段（含空格）');
-	check(read('turbomc_firstSlotOf', ['minecraft:apple']) === 27
-		&& read('turbomc_firstSlotOf', ['dirt']) === -1, '首个槽位');
+	check(read('turbomc_inventoryQuery', ['screen', 'minecraft:apple', 'first_slot']) === 27
+		&& read('turbomc_inventoryQuery', ['screen', 'dirt', 'first_slot']) === -1, '首个槽位');
 
 	// 整体快照与键清单
 	check(read('turbomc_playerJson') === JSON.stringify(snapMsg.me), '玩家快照逐字一致');
@@ -267,15 +267,15 @@ setTimeout(() => {
 	check(read('turbomc_snapshotKeys', ['不存在']) === '[]', '未知类型给空数组');
 
 	// 聊天与 AI
-	check(read('turbomc_lastChat') === '你好呀', '最近一条聊天');
+	check(read('turbomc_chatSource', ['last']) === '你好呀', '最近一条聊天');
 	check(read('turbomc_chatHistory', [1]) === '["你好呀"]', '聊天历史取最近 N 条');
 	check(read('turbomc_chatHistory', [10]) === JSON.stringify(snapMsg.chat.history), '历史条数不足时全给');
 	check(read('turbomc_aiReply', ['default']) === 'AI 回复内容', 'AI 回复按会话查');
 	check(read('turbomc_aiReply', ['nope']) === '', '不存在的会话给空串');
 	// 「触发我的聊天」读的是 util.thread 上的私有副本
-	check(ext.__tmc('turbomc_triggerChat', [], 'reporter', null, {thread: {tmcChat: '这条是我的'}}) === '这条是我的',
+	check(ext.__tmc('turbomc_chatSource', ['trigger'], 'reporter', null, {thread: {tmcChat: '这条是我的'}}) === '这条是我的',
 		'触发我的聊天读线程副本');
-	check(ext.__tmc('turbomc_triggerChat', [], 'reporter', null, {thread: {}} ) === '',
+	check(ext.__tmc('turbomc_chatSource', ['trigger'], 'reporter', null, {thread: {}} ) === '',
 		'非聊天线程给空串');
 
 	// 附近实体：快照按距离升序，三类过滤与半径/数量都在客户端筛

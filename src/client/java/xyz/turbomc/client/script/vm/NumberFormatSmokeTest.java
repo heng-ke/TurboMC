@@ -30,11 +30,17 @@ public final class NumberFormatSmokeTest {
 		NativeRegistry.bootstrapOnce();
 		BlockRegistry.bootstrapOnce();
 
-		// 探针：复用已映射的类型 world.health（映射表不可变，但注册表可加实现）。
-		// 真实 health 要读客户端，纯 JVM 下拿不到；这里换成固定值，专测封送与字符串化。
-		NativeRegistry.function("world.health", (ctx, values) -> 20.0d);
-		NativeRegistry.function("world.food", (ctx, values) -> 0.00001d);
-		NativeRegistry.function("world.xp_level", (ctx, values) -> Boolean.FALSE);
+		// 探针：玩家的读数已合并成 world.player_field（旧的 world.health / food / xp_level
+		// 三块已删除），这里按 FIELD 参数给固定值——真实实现要读客户端，纯 JVM 拿不到。
+		// 三个值刻意不同：正常数、极小浮点、布尔，用来测封送与字符串化。
+		NativeRegistry.function("world.player_field", (ctx, values) -> {
+			String field = values.length > 0 ? String.valueOf(values[0]) : "health";
+			return switch (field) {
+				case "food" -> 0.00001d;
+				case "xp_level" -> Boolean.FALSE;
+				default -> 20.0d;
+			};
+		});
 
 		RhinoVm vm = RhinoVm.get();
 		vm.setBudgetMs(4);
@@ -106,7 +112,7 @@ public final class NumberFormatSmokeTest {
 				        "b0": {"opcode":"event_whenflagclicked","next":"b1","parent":null,
 				          "inputs":{},"fields":{},"shadow":false,"topLevel":true,"x":0,"y":0},
 				        "b1": {"opcode":"data_setvariableto","next":"b2","parent":"b0",
-				          "inputs":{"VALUE":[3,"v_num",[10,"0"]]},"fields":{"VARIABLE":["numeric","nid"]},
+				          "inputs":{"VALUE":[3,"v_num",[10,""]]},"fields":{"VARIABLE":["numeric","nid"]},
 				          "shadow":false,"topLevel":false},
 				        "b2": {"opcode":"data_setvariableto","next":"b3","parent":"b1",
 				          "inputs":{"VALUE":[3,"v_tiny",[10,"0"]]},"fields":{"VARIABLE":["tiny","tid"]},
@@ -117,17 +123,17 @@ public final class NumberFormatSmokeTest {
 				        "b4": {"opcode":"data_setvariableto","next":null,"parent":"b3",
 				          "inputs":{"VALUE":[3,"v_join",[10,""]]},"fields":{"VARIABLE":["joined","jid"]},
 				          "shadow":false,"topLevel":false},
-				        "v_num": {"opcode":"turbomc_health","next":null,"parent":"b1",
-				          "inputs":{},"fields":{},"shadow":true,"topLevel":false},
-				        "v_tiny": {"opcode":"turbomc_food","next":null,"parent":"b2",
-				          "inputs":{},"fields":{},"shadow":true,"topLevel":false},
-				        "v_bool": {"opcode":"turbomc_xpLevel","next":null,"parent":"b3",
-				          "inputs":{},"fields":{},"shadow":true,"topLevel":false},
+				        "v_num": {"opcode":"turbomc_playerField","next":null,"parent":"b1",
+				          "inputs":{"FIELD":[1,[10,"health"]]},"fields":{},"shadow":true,"topLevel":false},
+				        "v_tiny": {"opcode":"turbomc_playerField","next":null,"parent":"b2",
+				          "inputs":{"FIELD":[1,[10,"food"]]},"fields":{},"shadow":true,"topLevel":false},
+				        "v_bool": {"opcode":"turbomc_playerField","next":null,"parent":"b3",
+				          "inputs":{"FIELD":[1,[10,"xp_level"]]},"fields":{},"shadow":true,"topLevel":false},
 				        "v_join": {"opcode":"operator_join","next":null,"parent":"b4",
 				          "inputs":{"STRING1":[3,"v_join2",[10,""]],"STRING2":[1,[10,"!"]]},
 				          "fields":{},"shadow":true,"topLevel":false},
-				        "v_join2": {"opcode":"turbomc_health","next":null,"parent":"v_join",
-				          "inputs":{},"fields":{},"shadow":true,"topLevel":false}
+				        "v_join2": {"opcode":"turbomc_playerField","next":null,"parent":"v_join",
+				          "inputs":{"FIELD":[1,[10,"health"]]},"fields":{},"shadow":true,"topLevel":false}
 				      },
 				      "comments": {},
 				      "currentCostume": 0,
