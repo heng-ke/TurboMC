@@ -2,6 +2,7 @@ package xyz.turbomc.client.script.action;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -51,7 +52,7 @@ public final class ContainerActions {
 		NativeRegistry.action("action.close_container", ContainerActions::close);
 		NativeRegistry.function("world.container_slots", ContainerActions::containerSlots);
 		NativeRegistry.function("world.slot_field", ContainerActions::slotField);
-		NativeRegistry.function("world.first_slot_of", ContainerActions::firstSlotOf);
+		NativeRegistry.function("world.inventory_query", ContainerActions::inventoryQuery);
 	}
 
 	/**
@@ -215,34 +216,57 @@ public final class ContainerActions {
 	}
 
 	/**
-	 * 第一个装着指定物品的槽位号；找不到返回 -1。
+	 * 「[范围] 中 [ITEM] 的 [数量 / 首个槽位]」。
 	 *
-	 * <p>比让脚本自己循环 36 格好：一次桥调用就能定位，也不会把「背包格」和
-	 * 「容器格」的索引边界写错。</p>
+	 * <p><b>背包与界面是两套槽位</b>：背包走 {@code PlayerInventory}，界面走当前
+	 * {@code ScreenHandler}（含打开的箱子/熔炉）。同一件物品在两边的槽位号含义不同，
+	 * 所以范围必须由 RANGE 参数显式选——原来那两块（只查背包的 itemCount、只查界面的
+	 * firstSlotOf）正是因为容易被混为一谈才合并的。</p>
+	 *
+	 * <p>找不到物品时：数量返回 0，首个槽位返回 -1（与合并前的语义一致）。</p>
 	 */
-	private static Object firstSlotOf(ScriptContext ctx, Object[] args) {
+	private static Object inventoryQuery(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = (MinecraftClient) ctx.handle();
-		if (client == null) {
-			return -1d;
+		if (client == null || client.player == null) {
+			return 0d;
 		}
-		ScreenHandler handler = handler(client);
-		if (handler == null) {
-			return -1d;
-		}
-		Item wanted = ItemIds.resolve(ScratchCast.toString(args.length > 0 ? args[0] : ""));
+		boolean screen = args.length > 0 && "screen".equalsIgnoreCase(ScratchCast.toString(args[0]).trim());
+		boolean firstSlot = args.length > 2 && "first_slot".equalsIgnoreCase(ScratchCast.toString(args[2]).trim());
+		Item wanted = ItemIds.resolve(ScratchCast.toString(args.length > 1 ? args[1] : ""));
 		if (wanted == null) {
-			return -1d;
+			return firstSlot ? -1d : 0d;
 		}
-		for (int index = 0; index < handler.slots.size(); index++) {
-			ItemStack stack = handler.getSlot(index).getStack();
-			if (stack == null || stack.isEmpty()) {
+		if (screen) {
+			ScreenHandler handler = handler(client);
+			if (handler == null) {
+				return firstSlot ? -1d : 0d;
+			}
+			int total = 0;
+			for (int index = 0; index < handler.slots.size(); index++) {
+				ItemStack stack = handler.getSlot(index).getStack();
+				if (stack == null || stack.isEmpty() || stack.getItem() != wanted) {
+					continue;
+				}
+				if (firstSlot) {
+					return (double) index;
+				}
+				total += stack.getCount();
+			}
+			return firstSlot ? -1d : (double) total;
+		}
+		PlayerInventory inventory = client.player.getInventory();
+		int total = 0;
+		for (int i = 0; i < inventory.size(); i++) {
+			ItemStack stack = inventory.getStack(i);
+			if (stack.isEmpty() || stack.getItem() != wanted) {
 				continue;
 			}
-			if (stack.getItem() == wanted) {
-				return (double) index;
+			if (firstSlot) {
+				return (double) i;
 			}
+			total += stack.getCount();
 		}
-		return -1d;
+		return firstSlot ? -1d : (double) total;
 	}
 
 	/**

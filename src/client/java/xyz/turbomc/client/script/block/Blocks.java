@@ -181,55 +181,58 @@ final class Blocks {
 				BlockParam.text("LIST", "items"),
 				BlockParam.text("VALUE", "0"));
 
-		// 世界查询
-		reg("world.block_in_front", "world", BlockShape.BOOLEAN);
-		reg("world.is_mining", "world", BlockShape.BOOLEAN);
-		reg("world.mining_progress", "world", BlockShape.REPORTER);
+		// ---- 玩家状态 ----
 		// 玩家的数值/文本字段合并成一块下拉。旧的 world.health / food / pos / selected_slot /
 		// dimension / xp_level / ping 七块已删除；sb3 存的是 opcode，含它们的旧工程会出现
 		// 未知积木（与 world.pos_x/y/z 那次同一处理，见 ARCHITECTURE §6.2）
 		regT("world.player_field", "world", BlockShape.REPORTER, "玩家的 {FIELD}",
-				BlockParam.fieldOption("FIELD", "health", "health", "food", "xp_level",
-						"selected_slot", "x", "y", "z", "yaw", "pitch", "dimension", "ping"));
-		reg("world.container_slots", "world", BlockShape.REPORTER);
-		regT("world.slot_field", "world", BlockShape.REPORTER, "槽位 {INDEX} 的 {FIELD}",
-				BlockParam.number("INDEX", "0"),
-				BlockParam.fieldOption("FIELD", "id", "id", "amount",
-						"max_durability", "damage", "custom_name"));
-		// 物品参数是下拉菜单（扩展的 itemId 菜单，1.21.11 全部 1505 个物品）；
-		// 查看器把 id 显示成物品中文名（见 ParamLabels.itemName）
-		regT("world.first_slot_of", "world", BlockShape.REPORTER, "第一个装着 {ITEM} 的槽位",
-				BlockParam.text("ITEM", "minecraft:iron_ore"));
+				BlockParam.fieldOption("FIELD", "health", "health", "max_health", "armor", "air",
+						"food", "xp_level", "selected_slot", "x", "y", "z", "yaw", "pitch",
+						"dimension", "ping"));
+		reg("world.on_ground", "world", BlockShape.BOOLEAN);
+		reg("world.in_water", "world", BlockShape.BOOLEAN);
+		reg("world.in_lava", "world", BlockShape.BOOLEAN);
+		reg("world.inventory_full", "world", BlockShape.BOOLEAN);
+		// 物品参数是下拉菜单（扩展的 itemId 菜单，1.21.11 全部 1505 个物品），查看器把 id 显示成
+		// 中文名（见 ParamLabels.itemName）。「背包 / 当前界面」是两套槽位，必须显式选范围
+		regT("world.inventory_query", "world", BlockShape.REPORTER, "{RANGE} 中 {ITEM} 的 {ASK}",
+				BlockParam.fieldOption("RANGE", "backpack", "backpack", "screen"),
+				BlockParam.text("ITEM", "minecraft:stone"),
+				BlockParam.fieldOption("ASK", "count", "count", "first_slot"));
+		regT("world.held_item_field", "world", BlockShape.REPORTER, "手中的 {FIELD}",
+				BlockParam.fieldOption("FIELD", "id", "id", "durability", "count", "max_durability"));
+
+		// ---- 世界与实体 ----
+		reg("world.is_day", "world", BlockShape.BOOLEAN);
+		reg("world.biome", "world", BlockShape.REPORTER);
+		reg("world.block_below", "world", BlockShape.REPORTER);
+		reg("world.block_in_front", "world", BlockShape.BOOLEAN);
+		regT("world.block_at", "world", BlockShape.REPORTER, "坐标处方块 x{X} y{Y} z{Z}",
+				BlockParam.number("X", "0"),
+				BlockParam.number("Y", "64"),
+				BlockParam.number("Z", "0"));
+		reg("world.front_block", "world", BlockShape.REPORTER);
+		// 准星方块坐标：命中就是命中格，未命中取视线尽头那一格（见 WorldQueries.aimBlockPos）
+		regT("world.aim_pos", "world", BlockShape.REPORTER, "准星方块的 {AXIS} 坐标",
+				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
+		// 挖掘：先查「在不在挖、挖了多少」，再决定要不要「等它被挖破」
+		reg("world.is_mining", "world", BlockShape.BOOLEAN);
+		reg("world.mining_progress", "world", BlockShape.REPORTER);
 		// 实体类型在编辑器里是下拉菜单（扩展的 entityType 菜单，1.21.11 全部 157 个实体）；
 		// 查看器只拿到最终值：关键字走语言文件，具体 id 走注册表查中文名（见 ParamLabels）
 		regT("world.nearest_entity_field", "world", BlockShape.REPORTER, "最近 {TYPE} 的 {FIELD}",
 				BlockParam.text("TYPE", "minecraft:zombie"),
 				BlockParam.fieldOption("FIELD", "distance", "distance", "x", "y", "z", "name",
-						"health", "max_health", "type_id"));
-		// 物品菜单同上（itemId）
-		regT("world.item_count", "world", BlockShape.REPORTER, "背包里 {ITEM} 的数量",
-				BlockParam.text("ITEM", "minecraft:stone"));
-		reg("world.on_ground", "world", BlockShape.BOOLEAN);
-
-		// ---- 状态与物品 ----
-		regT("world.held_item_field", "world", BlockShape.REPORTER, "手中的 {FIELD}",
-				BlockParam.fieldOption("FIELD", "id", "id", "durability", "count", "max_durability"));
-		reg("world.front_block", "world", BlockShape.REPORTER);
-		reg("world.block_below", "world", BlockShape.REPORTER);
-		regT("world.block_at", "world", BlockShape.REPORTER, "坐标处方块 x{X} y{Y} z{Z}",
-				BlockParam.number("X", "0"),
-				BlockParam.number("Y", "64"),
-				BlockParam.number("Z", "0"));
-		// 准星方块坐标：命中就是命中格，未命中取视线尽头那一格（见 WorldQueries.aimBlockPos）
-		regT("world.aim_pos", "world", BlockShape.REPORTER, "准星方块的 {AXIS} 坐标",
-				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
-		reg("world.is_day", "world", BlockShape.BOOLEAN);
-		reg("world.in_water", "world", BlockShape.BOOLEAN);
-		reg("world.in_lava", "world", BlockShape.BOOLEAN);
-		reg("world.inventory_full", "world", BlockShape.BOOLEAN);
+						"health", "max_health", "type_id", "is_baby", "on_ground"));
 		regT("world.entity_count", "world", BlockShape.REPORTER, "附近 {TYPE} 的数量",
 				BlockParam.text("TYPE", "minecraft:zombie"));
-		reg("world.biome", "world", BlockShape.REPORTER);
+
+		// ---- 容器 ----
+		reg("world.container_slots", "world", BlockShape.REPORTER);
+		regT("world.slot_field", "world", BlockShape.REPORTER, "槽位 {INDEX} 的 {FIELD}",
+				BlockParam.number("INDEX", "0"),
+				BlockParam.fieldOption("FIELD", "id", "id", "amount",
+						"max_durability", "damage", "custom_name"));
 
 		// ---- 快照（游戏状态 → JSON 文本，只读，见 ARCHITECTURE §26）----
 		// 返回的是字符串，可直接接 JSON 那批积木；字段名是契约，只增不删
@@ -305,14 +308,18 @@ final class Blocks {
 		// 无参数：等待上限由宿主侧固定（走 requestWaitUntil 的条件等待），
 		// 与扩展里 breakWait 的「等待方块被挖破」一致。
 		regT("action.break_wait", "action", BlockShape.C_SHAPE, "等待方块被挖破");
-		regT("action.look", "action", BlockShape.STACK, "设置视角 水平{YAW} 俯仰{PITCH}",
+		// 视角命令带「绝对 / 增量」模式。瞬时与平滑两块共用同一套模式语义，
+		// 旧的 action.look / action.look_smooth 已删除，并入这两块
+		regT("action.turn_view", "action", BlockShape.STACK, "转动视角 {MODE} 水平{YAW} 俯仰{PITCH}",
+				BlockParam.fieldOption("MODE", "absolute", "absolute", "relative"),
 				BlockParam.number("YAW", "0"),
 				BlockParam.number("PITCH", "0"));
 		regT("action.look_at", "action", BlockShape.STACK, "看向 x{X} y{Y} z{Z}",
 				BlockParam.number("X", "0"),
 				BlockParam.number("Y", "64"),
 				BlockParam.number("Z", "0"));
-		regT("action.look_smooth", "action", BlockShape.STACK, "平滑转到视角 水平{YAW} 俯仰{PITCH}",
+		regT("action.turn_view_smooth", "action", BlockShape.STACK, "平滑转动视角 {MODE} 水平{YAW} 俯仰{PITCH}",
+				BlockParam.fieldOption("MODE", "absolute", "absolute", "relative"),
 				BlockParam.number("YAW", "0"),
 				BlockParam.number("PITCH", "0"));
 		regT("action.look_at_smooth", "action", BlockShape.STACK, "平滑看向 x{X} y{Y} z{Z}",
@@ -321,11 +328,10 @@ final class Blocks {
 				BlockParam.number("Z", "0"));
 
 		// 聊天与 AI
-		// 「最近的聊天」是唯一能把聊天原文交给脚本的出口：whenChat 帽子只做关键词过滤，
-		// 文本不进线程。AI 对话靠它拿到玩家说的话，否则只能对着写死的文本自问自答。
-		regT("query.last_chat", "sensing", BlockShape.REPORTER, "最近的聊天");
-		// 与上一块同一族：前者是「全局最新」，后者是「触发我的那条」（跟着线程走，不会被覆盖）
-		regT("query.trigger_chat", "sensing", BlockShape.REPORTER, "触发我的聊天");
+		// 「聊天 [来源]」是唯一能把聊天原文交给脚本的出口：whenChat 帽子只做关键词过滤，
+		// 文本不进线程。两块合并成一块（最近 / 触发我的），差别只在取哪一条
+		regT("query.chat_source", "sensing", BlockShape.REPORTER, "聊天 {SOURCE}",
+				BlockParam.fieldOption("SOURCE", "last", "last", "trigger"));
 		regT("query.chat_history", "sensing", BlockShape.REPORTER, "最近 {COUNT} 条聊天",
 				BlockParam.number("COUNT", "10"));
 		regT("ai.ask", "action", BlockShape.STACK, "让会话 {SESSION} 回应 {TEXT}",

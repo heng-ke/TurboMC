@@ -82,7 +82,6 @@ public final class WorldQueries {
 		NativeRegistry.function("world.held_item_field", WorldQueries::heldItemField);
 		NativeRegistry.function("world.block_in_front", WorldQueries::blockInFront);
 		NativeRegistry.function("world.on_ground", WorldQueries::onGround);
-		NativeRegistry.function("world.item_count", WorldQueries::itemCount);
 		NativeRegistry.function("world.front_block", WorldQueries::frontBlock);
 		NativeRegistry.function("world.block_below", WorldQueries::blockBelow);
 		NativeRegistry.function("world.block_at", WorldQueries::blockAt);
@@ -106,13 +105,18 @@ public final class WorldQueries {
 		NativeRegistry.function("world.is_mining", WorldQueries::isMining);
 		NativeRegistry.function("world.mining_progress", WorldQueries::miningProgress);
 		// 聊天不是「世界状态」，但同样是纯读取，放在这里不必单开一张注册表。
-		// 写入方在 TurboMCClient 的聊天事件里（ChatGate 通过之后）
-		NativeRegistry.function("query.last_chat", (context, args) -> ChatState.last());
+		// 写入方在 TurboMCClient 的聊天事件里（ChatGate 通过之后）。
+		// 「触发我的」那一路由引导脚本在线程上下文里直接返回（见 vm-bootstrap 的
+		// __tmcThreadChat），这里只服务「最近」并给 trigger 兜底空串——刻意不回落
+		// ChatState.last()，否则两种来源就变成同一个积木了。
+		NativeRegistry.function("query.chat_source", (context, args) -> {
+			if (args != null && args.length > 0
+					&& "trigger".equalsIgnoreCase(ScratchCast.toString(args[0]).trim())) {
+				return "";
+			}
+			return ChatState.last();
+		});
 		NativeRegistry.function("query.chat_history", WorldQueries::chatHistory);
-		// 「触发我的聊天」由引导脚本在线程上下文里直接返回（见 vm-bootstrap 的 __tmcThreadChat），
-		// 这里只是兜底：万一某个调用路径绕过了包装器，拿到空串而不是一次「未映射」警告。
-		// 刻意不回落 ChatState.last()——那会让它和「最近的聊天」变成同一个积木。
-		NativeRegistry.function("query.trigger_chat", (context, args) -> "");
 	}
 
 	// ---- 挖掘 ----
@@ -248,6 +252,10 @@ public final class WorldQueries {
 		String field = args == null || args.length == 0 ? "health" : ScratchCast.toString(args[0]).trim();
 		return switch (field) {
 			case "health" -> (double) player.getHealth();
+			// 最大血量 / 护甲 / 氧气：判断「还能扛几下」「要不要浮上水面」都比拿血量猜准
+			case "max_health" -> (double) player.getMaxHealth();
+			case "armor" -> (double) player.getArmor();
+			case "air" -> (double) player.getAir();
 			case "food" -> (double) player.getHungerManager().getFoodLevel();
 			case "xp_level" -> (double) player.experienceLevel;
 			case "selected_slot" -> (double) (player.getInventory().getSelectedSlot() + 1);
@@ -303,6 +311,10 @@ public final class WorldQueries {
 			case "max_health" -> entity == null ? 0d : (double) maxHealthOf(entity);
 			case "type_id" -> entity == null
 					? "" : Registries.ENTITY_TYPE.getId(entity.getType()).toString();
+			// 幼年 / 着地：直接读实体本身，不额外遍历。无目标时给 false，
+			// 与「血量 0 / 名称空串」的取舍一致（不让脚本拿到 NaN）
+			case "is_baby" -> entity instanceof LivingEntity living && living.isBaby();
+			case "on_ground" -> entity != null && entity.isOnGround();
 			default -> entity == null || client.player == null ? -1d : (double) client.player.distanceTo(entity);
 		};
 	}
@@ -339,26 +351,6 @@ public final class WorldQueries {
 	private static Object onGround(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
 		return client.player != null && client.player.isOnGround();
-	}
-
-	private static Object itemCount(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.player == null) {
-			return 0d;
-		}
-		Item item = ItemIds.resolve(ScratchCast.toString(args[0]));
-		if (item == null) {
-			return 0d;
-		}
-		PlayerInventory inventory = client.player.getInventory();
-		int total = 0;
-		for (int i = 0; i < inventory.size(); i++) {
-			ItemStack stack = inventory.getStack(i);
-			if (!stack.isEmpty() && stack.getItem() == item) {
-				total += stack.getCount();
-			}
-		}
-		return (double) total;
 	}
 
 	/** 主手物品的注册名；空手返回空串。 */

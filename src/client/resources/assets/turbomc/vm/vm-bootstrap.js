@@ -254,15 +254,17 @@ for (var __j = 0; __j < __tmcInfo.blocks.length; __j++) {
 			return;
 		}
 		Scratch.__instance[block.opcode] = function (args, util) {
-			// 聊天类的两个报告器优先读「线程自带的副本」，理由见 __tmcThreadChat。
+			// 「聊天 [来源]」优先读「线程自带的副本」，理由见 __tmcThreadChat。
+			// 两种来源的差别：trigger 只认副本（没有就返回空串，刻意不回落全局，
+			// 否则它就等同于「最近的聊天」，失去存在意义）；last 优先副本、再走桥取全局。
 			var tagged = __tmcThreadChat(util);
-			if (block.opcode === 'lastChat' && tagged !== null) {
-				return tagged;
-			}
-			if (block.opcode === 'triggerChat') {
-				// 不是聊天触发的线程（绿旗、广播、按键）没有副本，返回空串。
-				// 这里刻意不回落到全局槽：回落就等于「最近的聊天」，这个积木也就没有存在意义了
-				return tagged === null ? '' : tagged;
+			if (block.opcode === 'chatSource') {
+				if (String((args && args.SOURCE) || 'last') === 'trigger') {
+					return tagged === null ? '' : tagged;
+				}
+				if (tagged !== null) {
+					return tagged;
+				}
 			}
 			var result = __tmcApi().call('turbomc_' + block.opcode, names, args);
 			// 条件型等待优先：它表达的是「等到某事发生」，不能用固定帧数代替

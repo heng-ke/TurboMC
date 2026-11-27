@@ -140,6 +140,13 @@ public final class ParamLabels {
 			case "SCREEN" -> "value.turbomc.screen." + normalize(value);
 			// 「[快照] 的字段」的菜单
 			case "KIND" -> "value.turbomc.kind." + normalize(value);
+			// 视角命令的「绝对 / 增量」
+			case "MODE" -> "value.turbomc.viewmode." + normalize(value);
+			// 「聊天 [来源]」的最近 / 触发我的
+			case "SOURCE" -> "value.turbomc.chatsource." + normalize(value);
+			// 「[背包/当前界面] 中 [物品] 的 [数量/首个槽位]」
+			case "RANGE" -> "value.turbomc.invrange." + normalize(value);
+			case "ASK" -> "value.turbomc.invkind." + normalize(value);
 			// 合并块的下拉：AXIS 与 FIELD 共用一张表（x/y/z 两种菜单都有，且显示相同）
 			case "AXIS", "FIELD" -> "value.turbomc.field." + normalize(value);
 			default -> null;

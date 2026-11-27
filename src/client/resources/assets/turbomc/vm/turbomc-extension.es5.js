@@ -1592,11 +1592,23 @@ var ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'look',
+						opcode: 'turnView',
 						blockType: Scratch.BlockType.COMMAND,
-						text: T('set view yaw[YAW] pitch[PITCH]', '设置视角 水平[YAW] 俯仰[PITCH]'),
-						argOrder: ['YAW', 'PITCH'],
+						text: T('turn view [MODE] yaw[YAW] pitch[PITCH]', '转动视角 [MODE] 水平[YAW] 俯仰[PITCH]'),
+						argOrder: ['MODE', 'YAW', 'PITCH'],
 						arguments: {
+							MODE: {type: Scratch.ArgumentType.STRING, defaultValue: 'absolute', menu: 'viewMode'},
+							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+						}
+					},
+					{
+						opcode: 'turnViewSmooth',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('turn smoothly [MODE] yaw[YAW] pitch[PITCH]', '平滑转动视角 [MODE] 水平[YAW] 俯仰[PITCH]'),
+						argOrder: ['MODE', 'YAW', 'PITCH'],
+						arguments: {
+							MODE: {type: Scratch.ArgumentType.STRING, defaultValue: 'absolute', menu: 'viewMode'},
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 						}
@@ -1610,16 +1622,6 @@ var ITEM_TABLE = [
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-						}
-					},
-					{
-						opcode: 'lookSmooth',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('turn smoothly to yaw[YAW] pitch[PITCH]', '平滑转到视角 水平[YAW] 俯仰[PITCH]'),
-						argOrder: ['YAW', 'PITCH'],
-						arguments: {
-							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
-							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 						}
 					},
 					{
@@ -1677,11 +1679,6 @@ var ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'breakWait',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('wait until block broken', '等待方块被挖破')
-					},
-					{
 						opcode: 'isMining',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('is mining', '正在挖掘')
@@ -1690,6 +1687,11 @@ var ITEM_TABLE = [
 						opcode: 'miningProgress',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('mining progress', '挖掘进度')
+					},
+					{
+						opcode: 'breakWait',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('wait until block broken', '等待方块被挖破')
 					},
 					{
 						opcode: 'openContainerAt',
@@ -1721,15 +1723,6 @@ var ITEM_TABLE = [
 						opcode: 'screenJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('open screen snapshot', '界面快照')
-					},
-					{
-						opcode: 'firstSlotOf',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('first slot with [ITEM]', '第一个装着 [ITEM] 的槽位'),
-						argOrder: ['ITEM'],
-						arguments: {
-							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:iron_ore', menu: 'itemId'}
-						}
 					},
 					{
 						opcode: 'clickSlot',
@@ -1770,6 +1763,37 @@ var ITEM_TABLE = [
 						text: T('on ground?', '站在地面？')
 					},
 					{
+						opcode: 'inWater',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('in water?', '在水中?')
+					},
+					{
+						opcode: 'inLava',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('in lava?', '在岩浆中?')
+					},
+					{
+						opcode: 'inventoryQuery',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('[ASK] of [ITEM] in [RANGE]', '[RANGE] 中 [ITEM] 的 [ASK]'),
+						argOrder: ['RANGE', 'ITEM', 'ASK'],
+						arguments: {
+							RANGE: {type: Scratch.ArgumentType.STRING, defaultValue: 'backpack', menu: 'inventoryRange'},
+							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'},
+							ASK: {type: Scratch.ArgumentType.STRING, defaultValue: 'count', menu: 'inventoryKind'}
+						}
+					},
+					{
+						opcode: 'inventoryFull',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('inventory full?', '背包已满?')
+					},
+					{
+						opcode: 'inventoryJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('inventory snapshot', '背包快照')
+					},
+					{
 						opcode: 'heldItemField',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('held [FIELD]', '手中的 [FIELD]'),
@@ -1779,28 +1803,9 @@ var ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'inventoryJson',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('inventory snapshot', '背包快照')
-					},
-					{
-						opcode: 'inventoryFull',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('inventory full?', '背包已满?')
-					},
-					{
 						opcode: 'playerJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('player snapshot', '玩家快照')
-					},
-					{
-						opcode: 'itemCount',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
-						argOrder: ['ITEM'],
-						arguments: {
-							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'}
-						}
 					},
 					{
 						opcode: 'respawn',
@@ -1818,24 +1823,14 @@ var ITEM_TABLE = [
 						text: T('biome', '当前生物群系')
 					},
 					{
-						opcode: 'inWater',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('in water?', '在水中?')
-					},
-					{
-						opcode: 'inLava',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('in lava?', '在岩浆中?')
+						opcode: 'blockBelow',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('block below', '脚下方块')
 					},
 					{
 						opcode: 'blockInFront',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('block in front?', '前方有方块？')
-					},
-					{
-						opcode: 'blockBelow',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('block below', '脚下方块')
 					},
 					{
 						opcode: 'blockAt',
@@ -1860,9 +1855,28 @@ var ITEM_TABLE = [
 						}
 					},
 					{
+						opcode: 'frontBlock',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('block at crosshair', '准星所指方块')
+					},
+					{
+						opcode: 'aimPos',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('aimed block [AXIS] position', '准星方块的 [AXIS] 坐标'),
+						argOrder: ['AXIS'],
+						arguments: {
+							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
+						}
+					},
+					{
 						opcode: 'playersJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('online players snapshot', '在线玩家快照')
+					},
+					{
+						opcode: 'worldJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('world snapshot', '世界快照')
 					},
 					{
 						opcode: 'scanJson',
@@ -1886,25 +1900,6 @@ var ITEM_TABLE = [
 						argOrder: ['KIND'],
 						arguments: {
 							KIND: {type: Scratch.ArgumentType.STRING, defaultValue: 'player', menu: 'snapshotKind'}
-						}
-					},
-					{
-						opcode: 'worldJson',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('world snapshot', '世界快照')
-					},
-					{
-						opcode: 'frontBlock',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('block at crosshair', '准星所指方块')
-					},
-					{
-						opcode: 'aimPos',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('aimed block [AXIS] position', '准星方块的 [AXIS] 坐标'),
-						argOrder: ['AXIS'],
-						arguments: {
-							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
 						}
 					},
 					{
@@ -1985,9 +1980,13 @@ var ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'lastChat',
+						opcode: 'chatSource',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('last chat message', '最近的聊天')
+						text: T('chat [SOURCE]', '聊天 [SOURCE]'),
+						argOrder: ['SOURCE'],
+						arguments: {
+							SOURCE: {type: Scratch.ArgumentType.STRING, defaultValue: 'last', menu: 'chatSource'}
+						}
 					},
 					{
 						opcode: 'chatHistory',
@@ -1997,11 +1996,6 @@ var ITEM_TABLE = [
 						arguments: {
 							COUNT: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10}
 						}
-					},
-					{
-						opcode: 'triggerChat',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('chat that triggered me', '触发我的聊天')
 					},
 					{
 						opcode: 'aiAsk',
@@ -2023,15 +2017,6 @@ var ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'aiReset',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
-						argOrder: ['SESSION'],
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-						}
-					},
-					{
 						opcode: 'aiSystem',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('set system prompt of session [SESSION] to [TEXT]', '设置会话 [SESSION] 的系统提示为 [TEXT]'),
@@ -2039,6 +2024,15 @@ var ITEM_TABLE = [
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
+						}
+					},
+					{
+						opcode: 'aiReset',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
+						argOrder: ['SESSION'],
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
 						}
 					},
 					{
@@ -2372,8 +2366,27 @@ var ITEM_TABLE = [
 							{text: T('Y', 'Y'), value: 'y'},
 							{text: T('Z', 'Z'), value: 'z'}
 					]},
+					viewMode: {acceptReporters: false, items: [
+							{text: T('absolute', '绝对'), value: 'absolute'},
+							{text: T('relative', '增量'), value: 'relative'}
+					]},
+					inventoryRange: {acceptReporters: false, items: [
+							{text: T('backpack', '背包'), value: 'backpack'},
+							{text: T('open container', '当前界面'), value: 'screen'}
+					]},
+					inventoryKind: {acceptReporters: false, items: [
+							{text: T('count', '数量'), value: 'count'},
+							{text: T('first slot', '首个槽位'), value: 'first_slot'}
+					]},
+					chatSource: {acceptReporters: false, items: [
+							{text: T('last message', '最近'), value: 'last'},
+							{text: T('that triggered me', '触发我的'), value: 'trigger'}
+					]},
 					playerField: {acceptReporters: false, items: [
 							{text: T('health', '血量'), value: 'health'},
+							{text: T('max health', '最大血量'), value: 'max_health'},
+							{text: T('armor', '护甲'), value: 'armor'},
+							{text: T('air', '氧气'), value: 'air'},
 							{text: T('food level', '饱食度'), value: 'food'},
 							{text: T('xp level', '经验等级'), value: 'xp_level'},
 							{text: T('selected slot', '当前槽位'), value: 'selected_slot'},
@@ -2393,7 +2406,9 @@ var ITEM_TABLE = [
 							{text: T('name', '名称'), value: 'name'},
 							{text: T('health', '血量'), value: 'health'},
 							{text: T('max health', '最大血量'), value: 'max_health'},
-							{text: T('registry id', '注册名'), value: 'type_id'}
+							{text: T('registry id', '注册名'), value: 'type_id'},
+							{text: T('baby?', '幼年?'), value: 'is_baby'},
+							{text: T('on ground?', '着地?'), value: 'on_ground'}
 					]},
 					heldField: {acceptReporters: false, items: [
 							{text: T('item', '物品'), value: 'id'},

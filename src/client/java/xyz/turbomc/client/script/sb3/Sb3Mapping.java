@@ -108,8 +108,7 @@ public final class Sb3Mapping {
 			Map.entry("looks_thinkforsecs", "debug.think_for"),
 
 			// ---- 聊天与 AI（扩展）----
-			Map.entry("turbomc_lastChat", "query.last_chat"),
-			Map.entry("turbomc_triggerChat", "query.trigger_chat"),
+			Map.entry("turbomc_chatSource", "query.chat_source"),
 			Map.entry("turbomc_aiAsk", "ai.ask"),
 			Map.entry("turbomc_aiReply", "ai.reply"),
 			Map.entry("turbomc_aiReset", "ai.reset"),
@@ -127,7 +126,7 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_slotField", "world.slot_field"),
 			Map.entry("turbomc_blockInFront", "world.block_in_front"),
 			Map.entry("turbomc_onGround", "world.on_ground"),
-			Map.entry("turbomc_itemCount", "world.item_count"),
+			Map.entry("turbomc_inventoryQuery", "world.inventory_query"),
 
 			// ---- 动作（扩展）----
 			Map.entry("turbomc_key", "action.key"),
@@ -142,11 +141,10 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_quickMoveSlot", "action.quick_move_slot"),
 			Map.entry("turbomc_closeContainer", "action.close_container"),
 			Map.entry("turbomc_containerSlots", "world.container_slots"),
-			Map.entry("turbomc_firstSlotOf", "world.first_slot_of"),
 			Map.entry("turbomc_moveToward", "action.move_toward"),
-			Map.entry("turbomc_look", "action.look"),
+			Map.entry("turbomc_turnView", "action.turn_view"),
 			Map.entry("turbomc_lookAt", "action.look_at"),
-			Map.entry("turbomc_lookSmooth", "action.look_smooth"),
+			Map.entry("turbomc_turnViewSmooth", "action.turn_view_smooth"),
 			Map.entry("turbomc_lookAtSmooth", "action.look_at_smooth"),
 			Map.entry("turbomc_stop", "action.stop"),
 

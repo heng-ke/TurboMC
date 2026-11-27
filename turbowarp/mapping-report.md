@@ -7,10 +7,10 @@
 
 | 项 | 数量 |
 |---|---|
-| 扩展积木 | 91 |
+| 扩展积木 | 89 |
 | 其中事件帽子（宿主触发） | 4 |
-| 需要动作实现 | 87 |
-| 映射表条目 | 158 |
+| 需要动作实现 | 85 |
+| 映射表条目 | 156 |
 | 其中原生积木 | 67 |
 
 ## 二、扩展积木
@@ -24,9 +24,9 @@
 | 4 | `turbomc_whenChat` | `event.chat` | HAT |
 | | **移动与视角** | | |
 | 5 | `turbomc_moveToward` | `action.move_toward` | COMMAND |
-| 6 | `turbomc_look` | `action.look` | COMMAND |
-| 7 | `turbomc_lookAt` | `action.look_at` | COMMAND |
-| 8 | `turbomc_lookSmooth` | `action.look_smooth` | COMMAND |
+| 6 | `turbomc_turnView` | `action.turn_view` | COMMAND |
+| 7 | `turbomc_turnViewSmooth` | `action.turn_view_smooth` | COMMAND |
+| 8 | `turbomc_lookAt` | `action.look_at` | COMMAND |
 | 9 | `turbomc_lookAtSmooth` | `action.look_at_smooth` | COMMAND |
 | 10 | `turbomc_stop` | `action.stop` | COMMAND |
 | | **输入** | | |
@@ -35,94 +35,92 @@
 | 13 | `turbomc_tap` | `action.tap` | COMMAND |
 | 14 | `turbomc_mouseDown` | `input.mouse_button_down` | BOOLEAN |
 | | **挖掘** | | |
-| 15 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
-| 16 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
-| 17 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
+| 15 | `turbomc_isMining` | `world.is_mining` | BOOLEAN |
+| 16 | `turbomc_miningProgress` | `world.mining_progress` | REPORTER |
+| 17 | `turbomc_breakWait` | `action.break_wait` | COMMAND |
 | | **容器** | | |
 | 18 | `turbomc_openContainerAt` | `action.open_container_at` | COMMAND |
 | 19 | `turbomc_containerSlots` | `world.container_slots` | REPORTER |
 | 20 | `turbomc_slotField` | `world.slot_field` | REPORTER |
 | 21 | `turbomc_screenJson` | `world.screen_json` | REPORTER |
-| 22 | `turbomc_firstSlotOf` | `world.first_slot_of` | REPORTER |
-| 23 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
-| 24 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
-| 25 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
+| 22 | `turbomc_clickSlot` | `action.click_slot` | COMMAND |
+| 23 | `turbomc_quickMoveSlot` | `action.quick_move_slot` | COMMAND |
+| 24 | `turbomc_closeContainer` | `action.close_container` | COMMAND |
 | | **玩家状态** | | |
-| 26 | `turbomc_playerField` | `world.player_field` | REPORTER |
-| 27 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
-| 28 | `turbomc_heldItemField` | `world.held_item_field` | REPORTER |
-| 29 | `turbomc_inventoryJson` | `world.inventory_json` | REPORTER |
+| 25 | `turbomc_playerField` | `world.player_field` | REPORTER |
+| 26 | `turbomc_onGround` | `world.on_ground` | BOOLEAN |
+| 27 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
+| 28 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
+| 29 | `turbomc_inventoryQuery` | `world.inventory_query` | REPORTER |
 | 30 | `turbomc_inventoryFull` | `world.inventory_full` | BOOLEAN |
-| 31 | `turbomc_playerJson` | `world.player_json` | REPORTER |
-| 32 | `turbomc_itemCount` | `world.item_count` | REPORTER |
-| 33 | `turbomc_respawn` | `action.respawn` | COMMAND |
+| 31 | `turbomc_inventoryJson` | `world.inventory_json` | REPORTER |
+| 32 | `turbomc_heldItemField` | `world.held_item_field` | REPORTER |
+| 33 | `turbomc_playerJson` | `world.player_json` | REPORTER |
+| 34 | `turbomc_respawn` | `action.respawn` | COMMAND |
 | | **世界查询** | | |
-| 34 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
-| 35 | `turbomc_biome` | `world.biome` | REPORTER |
-| 36 | `turbomc_inWater` | `world.in_water` | BOOLEAN |
-| 37 | `turbomc_inLava` | `world.in_lava` | BOOLEAN |
+| 35 | `turbomc_isDay` | `world.is_day` | BOOLEAN |
+| 36 | `turbomc_biome` | `world.biome` | REPORTER |
+| 37 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
 | 38 | `turbomc_blockInFront` | `world.block_in_front` | BOOLEAN |
-| 39 | `turbomc_blockBelow` | `world.block_below` | REPORTER |
-| 40 | `turbomc_blockAt` | `world.block_at` | REPORTER |
-| 41 | `turbomc_blockJson` | `world.block_json` | REPORTER |
-| 42 | `turbomc_playersJson` | `world.players_json` | REPORTER |
-| 43 | `turbomc_scanJson` | `world.scan_json` | REPORTER |
-| 44 | `turbomc_snapshotKeys` | `world.snapshot_keys` | REPORTER |
-| 45 | `turbomc_worldJson` | `world.world_json` | REPORTER |
-| 46 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
-| 47 | `turbomc_aimPos` | `world.aim_pos` | REPORTER |
+| 39 | `turbomc_blockAt` | `world.block_at` | REPORTER |
+| 40 | `turbomc_blockJson` | `world.block_json` | REPORTER |
+| 41 | `turbomc_frontBlock` | `world.front_block` | REPORTER |
+| 42 | `turbomc_aimPos` | `world.aim_pos` | REPORTER |
+| 43 | `turbomc_playersJson` | `world.players_json` | REPORTER |
+| 44 | `turbomc_worldJson` | `world.world_json` | REPORTER |
+| 45 | `turbomc_scanJson` | `world.scan_json` | REPORTER |
+| 46 | `turbomc_snapshotKeys` | `world.snapshot_keys` | REPORTER |
 | | **实体查询** | | |
-| 48 | `turbomc_nearestEntityField` | `world.nearest_entity_field` | REPORTER |
-| 49 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
-| 50 | `turbomc_entitiesJson` | `world.entities_json` | REPORTER |
+| 47 | `turbomc_nearestEntityField` | `world.nearest_entity_field` | REPORTER |
+| 48 | `turbomc_entityCount` | `world.entity_count` | REPORTER |
+| 49 | `turbomc_entitiesJson` | `world.entities_json` | REPORTER |
 | | **显示与日志** | | |
-| 51 | `turbomc_drawFrame` | `region.draw_frame` | COMMAND |
-| 52 | `turbomc_clearFrames` | `region.clear_frames` | COMMAND |
-| 53 | `turbomc_log` | `debug.log` | COMMAND |
+| 50 | `turbomc_drawFrame` | `region.draw_frame` | COMMAND |
+| 51 | `turbomc_clearFrames` | `region.clear_frames` | COMMAND |
+| 52 | `turbomc_log` | `debug.log` | COMMAND |
 | | **聊天与 AI** | | |
-| 54 | `turbomc_chat` | `action.chat` | COMMAND |
-| 55 | `turbomc_command` | `action.command` | COMMAND |
-| 56 | `turbomc_lastChat` | `query.last_chat` | REPORTER |
-| 57 | `turbomc_chatHistory` | `query.chat_history` | REPORTER |
-| 58 | `turbomc_triggerChat` | `query.trigger_chat` | REPORTER |
-| 59 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
-| 60 | `turbomc_aiReply` | `ai.reply` | REPORTER |
-| 61 | `turbomc_aiReset` | `ai.reset` | COMMAND |
-| 62 | `turbomc_aiSystem` | `ai.system` | COMMAND |
+| 53 | `turbomc_chat` | `action.chat` | COMMAND |
+| 54 | `turbomc_command` | `action.command` | COMMAND |
+| 55 | `turbomc_chatSource` | `query.chat_source` | REPORTER |
+| 56 | `turbomc_chatHistory` | `query.chat_history` | REPORTER |
+| 57 | `turbomc_aiAsk` | `ai.ask` | COMMAND |
+| 58 | `turbomc_aiReply` | `ai.reply` | REPORTER |
+| 59 | `turbomc_aiSystem` | `ai.system` | COMMAND |
+| 60 | `turbomc_aiReset` | `ai.reset` | COMMAND |
 | | **JSON · 校验与新建** | | |
-| 63 | `turbomc_jsonIs` | `json.is` | BOOLEAN |
-| 64 | `turbomc_jsonNew` | `json.new` | REPORTER |
-| 65 | `turbomc_jsonLength` | `json.length` | REPORTER |
-| 66 | `turbomc_jsonHasKey` | `json.has_key` | BOOLEAN |
-| 67 | `turbomc_jsonGetAll` | `json.get_all` | REPORTER |
-| 68 | `turbomc_jsonErrMsg` | `json.err_msg` | REPORTER |
-| 69 | `turbomc_jsonMinify` | `json.minify` | REPORTER |
+| 61 | `turbomc_jsonIs` | `json.is` | BOOLEAN |
+| 62 | `turbomc_jsonNew` | `json.new` | REPORTER |
+| 63 | `turbomc_jsonLength` | `json.length` | REPORTER |
+| 64 | `turbomc_jsonHasKey` | `json.has_key` | BOOLEAN |
+| 65 | `turbomc_jsonGetAll` | `json.get_all` | REPORTER |
+| 66 | `turbomc_jsonErrMsg` | `json.err_msg` | REPORTER |
+| 67 | `turbomc_jsonMinify` | `json.minify` | REPORTER |
 | | **JSON · 对象与路径** | | |
-| 70 | `turbomc_jsonGet` | `json.get` | REPORTER |
-| 71 | `turbomc_jsonSet` | `json.set` | REPORTER |
-| 72 | `turbomc_jsonDelete` | `json.delete` | REPORTER |
-| 73 | `turbomc_jsonGetPath` | `json.get_path` | REPORTER |
-| 74 | `turbomc_jsonSetPath` | `json.set_path` | REPORTER |
+| 68 | `turbomc_jsonGet` | `json.get` | REPORTER |
+| 69 | `turbomc_jsonSet` | `json.set` | REPORTER |
+| 70 | `turbomc_jsonDelete` | `json.delete` | REPORTER |
+| 71 | `turbomc_jsonGetPath` | `json.get_path` | REPORTER |
+| 72 | `turbomc_jsonSetPath` | `json.set_path` | REPORTER |
 | | **JSON · 数组读写** | | |
-| 75 | `turbomc_jsonArrayPush` | `json.array_push` | REPORTER |
-| 76 | `turbomc_jsonArraySet` | `json.array_set` | REPORTER |
-| 77 | `turbomc_jsonArrayInsert` | `json.array_insert` | REPORTER |
-| 78 | `turbomc_jsonArrayDelete` | `json.array_delete` | REPORTER |
-| 79 | `turbomc_jsonArrayRemoveAll` | `json.array_remove_all` | REPORTER |
-| 80 | `turbomc_jsonArrayItemNum` | `json.array_item_num` | REPORTER |
-| 81 | `turbomc_jsonArrayFromTo` | `json.array_fromto` | REPORTER |
-| 82 | `turbomc_jsonArraySetLen` | `json.array_setlen` | REPORTER |
+| 73 | `turbomc_jsonArrayPush` | `json.array_push` | REPORTER |
+| 74 | `turbomc_jsonArraySet` | `json.array_set` | REPORTER |
+| 75 | `turbomc_jsonArrayInsert` | `json.array_insert` | REPORTER |
+| 76 | `turbomc_jsonArrayDelete` | `json.array_delete` | REPORTER |
+| 77 | `turbomc_jsonArrayRemoveAll` | `json.array_remove_all` | REPORTER |
+| 78 | `turbomc_jsonArrayItemNum` | `json.array_item_num` | REPORTER |
+| 79 | `turbomc_jsonArrayFromTo` | `json.array_fromto` | REPORTER |
+| 80 | `turbomc_jsonArraySetLen` | `json.array_setlen` | REPORTER |
 | | **JSON · 数组变换** | | |
-| 83 | `turbomc_jsonArrayConcat` | `json.array_concat` | REPORTER |
-| 84 | `turbomc_jsonArrayMapField` | `json.array_map_field` | REPORTER |
-| 85 | `turbomc_jsonArrayCreate` | `json.array_create` | REPORTER |
-| 86 | `turbomc_jsonArrayJoin` | `json.array_join` | REPORTER |
-| 87 | `turbomc_jsonArraySort` | `json.array_sort` | REPORTER |
-| 88 | `turbomc_jsonArrayTextFilter` | `json.array_textfilter` | REPORTER |
-| 89 | `turbomc_jsonArrayAnalysis` | `json.array_analysis` | REPORTER |
+| 81 | `turbomc_jsonArrayConcat` | `json.array_concat` | REPORTER |
+| 82 | `turbomc_jsonArrayMapField` | `json.array_map_field` | REPORTER |
+| 83 | `turbomc_jsonArrayCreate` | `json.array_create` | REPORTER |
+| 84 | `turbomc_jsonArrayJoin` | `json.array_join` | REPORTER |
+| 85 | `turbomc_jsonArraySort` | `json.array_sort` | REPORTER |
+| 86 | `turbomc_jsonArrayTextFilter` | `json.array_textfilter` | REPORTER |
+| 87 | `turbomc_jsonArrayAnalysis` | `json.array_analysis` | REPORTER |
 | | **JSON · 与列表互通** | | |
-| 90 | `turbomc_jsonVmGetList` | `json.vm_getlist` | REPORTER |
-| 91 | `turbomc_jsonVmSetList` | `json.vm_setlist` | COMMAND |
+| 88 | `turbomc_jsonVmGetList` | `json.vm_getlist` | REPORTER |
+| 89 | `turbomc_jsonVmSetList` | `json.vm_setlist` | COMMAND |
 
 ## 三、原生积木
 

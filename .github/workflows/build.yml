@@ -51,6 +51,10 @@ jobs:
       # 映射表同样由代码生成（Sb3Mapping + blocks.data.js），守「文档描述不存在的积木」。
       - name: 映射表新鲜度
         run: node tools/build-mapping-report.js --check
+      # JSON 只在 JS 侧有实现，两个引擎都要对拍：Rhino 侧由 :test 里的 JsonCoreParityTest 覆盖，
+      # V8 侧（产物实际运行的引擎）只能靠这个脚本。只跑一个引擎时，两边分叉不会被发现。
+      - name: JSON 对拍（V8）
+        run: node tools/check-json-parity.js
       - name: smoke · 顺序执行
         run: ./gradlew vmSmoke
       # 合并块（一块 + 下拉）走一遍真实的 sb3 → VM → 桥 → Java 链路；
@@ -102,3 +106,7 @@ jobs:
         with:
           name: Artifacts
           path: build/libs/
+      # 未接入 CI 的任务，列在这里避免被当成漏配：
+      #   vmPreload（-Pmode=cold|preload）测预热前后的载入耗时，结果依机器而变，
+      #   不能做门禁；需要时本地手动跑。
+      #   compare-getinfo.js 是迁移期的一次性语义闸门，产物切换后已无对照物。

@@ -1600,11 +1600,23 @@ const ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'look',
+						opcode: 'turnView',
 						blockType: Scratch.BlockType.COMMAND,
-						text: T('set view yaw[YAW] pitch[PITCH]', '设置视角 水平[YAW] 俯仰[PITCH]'),
-						argOrder: ['YAW', 'PITCH'],
+						text: T('turn view [MODE] yaw[YAW] pitch[PITCH]', '转动视角 [MODE] 水平[YAW] 俯仰[PITCH]'),
+						argOrder: ['MODE', 'YAW', 'PITCH'],
 						arguments: {
+							MODE: {type: Scratch.ArgumentType.STRING, defaultValue: 'absolute', menu: 'viewMode'},
+							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
+							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
+						}
+					},
+					{
+						opcode: 'turnViewSmooth',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('turn smoothly [MODE] yaw[YAW] pitch[PITCH]', '平滑转动视角 [MODE] 水平[YAW] 俯仰[PITCH]'),
+						argOrder: ['MODE', 'YAW', 'PITCH'],
+						arguments: {
+							MODE: {type: Scratch.ArgumentType.STRING, defaultValue: 'absolute', menu: 'viewMode'},
 							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 						}
@@ -1618,16 +1630,6 @@ const ITEM_TABLE = [
 							X: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
 							Y: {type: Scratch.ArgumentType.NUMBER, defaultValue: 64},
 							Z: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
-						}
-					},
-					{
-						opcode: 'lookSmooth',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('turn smoothly to yaw[YAW] pitch[PITCH]', '平滑转到视角 水平[YAW] 俯仰[PITCH]'),
-						argOrder: ['YAW', 'PITCH'],
-						arguments: {
-							YAW: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0},
-							PITCH: {type: Scratch.ArgumentType.NUMBER, defaultValue: 0}
 						}
 					},
 					{
@@ -1687,11 +1689,6 @@ const ITEM_TABLE = [
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Mining', '挖掘')},
 					{
-						opcode: 'breakWait',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('wait until block broken', '等待方块被挖破')
-					},
-					{
 						opcode: 'isMining',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('is mining', '正在挖掘')
@@ -1700,6 +1697,11 @@ const ITEM_TABLE = [
 						opcode: 'miningProgress',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('mining progress', '挖掘进度')
+					},
+					{
+						opcode: 'breakWait',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('wait until block broken', '等待方块被挖破')
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Containers', '容器')},
 					{
@@ -1732,15 +1734,6 @@ const ITEM_TABLE = [
 						opcode: 'screenJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('open screen snapshot', '界面快照')
-					},
-					{
-						opcode: 'firstSlotOf',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('first slot with [ITEM]', '第一个装着 [ITEM] 的槽位'),
-						argOrder: ['ITEM'],
-						arguments: {
-							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:iron_ore', menu: 'itemId'}
-						}
 					},
 					{
 						opcode: 'clickSlot',
@@ -1782,6 +1775,37 @@ const ITEM_TABLE = [
 						text: T('on ground?', '站在地面？')
 					},
 					{
+						opcode: 'inWater',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('in water?', '在水中?')
+					},
+					{
+						opcode: 'inLava',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('in lava?', '在岩浆中?')
+					},
+					{
+						opcode: 'inventoryQuery',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('[ASK] of [ITEM] in [RANGE]', '[RANGE] 中 [ITEM] 的 [ASK]'),
+						argOrder: ['RANGE', 'ITEM', 'ASK'],
+						arguments: {
+							RANGE: {type: Scratch.ArgumentType.STRING, defaultValue: 'backpack', menu: 'inventoryRange'},
+							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'},
+							ASK: {type: Scratch.ArgumentType.STRING, defaultValue: 'count', menu: 'inventoryKind'}
+						}
+					},
+					{
+						opcode: 'inventoryFull',
+						blockType: Scratch.BlockType.BOOLEAN,
+						text: T('inventory full?', '背包已满?')
+					},
+					{
+						opcode: 'inventoryJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('inventory snapshot', '背包快照')
+					},
+					{
 						opcode: 'heldItemField',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('held [FIELD]', '手中的 [FIELD]'),
@@ -1791,28 +1815,9 @@ const ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'inventoryJson',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('inventory snapshot', '背包快照')
-					},
-					{
-						opcode: 'inventoryFull',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('inventory full?', '背包已满?')
-					},
-					{
 						opcode: 'playerJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('player snapshot', '玩家快照')
-					},
-					{
-						opcode: 'itemCount',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('count of [ITEM]', '背包中 [ITEM] 的数量'),
-						argOrder: ['ITEM'],
-						arguments: {
-							ITEM: {type: Scratch.ArgumentType.STRING, defaultValue: 'minecraft:stone', menu: 'itemId'}
-						}
 					},
 					{
 						opcode: 'respawn',
@@ -1831,24 +1836,14 @@ const ITEM_TABLE = [
 						text: T('biome', '当前生物群系')
 					},
 					{
-						opcode: 'inWater',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('in water?', '在水中?')
-					},
-					{
-						opcode: 'inLava',
-						blockType: Scratch.BlockType.BOOLEAN,
-						text: T('in lava?', '在岩浆中?')
+						opcode: 'blockBelow',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('block below', '脚下方块')
 					},
 					{
 						opcode: 'blockInFront',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('block in front?', '前方有方块？')
-					},
-					{
-						opcode: 'blockBelow',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('block below', '脚下方块')
 					},
 					{
 						opcode: 'blockAt',
@@ -1873,9 +1868,28 @@ const ITEM_TABLE = [
 						}
 					},
 					{
+						opcode: 'frontBlock',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('block at crosshair', '准星所指方块')
+					},
+					{
+						opcode: 'aimPos',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('aimed block [AXIS] position', '准星方块的 [AXIS] 坐标'),
+						argOrder: ['AXIS'],
+						arguments: {
+							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
+						}
+					},
+					{
 						opcode: 'playersJson',
 						blockType: Scratch.BlockType.REPORTER,
 						text: T('online players snapshot', '在线玩家快照')
+					},
+					{
+						opcode: 'worldJson',
+						blockType: Scratch.BlockType.REPORTER,
+						text: T('world snapshot', '世界快照')
 					},
 					{
 						opcode: 'scanJson',
@@ -1899,25 +1913,6 @@ const ITEM_TABLE = [
 						argOrder: ['KIND'],
 						arguments: {
 							KIND: {type: Scratch.ArgumentType.STRING, defaultValue: 'player', menu: 'snapshotKind'}
-						}
-					},
-					{
-						opcode: 'worldJson',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('world snapshot', '世界快照')
-					},
-					{
-						opcode: 'frontBlock',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('block at crosshair', '准星所指方块')
-					},
-					{
-						opcode: 'aimPos',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('aimed block [AXIS] position', '准星方块的 [AXIS] 坐标'),
-						argOrder: ['AXIS'],
-						arguments: {
-							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
 						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('Entities', '实体查询')},
@@ -2001,9 +1996,13 @@ const ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'lastChat',
+						opcode: 'chatSource',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('last chat message', '最近的聊天')
+						text: T('chat [SOURCE]', '聊天 [SOURCE]'),
+						argOrder: ['SOURCE'],
+						arguments: {
+							SOURCE: {type: Scratch.ArgumentType.STRING, defaultValue: 'last', menu: 'chatSource'}
+						}
 					},
 					{
 						opcode: 'chatHistory',
@@ -2013,11 +2012,6 @@ const ITEM_TABLE = [
 						arguments: {
 							COUNT: {type: Scratch.ArgumentType.NUMBER, defaultValue: 10}
 						}
-					},
-					{
-						opcode: 'triggerChat',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('chat that triggered me', '触发我的聊天')
 					},
 					{
 						opcode: 'aiAsk',
@@ -2039,15 +2033,6 @@ const ITEM_TABLE = [
 						}
 					},
 					{
-						opcode: 'aiReset',
-						blockType: Scratch.BlockType.COMMAND,
-						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
-						argOrder: ['SESSION'],
-						arguments: {
-							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
-						}
-					},
-					{
 						opcode: 'aiSystem',
 						blockType: Scratch.BlockType.COMMAND,
 						text: T('set system prompt of session [SESSION] to [TEXT]', '设置会话 [SESSION] 的系统提示为 [TEXT]'),
@@ -2055,6 +2040,15 @@ const ITEM_TABLE = [
 						arguments: {
 							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'},
 							TEXT: {type: Scratch.ArgumentType.STRING, defaultValue: 'you are a Minecraft helper'}
+						}
+					},
+					{
+						opcode: 'aiReset',
+						blockType: Scratch.BlockType.COMMAND,
+						text: T('clear conversation of session [SESSION]', '清空会话 [SESSION] 的对话记录'),
+						argOrder: ['SESSION'],
+						arguments: {
+							SESSION: {type: Scratch.ArgumentType.STRING, defaultValue: 'main'}
 						}
 					},
 					{blockType: Scratch.BlockType.LABEL, text: T('JSON · Check & create', 'JSON · 校验与新建')},
@@ -2393,8 +2387,27 @@ const ITEM_TABLE = [
 							{text: T('Y', 'Y'), value: 'y'},
 							{text: T('Z', 'Z'), value: 'z'}
 					]},
+					viewMode: {acceptReporters: false, items: [
+							{text: T('absolute', '绝对'), value: 'absolute'},
+							{text: T('relative', '增量'), value: 'relative'}
+					]},
+					inventoryRange: {acceptReporters: false, items: [
+							{text: T('backpack', '背包'), value: 'backpack'},
+							{text: T('open container', '当前界面'), value: 'screen'}
+					]},
+					inventoryKind: {acceptReporters: false, items: [
+							{text: T('count', '数量'), value: 'count'},
+							{text: T('first slot', '首个槽位'), value: 'first_slot'}
+					]},
+					chatSource: {acceptReporters: false, items: [
+							{text: T('last message', '最近'), value: 'last'},
+							{text: T('that triggered me', '触发我的'), value: 'trigger'}
+					]},
 					playerField: {acceptReporters: false, items: [
 							{text: T('health', '血量'), value: 'health'},
+							{text: T('max health', '最大血量'), value: 'max_health'},
+							{text: T('armor', '护甲'), value: 'armor'},
+							{text: T('air', '氧气'), value: 'air'},
 							{text: T('food level', '饱食度'), value: 'food'},
 							{text: T('xp level', '经验等级'), value: 'xp_level'},
 							{text: T('selected slot', '当前槽位'), value: 'selected_slot'},
@@ -2414,7 +2427,9 @@ const ITEM_TABLE = [
 							{text: T('name', '名称'), value: 'name'},
 							{text: T('health', '血量'), value: 'health'},
 							{text: T('max health', '最大血量'), value: 'max_health'},
-							{text: T('registry id', '注册名'), value: 'type_id'}
+							{text: T('registry id', '注册名'), value: 'type_id'},
+							{text: T('baby?', '幼年?'), value: 'is_baby'},
+							{text: T('on ground?', '着地?'), value: 'on_ground'}
 					]},
 					heldField: {acceptReporters: false, items: [
 							{text: T('item', '物品'), value: 'id'},
@@ -2756,48 +2771,47 @@ const ITEM_TABLE = [
 		whenScreenOpen() { return true; }
 		whenChat() { return true; }
 		moveToward(args, util) { return this.__tmc('turbomc_moveToward', [args.X, args.Y, args.Z], 'command', function () { this.preview('moveToward ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
-		look(args, util) { return this.__tmc('turbomc_look', [args.YAW, args.PITCH], 'command', function () { this.preview('look ' + args.YAW + ',' + args.PITCH); }, util); }
+		turnView(args, util) { return this.__tmc('turbomc_turnView', [args.MODE, args.YAW, args.PITCH], 'command', function () { this.preview('turnView ' + args.MODE + ' ' + args.YAW + ',' + args.PITCH); }, util); }
+		turnViewSmooth(args, util) { return this.__tmc('turbomc_turnViewSmooth', [args.MODE, args.YAW, args.PITCH], 'command', function () { this.preview('turnViewSmooth ' + args.MODE + ' ' + args.YAW + ',' + args.PITCH); }, util); }
 		lookAt(args, util) { return this.__tmc('turbomc_lookAt', [args.X, args.Y, args.Z], 'command', function () { this.preview('lookAt ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
-		lookSmooth(args, util) { return this.__tmc('turbomc_lookSmooth', [args.YAW, args.PITCH], 'command', function () { this.preview('lookSmooth ' + args.YAW + ',' + args.PITCH); }, util); }
 		lookAtSmooth(args, util) { return this.__tmc('turbomc_lookAtSmooth', [args.X, args.Y, args.Z], 'command', function () { this.preview('lookAtSmooth ' + args.X + ',' + args.Y + ',' + args.Z); }, util); }
 		stop(args, util) { return this.__tmc('turbomc_stop', [], 'command', function () { this.preview('stop'); }, util); }
 		key(args, util) { return this.__tmc('turbomc_key', [args.KEY, args.STATE], 'command', function () { this.preview('key ' + args.KEY + ' ' + args.STATE); }, util); }
 		click(args, util) { return this.__tmc('turbomc_click', [args.BUTTON], 'command', function () { this.preview('click ' + args.BUTTON); }, util); }
 		tap(args, util) { return this.__tmc('turbomc_tap', [args.KEY, args.HOLD], 'command', function () { this.preview('tap ' + args.KEY + ' x' + args.HOLD); }, util); }
 		mouseDown(args, util) { return this.__tmc('turbomc_mouseDown', [args.BUTTON], 'boolean', function () { return false; }, util); }
-		breakWait(args, util) { return this.__tmc('turbomc_breakWait', [], 'command', function () { this.preview('breakWait'); }, util); }
 		isMining(args, util) { return this.__tmc('turbomc_isMining', [], 'boolean', function () { return false; }, util); }
 		miningProgress(args, util) { return this.__tmc('turbomc_miningProgress', [], 'reporter', function () { return 0; }, util); }
+		breakWait(args, util) { return this.__tmc('turbomc_breakWait', [], 'command', function () { this.preview('breakWait'); }, util); }
 		openContainerAt(args, util) { return this.__tmc('turbomc_openContainerAt', [args.X, args.Y, args.Z], 'command', function () { this.preview('openContainerAt'); }, util); }
 		containerSlots(args, util) { return this.__tmc('turbomc_containerSlots', [], 'reporter', function () { return 0; }, util); }
 		slotField(args, util) { return this.__tmc('turbomc_slotField', [args.INDEX, args.FIELD], 'reporter', function () { return ''; }, util); }
 		screenJson(args, util) { return this.__tmc('turbomc_screenJson', [], 'reporter', function () { return '{}'; }, util); }
-		firstSlotOf(args, util) { return this.__tmc('turbomc_firstSlotOf', [args.ITEM], 'reporter', function () { return -1; }, util); }
 		clickSlot(args, util) { return this.__tmc('turbomc_clickSlot', [args.INDEX, args.BUTTON], 'command', function () { this.preview('clickSlot'); }, util); }
 		quickMoveSlot(args, util) { return this.__tmc('turbomc_quickMoveSlot', [args.INDEX], 'command', function () { this.preview('quickMoveSlot'); }, util); }
 		closeContainer(args, util) { return this.__tmc('turbomc_closeContainer', [], 'command', function () { this.preview('closeContainer'); }, util); }
 		playerField(args, util) { return this.__tmc('turbomc_playerField', [args.FIELD], 'reporter', function () { return 0; }, util); }
 		onGround(args, util) { return this.__tmc('turbomc_onGround', [], 'boolean', function () { this.preview('onGround'); return true; }, util); }
-		heldItemField(args, util) { return this.__tmc('turbomc_heldItemField', [args.FIELD], 'reporter', function () { return ''; }, util); }
-		inventoryJson(args, util) { return this.__tmc('turbomc_inventoryJson', [], 'reporter', function () { return '[]'; }, util); }
+		inWater(args, util) { return this.__tmc('turbomc_inWater', [], 'boolean', function () { return false; }, util); }
+		inLava(args, util) { return this.__tmc('turbomc_inLava', [], 'boolean', function () { return false; }, util); }
+		inventoryQuery(args, util) { return this.__tmc('turbomc_inventoryQuery', [args.RANGE, args.ITEM, args.ASK], 'reporter', function () { return 0; }, util); }
 		inventoryFull(args, util) { return this.__tmc('turbomc_inventoryFull', [], 'boolean', function () { return false; }, util); }
+		inventoryJson(args, util) { return this.__tmc('turbomc_inventoryJson', [], 'reporter', function () { return '[]'; }, util); }
+		heldItemField(args, util) { return this.__tmc('turbomc_heldItemField', [args.FIELD], 'reporter', function () { return ''; }, util); }
 		playerJson(args, util) { return this.__tmc('turbomc_playerJson', [], 'reporter', function () { return '{"name":"","uuid":"","health":0,"max_health":20,"absorption":0,"food":20,"saturation":5,"xp_level":0,"xp_progress":0,"armor":0,"air":300,"gamemode":"","dimension":"","x":0,"y":0,"z":0,"motion_x":0,"motion_y":0,"motion_z":0,"yaw":0,"pitch":0,"on_ground":false,"in_water":false,"in_lava":false,"selected_slot":1,"effects":[]}'; }, util); }
-		itemCount(args, util) { return this.__tmc('turbomc_itemCount', [args.ITEM], 'reporter', function () { return 0; }, util); }
 		respawn(args, util) { return this.__tmc('turbomc_respawn', [], 'command', function () { this.preview('respawn'); }, util); }
 		isDay(args, util) { return this.__tmc('turbomc_isDay', [], 'boolean', function () { return true; }, util); }
 		biome(args, util) { return this.__tmc('turbomc_biome', [], 'reporter', function () { return 'minecraft:plains'; }, util); }
-		inWater(args, util) { return this.__tmc('turbomc_inWater', [], 'boolean', function () { return false; }, util); }
-		inLava(args, util) { return this.__tmc('turbomc_inLava', [], 'boolean', function () { return false; }, util); }
-		blockInFront(args, util) { return this.__tmc('turbomc_blockInFront', [], 'boolean', function () { this.preview('blockInFront'); return false; }, util); }
 		blockBelow(args, util) { return this.__tmc('turbomc_blockBelow', [], 'reporter', function () { return 'minecraft:grass_block'; }, util); }
+		blockInFront(args, util) { return this.__tmc('turbomc_blockInFront', [], 'boolean', function () { this.preview('blockInFront'); return false; }, util); }
 		blockAt(args, util) { return this.__tmc('turbomc_blockAt', [args.X, args.Y, args.Z], 'reporter', function () { this.preview('blockAt ' + args.X + ',' + args.Y + ',' + args.Z); return 'minecraft:air'; }, util); }
 		blockJson(args, util) { return this.__tmc('turbomc_blockJson', [args.X, args.Y, args.Z], 'reporter', function () { return '{"id":"","x":0,"y":0,"z":0,"state":{},"hardness":0,"is_air":false,"is_solid":false,"is_fluid":false,"light":0,"biome":"","block_entity":{"type":"","items":[],"items_total":0,"nbt":{},"text_front":"","text_back":""}}'; }, util); }
-		playersJson(args, util) { return this.__tmc('turbomc_playersJson', [], 'reporter', function () { return '[]'; }, util); }
-		scanJson(args, util) { return this.__tmc('turbomc_scanJson', [args.X1, args.Y1, args.Z1, args.X2, args.Y2, args.Z2, args.LIMIT], 'reporter', function () { return '{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}'; }, util); }
-		snapshotKeys(args, util) { return this.__tmc('turbomc_snapshotKeys', [args.KIND], 'reporter', function () { return '[]'; }, util); }
-		worldJson(args, util) { return this.__tmc('turbomc_worldJson', [], 'reporter', function () { return '{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}'; }, util); }
 		frontBlock(args, util) { return this.__tmc('turbomc_frontBlock', [], 'reporter', function () { return 'minecraft:air'; }, util); }
 		aimPos(args, util) { return this.__tmc('turbomc_aimPos', [args.AXIS], 'reporter', function () { return 0; }, util); }
+		playersJson(args, util) { return this.__tmc('turbomc_playersJson', [], 'reporter', function () { return '[]'; }, util); }
+		worldJson(args, util) { return this.__tmc('turbomc_worldJson', [], 'reporter', function () { return '{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}'; }, util); }
+		scanJson(args, util) { return this.__tmc('turbomc_scanJson', [args.X1, args.Y1, args.Z1, args.X2, args.Y2, args.Z2, args.LIMIT], 'reporter', function () { return '{"x1":0,"y1":0,"z1":0,"x2":0,"y2":0,"z2":0,"truncated":false,"blocks":[]}'; }, util); }
+		snapshotKeys(args, util) { return this.__tmc('turbomc_snapshotKeys', [args.KIND], 'reporter', function () { return '[]'; }, util); }
 		nearestEntityField(args, util) { return this.__tmc('turbomc_nearestEntityField', [args.TYPE, args.FIELD], 'reporter', function () { return 0; }, util); }
 		entityCount(args, util) { return this.__tmc('turbomc_entityCount', [args.TYPE], 'reporter', function () { return 0; }, util); }
 		entitiesJson(args, util) { return this.__tmc('turbomc_entitiesJson', [args.TYPE, args.RADIUS, args.LIMIT], 'reporter', function () { return '[]'; }, util); }
@@ -2806,13 +2820,12 @@ const ITEM_TABLE = [
 		log(args, util) { return this.__tmc('turbomc_log', [args.TEXT], 'command', function () { console.log('[turbomc]', args.TEXT); }, util); }
 		chat(args, util) { return this.__tmc('turbomc_chat', [args.TEXT], 'command', function () { this.preview('chat ' + args.TEXT); }, util); }
 		command(args, util) { return this.__tmc('turbomc_command', [args.COMMAND], 'command', function () { this.preview('command ' + args.COMMAND); }, util); }
-		lastChat(args, util) { return this.__tmc('turbomc_lastChat', [], 'reporter', function () { this.preview('lastChat'); return ''; }, util); }
+		chatSource(args, util) { return this.__tmc('turbomc_chatSource', [args.SOURCE], 'reporter', function () { this.preview('chatSource'); return ''; }, util); }
 		chatHistory(args, util) { return this.__tmc('turbomc_chatHistory', [args.COUNT], 'reporter', function () { return '[]'; }, util); }
-		triggerChat(args, util) { return this.__tmc('turbomc_triggerChat', [], 'reporter', function () { this.preview('triggerChat'); return ''; }, util); }
 		aiAsk(args, util) { return this.__tmc('turbomc_aiAsk', [args.SESSION, args.TEXT], 'command', function () { this.preview('aiAsk ' + args.SESSION + ' ' + args.TEXT); }, util); }
 		aiReply(args, util) { return this.__tmc('turbomc_aiReply', [args.SESSION], 'reporter', function () { this.preview('aiReply'); return ''; }, util); }
-		aiReset(args, util) { return this.__tmc('turbomc_aiReset', [args.SESSION], 'command', function () { this.preview('aiReset'); }, util); }
 		aiSystem(args, util) { return this.__tmc('turbomc_aiSystem', [args.SESSION, args.TEXT], 'command', function () { this.preview('aiSystem'); }, util); }
+		aiReset(args, util) { return this.__tmc('turbomc_aiReset', [args.SESSION], 'command', function () { this.preview('aiReset'); }, util); }
 		jsonIs(args, util) { return __tmcJson('jsonIs', [args.json, args.check], true); }
 		jsonNew(args, util) { return __tmcJson('jsonNew', [args.json], false); }
 		jsonLength(args, util) { return __tmcJson('jsonLength', [args.json], false); }
@@ -5280,25 +5293,53 @@ function installRemote(Scratch, ext, meta) {
 				return item ? item.id : '';
 			},
 		'turbomc_screenJson': (s) => (s && s.ui ? JSON.stringify(s.ui) : '{}'),
-		'turbomc_firstSlotOf': (s, a) => {
-				const want = itemKey(a && a[0]);
-				const items = s && s.ui && Array.isArray(s.ui.items) ? s.ui.items : [];
-				if (!want) {
-					return -1;
-				}
-				const hit = items.find((entry) => entry.id === want);
-				return hit ? hit.slot : -1;
-			},
 		'turbomc_playerField': (s, a) => {
 				if (!s) {
 					return 0;
 				}
-				const alias = {health: 'hp', xp_level: 'xpLevel', selected_slot: 'slot', dimension: 'dim'};
+				const alias = {health: 'hp', max_health: 'maxHp', xp_level: 'xpLevel', selected_slot: 'slot', dimension: 'dim'};
 				const key = (a && alias[a[0]]) || (a && a[0]);
 				const value = s[key];
 				return value === undefined || value === null ? 0 : value;
 			},
 		'turbomc_onGround': (s) => !!(s && s.onGround),
+		'turbomc_inWater': (s) => !!(s && s.inWater),
+		'turbomc_inLava': (s) => !!(s && s.inLava),
+		'turbomc_inventoryQuery': (s, a) => {
+				const range = (a && a[0]) === 'screen' ? 'screen' : 'backpack';
+				const want = itemKey(a && a[1]);
+				const firstSet = (a && a[2]) === 'first_slot';
+				if (!want || !s) {
+					return firstSet ? -1 : 0;
+				}
+				const entries = range === 'screen'
+					? (s.ui && Array.isArray(s.ui.items) ? s.ui.items : [])
+					: (Array.isArray(s.inv) ? s.inv : []);
+				if (firstSet) {
+					const hit = entries.find((entry) => entry.id === want);
+					return hit && typeof hit.slot === 'number' ? hit.slot : -1;
+				}
+				let total = 0;
+				for (const entry of entries) {
+					if (entry.id === want) {
+						total += entry.count || 0;
+					}
+				}
+				return total;
+			},
+		'turbomc_inventoryFull': (s) => {
+				if (!s || !Array.isArray(s.inv)) {
+					return false;
+				}
+				const filled = new Set(s.inv.map((item) => item.slot));
+				for (let i = 0; i < 36; i++) {
+					if (!filled.has(i)) {
+						return false;
+					}
+				}
+				return true;
+			},
+		'turbomc_inventoryJson': (s) => JSON.stringify(s && Array.isArray(s.inv) ? s.inv : []),
 		'turbomc_heldItemField': (s, a) => {
 				const field = String((a && a[0]) || 'id').trim().toLowerCase();
 				const hand = s && s.hand ? s.hand : {id: '', count: 0, maxDurability: 0, durability: 0};
@@ -5313,40 +5354,15 @@ function installRemote(Scratch, ext, meta) {
 				}
 				return hand.id;
 			},
-		'turbomc_inventoryJson': (s) => JSON.stringify(s && Array.isArray(s.inv) ? s.inv : []),
-		'turbomc_inventoryFull': (s) => {
-				if (!s || !Array.isArray(s.inv)) {
-					return false;
-				}
-				const filled = new Set(s.inv.map((item) => item.slot));
-				for (let i = 0; i < 36; i++) {
-					if (!filled.has(i)) {
-						return false;
-					}
-				}
-				return true;
-			},
 		'turbomc_playerJson': (s) => JSON.stringify(s && s.me ? s.me : {}),
-		'turbomc_itemCount': (s, a) => {
-				const want = itemKey(a && a[0]);
-				if (!want || !s || !Array.isArray(s.inv)) {
-					return 0;
-				}
-				let total = 0;
-				for (const item of s.inv) {
-					if (item.id === want) {
-						total += item.count;
-					}
-				}
-				return total;
-			},
 		'turbomc_isDay': (s) => !!(s && s.isDay),
 		'turbomc_biome': (s) => (s ? s.biome : ''),
-		'turbomc_inWater': (s) => !!(s && s.inWater),
-		'turbomc_inLava': (s) => !!(s && s.inLava),
-		'turbomc_blockInFront': (s) => !!(s && s.aim && s.aim.has),
 		'turbomc_blockBelow': (s) => (s ? s.below : ''),
+		'turbomc_blockInFront': (s) => !!(s && s.aim && s.aim.has),
+		'turbomc_frontBlock': (s) => (s && s.aim ? s.aim.block : ''),
+		'turbomc_aimPos': (s, a) => (s && s.aim ? s.aim[a[0]] : 0),
 		'turbomc_playersJson': (s) => JSON.stringify(s && Array.isArray(s.players) ? s.players : []),
+		'turbomc_worldJson': (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}),
 		'turbomc_snapshotKeys': (s, a) => {
 				const kind = String((a && a[0]) || 'player').trim().toLowerCase();
 				const table = S.welcome && S.welcome.snapshotKeys ? S.welcome.snapshotKeys : null;
@@ -5355,23 +5371,24 @@ function installRemote(Scratch, ext, meta) {
 				}
 				return JSON.stringify(Array.isArray(table[kind]) ? table[kind] : []);
 			},
-		'turbomc_worldJson': (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}),
-		'turbomc_frontBlock': (s) => (s && s.aim ? s.aim.block : ''),
-		'turbomc_aimPos': (s, a) => (s && s.aim ? s.aim[a[0]] : 0),
 		'turbomc_nearestEntityField': (s, a) => nearestEntityField(s, a),
 		'turbomc_entityCount': (s, a) => countEntities(s, entityFilter(a && a[0])),
 		'turbomc_entitiesJson': (s, a) => entitiesJson(s, a),
-		'turbomc_lastChat': (s) => (s && s.chat ? s.chat.last : ''),
+		'turbomc_chatSource': (s, a, util) => {
+				const tagged = util && util.thread ? util.thread.tmcChat : undefined;
+				const hasTagged = tagged !== undefined && tagged !== null;
+				if ((a && a[0]) === 'trigger') {
+					return hasTagged ? String(tagged) : '';
+				}
+				if (hasTagged) {
+					return String(tagged);
+				}
+				return s && s.chat ? s.chat.last : '';
+			},
 		'turbomc_chatHistory': (s, a) => {
 				const count = Math.max(1, Math.min(32, Number((a && a[0]) === undefined ? 10 : a[0]) || 0));
 				const history = s && s.chat && Array.isArray(s.chat.history) ? s.chat.history : [];
 				return JSON.stringify(history.slice(Math.max(0, history.length - count)));
-			},
-		'turbomc_triggerChat': (s, a, util) => {
-				if (util && util.thread && util.thread.tmcChat !== undefined && util.thread.tmcChat !== null) {
-					return String(util.thread.tmcChat);
-				}
-				return '';
 			},
 		'turbomc_aiReply': (s, a) => {
 				const session = String((a && a[0]) || '').trim();

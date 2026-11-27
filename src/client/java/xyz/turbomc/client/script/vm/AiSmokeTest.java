@@ -185,13 +185,14 @@ public final class AiSmokeTest {
 		ok &= report("空回复按失败处理", emptyOk,
 				emptyView == null ? "" : emptyView.phase() + " " + emptyView.error());
 
-		// 「最近的聊天」：注册表里能拿到，且读到的是最近记录的那条。
+		// 「聊天 [来源]」：注册表里能拿到，且「最近」读到的是最近记录的那条。
 		// 写入方在 TurboMCClient 的客户端事件里，纯 JVM 测不到；这里守的是注册与读取这一半。
+		// 「触发我的」那一路走线程上下文，纯 JVM 没有 util.thread，只会拿到兜底空串。
 		ChatState.record("hello from chat");
-		NativeRegistry.Function lastChat = NativeRegistry.getFunction("query.last_chat");
-		boolean chatOk = lastChat != null
-				&& "hello from chat".equals(String.valueOf(lastChat.apply(null, new Object[0])));
-		ok &= report("最近的聊天可读", chatOk, "");
+		NativeRegistry.Function chatSource = NativeRegistry.getFunction("query.chat_source");
+		boolean chatOk = chatSource != null
+				&& "hello from chat".equals(String.valueOf(chatSource.apply(null, new Object[]{"last"})));
+		ok &= report("聊天 [最近] 可读", chatOk, "");
 
 		// ---- 段 2：端到端 ----
 		String json = VmSmokeTest.readFixture(FIXTURE);

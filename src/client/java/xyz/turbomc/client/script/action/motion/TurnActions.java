@@ -18,17 +18,28 @@ public final class TurnActions {
 	}
 
 	public static void registerAll() {
-		NativeRegistry.action("action.look_smooth", TurnActions::lookSmooth);
+		NativeRegistry.action("action.turn_view_smooth", TurnActions::turnViewSmooth);
 		NativeRegistry.action("action.look_at_smooth", TurnActions::lookAtSmooth);
 	}
 
-	private static void lookSmooth(ScriptContext ctx, Object[] args) {
+	/**
+	 * 「平滑转动视角」：与瞬时版共用 MODE 语义，区别只在「直接写值」与「逐帧收敛」。
+	 *
+	 * <p>增量模式下把增量叠到<b>当前角度</b>上再交给 {@link TurnSession}；它内部会做
+	 * 最短路径折算与俯仰钳制，所以传 200° 的增量等价于转 -160°，不会绕远路。</p>
+	 */
+	private static void turnViewSmooth(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = (MinecraftClient) ctx.handle();
 		if (client.player == null) {
 			return;
 		}
-		float yaw = (float) ScratchCast.toNumber(args[0]);
-		float pitch = (float) ScratchCast.toNumber(args[1]);
+		float yaw = (float) ScratchCast.toNumber(args[1]);
+		float pitch = (float) ScratchCast.toNumber(args[2]);
+		if (args != null && args.length > 0
+				&& "relative".equalsIgnoreCase(ScratchCast.toString(args[0]).trim())) {
+			yaw += client.player.getYaw();
+			pitch += client.player.getPitch();
+		}
 		if (!TurnSession.start(client, yaw, pitch)) {
 			return;   // 已经在目标角上：不挂起
 		}

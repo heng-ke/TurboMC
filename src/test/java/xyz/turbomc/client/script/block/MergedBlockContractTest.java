@@ -32,6 +32,11 @@ class MergedBlockContractTest {
 		// 玩家的七个读数合并成一块：health / food / xpLevel / selectedSlot / dimension /
 		// ping / pos 的旧 opcode 已删（2026-11-27），这里只断言新块
 		assertMapping("turbomc_playerField", "world.player_field", 1);
+		// 2026-11-27 第二批：视角带模式、聊天来源、背包查询（范围 + 物品 + 要什么）
+		assertMapping("turbomc_turnView", "action.turn_view", 3);
+		assertMapping("turbomc_turnViewSmooth", "action.turn_view_smooth", 3);
+		assertMapping("turbomc_chatSource", "query.chat_source", 1);
+		assertMapping("turbomc_inventoryQuery", "world.inventory_query", 3);
 		assertMapping("turbomc_aimPos", "world.aim_pos", 1);
 		assertMapping("turbomc_nearestEntityField", "world.nearest_entity_field", 2);
 		assertMapping("turbomc_heldItemField", "world.held_item_field", 1);

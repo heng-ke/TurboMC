@@ -100,7 +100,7 @@ public final class GameActions {
 		ChatQueue.install(GameActions::sendChatNow, GameActions::chatIntervalTicks);
 		NativeRegistry.action("action.key", GameActions::key);
 		NativeRegistry.action("action.stop", GameActions::stop);
-		NativeRegistry.action("action.look", GameActions::look);
+		NativeRegistry.action("action.turn_view", GameActions::turnView);
 		NativeRegistry.action("action.look_at", GameActions::lookAt);
 		NativeRegistry.action("debug.log", GameActions::log);
 		NativeRegistry.action("action.chat", GameActions::chat);
@@ -156,14 +156,34 @@ public final class GameActions {
 		releaseMovementKeys();
 	}
 
-	private static void look(ScriptContext ctx, Object[] args) {
+	/**
+	 * 「转动视角」：绝对模式直接给目标角度，增量模式在当前角度上叠加。
+	 *
+	 * <p>两种模式都走 {@link ViewSmoother#applyManual}——NaN 检查与俯仰钳制都在那里，
+	 * 并且写入后以 MANUAL 占用视角（走向会把它接管回去，见 §13）。</p>
+	 *
+	 * <p><b>增量模式下 yaw 不做归一化</b>：与「平滑转向」保持同一约定，累加后的值可能
+	 * 超出 ±180，但朝向等价、服务端看到的是小增量。归一化反而会让 370→10 被当成一次
+	 * 360° 瞬转。</p>
+	 */
+	private static void turnView(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
-		if (client.player == null) {
+		if (client == null || client.player == null) {
 			return;
 		}
-		// 直接写值并占用视角：与「走向 / 平滑转向」的帧层控制互斥，否则每 tick 会互相掰
-		ViewSmoother.applyManual(client,
-				(float) ScratchCast.toNumber(args[0]), (float) ScratchCast.toNumber(args[1]));
+		float yaw = (float) ScratchCast.toNumber(args[1]);
+		float pitch = (float) ScratchCast.toNumber(args[2]);
+		if (isRelative(args)) {
+			yaw += client.player.getYaw();
+			pitch += client.player.getPitch();
+		}
+		ViewSmoother.applyManual(client, yaw, pitch);
+	}
+
+	/** 视角命令的 MODE 参数是否为「增量」。缺参按绝对处理（与默认值一致）。 */
+	private static boolean isRelative(Object[] args) {
+		return args != null && args.length > 0
+				&& "relative".equalsIgnoreCase(ScratchCast.toString(args[0]).trim());
 	}
 
 	private static void lookAt(ScriptContext ctx, Object[] args) {

@@ -155,7 +155,7 @@ src/client/java/xyz/turbomc/client/
 
 ```
 turbowarp/src/
-├── blocks.data.js             91 块积木、19 个菜单、15 个分组标题、每块的占位方法体
+├── blocks.data.js             89 块积木、23 个菜单、15 个分组标题、每块的占位方法体
 ├── items.data.js              1505 条物品（注册名|中文名|英文名）
 ├── remote-client.js           远程桥客户端：连接面板、__tmc、快照缓存、帽子匹配（见 §7.7）
 ├── json-lite.js               JSON 积木的唯一实现（ES5；编辑器内联，运行时复制为 json-core.es5.js）
@@ -297,11 +297,21 @@ JS 侧必须返回**数组**而不是计数，否则永远显示 0。
 `nearestEntity` 与它的 `X/Y/Z/name`、`heldItem/heldDurability`、`slotItem/slotAmount`。
 
 2026-11-27 又硬删 7 块：`health` / `food` / `xpLevel` / `selectedSlot` / `dimension` /
-`ping` / `pos`，全部并入 `playerField`（「玩家的 [字段]」，11 项下拉）。判断依据与上一次
+`ping` / `pos`，全部并入 `playerField`（「玩家的 [字段]」，14 项下拉）。判断依据与上一次
 相同——都是「同一对象、读一次状态」的字段。**布尔类没有并入**：`onGround` / `inWater` /
 `inLava` / `inventoryFull` 是六边形，合并成 reporter 就再也放不进条件槽，这是语法层约束，
 不是取舍。字段的 `value` 用**长名**（与玩家 JSON 快照的键一致），远程快照那套短名
 （`hp` / `dim` / `slot` / `xpLevel`）在积木的 `read` 里换算。
+
+同日第二批（4 合 2、2 合 1）：`look`/`lookSmooth` → `turnView`/`turnViewSmooth`（带
+「绝对 / 增量」模式，增量即用户要的「转动视角 Δ」）；`lastChat`/`triggerChat` →
+`chatSource`；`itemCount`/`firstSlotOf` → `inventoryQuery`。
+
+最后一项**不是简单的字段合并**：`firstSlotOf` 查的是当前打开的界面（`ScreenHandler`），
+`itemCount` 查的是玩家背包（`PlayerInventory`）——两者是两套槽位，直接合并会产出
+「背包中 [物品] 的首个槽位」这种错误语义。因此 `inventoryQuery` 多了 `RANGE`
+（背包 / 当前界面）参数，四种组合都成立。这类「看似同族、实则不同对象」的合并值得
+在动手前先读实现，而不是只看积木文案。
 
 **失效形态比报错更隐蔽**——实测（`vmSmoke -PvmProject=<旧工程的 project.json>`）：
 未知 opcode 被静默跳过，工程照常载入、脚本照常往下跑、`未映射` 计数仍为 0，
@@ -315,6 +325,10 @@ JS 侧必须返回**数组**而不是计数，否则永远显示 0。
 
 - 新增积木必须同时改三处：`blocks.data.js` 声明、`Sb3Mapping` 映射、`Blocks.java` 登记。
   名字与顺序的一致性由 `tools/build-mapping-report.js` 在构建期校验（§6.1）。
+- **位置也是约定的一部分**：同族必须相邻（瞬时/平滑、玩家布尔、准星三块、背包三块），
+  组内按「读 → 写」「常用 → 少用」排。扩展面板与查看器（`Blocks.java`）走同一套顺序——
+  两边错开会让「面板里第 3 块」和查看器里第 3 块对不上，排查时多绕一圈。
+  顺序不影响 opcode，改它不需要迁移。
 - 两份扩展产物由 `tools/build-extension.js` 从 `turbowarp/src` 渲染。`processResources`
   依赖 `checkExtensionFreshness`（同一脚本的 `--check`），改了源忘记重新生成时，
   `./gradlew build` 与 `runClient` 都会直接失败，不会把旧扩展打进 jar——那种 jar 在游戏里
@@ -814,7 +828,7 @@ Rhino 没有 Worker，Promise 被拒，整个 `loadProject` 失败。玩家看�
 `assets/turbomc/vm/turbomc-extension.es5.js`（运行时副本）都由
 `node tools/build-extension.js` 渲染，数据源是：
 
-- `turbowarp/src/blocks.data.js` —— 91 块积木、19 个菜单、15 个分组标题、每块的占位方法体；
+- `turbowarp/src/blocks.data.js` —— 89 块积木、23 个菜单、15 个分组标题、每块的占位方法体；
 - `turbowarp/src/items.data.js` —— 1505 条物品（`注册名|中文名|英文名`）。
 
 同一脚本还负责 `json-lite.js` 的运行时副本：源码本身就是 ES5，原样写为
@@ -1402,7 +1416,7 @@ JAVA_HOME=~/.jdks/ms-25.0.5.0.2 ./gradlew build
 | 帽子 | 4 | 由宿主事件派发，不走 `NativeRegistry` |
 | 其余 | 64 | 必须有 `Action` 或 `Function` |
 
-合计 91 块，帽子之外 87 块。缺哪个就逐个打印 `名字（动作层未实现 类型）` 并以非零退出。
+合计 89 块，帽子之外 85 块。缺哪个就逐个打印 `名字（动作层未实现 类型）` 并以非零退出。
 这条守的是「面板上有、拖得出来、点下去没反应」那类静默失效：夹具里只写了 4 个动作，
 其余 60 块要么读世界状态（纯 JVM 必 NPE）、要么没有夹具，端到端跑不出来。
 
