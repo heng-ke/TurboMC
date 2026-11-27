@@ -118,15 +118,14 @@ public final class Sb3Mapping {
 			// ---- 世界查询（扩展）----
 			// 合并后的粗粒度积木。被它取代的细粒度 opcode（posX/aimX/nearestEntity* 等）
 			// 已随 2026-11-19 的减块一并删除：含它们的旧工程会出现未知积木（§6.2）
-			Map.entry("turbomc_pos", "world.pos"),
+			// 2026-11-27：玩家的七个读数（health / food / xpLevel / selectedSlot / dimension /
+			// ping / pos）也合并进 playerField 一块，旧 opcode 一并删除。
+			Map.entry("turbomc_playerField", "world.player_field"),
 			Map.entry("turbomc_aimPos", "world.aim_pos"),
 			Map.entry("turbomc_nearestEntityField", "world.nearest_entity_field"),
 			Map.entry("turbomc_heldItemField", "world.held_item_field"),
 			Map.entry("turbomc_slotField", "world.slot_field"),
 			Map.entry("turbomc_blockInFront", "world.block_in_front"),
-			Map.entry("turbomc_health", "world.health"),
-			Map.entry("turbomc_food", "world.food"),
-			Map.entry("turbomc_selectedSlot", "world.selected_slot"),
 			Map.entry("turbomc_onGround", "world.on_ground"),
 			Map.entry("turbomc_itemCount", "world.item_count"),
 
@@ -156,14 +155,11 @@ public final class Sb3Mapping {
 			Map.entry("turbomc_blockBelow", "world.block_below"),
 			Map.entry("turbomc_blockAt", "world.block_at"),
 			Map.entry("turbomc_isDay", "world.is_day"),
-			Map.entry("turbomc_dimension", "world.dimension"),
 			Map.entry("turbomc_inWater", "world.in_water"),
 			Map.entry("turbomc_inLava", "world.in_lava"),
-			Map.entry("turbomc_xpLevel", "world.xp_level"),
 			Map.entry("turbomc_inventoryFull", "world.inventory_full"),
 			Map.entry("turbomc_entityCount", "world.entity_count"),
 			Map.entry("turbomc_biome", "world.biome"),
-			Map.entry("turbomc_ping", "world.ping"),
 			Map.entry("turbomc_breakWait", "action.break_wait"),
 			Map.entry("turbomc_isMining", "world.is_mining"),
 			Map.entry("turbomc_miningProgress", "world.mining_progress"),

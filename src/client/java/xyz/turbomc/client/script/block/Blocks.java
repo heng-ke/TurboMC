@@ -185,12 +185,12 @@ final class Blocks {
 		reg("world.block_in_front", "world", BlockShape.BOOLEAN);
 		reg("world.is_mining", "world", BlockShape.BOOLEAN);
 		reg("world.mining_progress", "world", BlockShape.REPORTER);
-		reg("world.health", "world", BlockShape.REPORTER);
-		reg("world.food", "world", BlockShape.REPORTER);
-		// 三轴合并成一块下拉（旧的 world.pos_x/y/z 已删除，见 ARCHITECTURE §6.2）
-		regT("world.pos", "world", BlockShape.REPORTER, "玩家 {AXIS} 坐标",
-				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
-		reg("world.selected_slot", "world", BlockShape.REPORTER);
+		// 玩家的数值/文本字段合并成一块下拉。旧的 world.health / food / pos / selected_slot /
+		// dimension / xp_level / ping 七块已删除；sb3 存的是 opcode，含它们的旧工程会出现
+		// 未知积木（与 world.pos_x/y/z 那次同一处理，见 ARCHITECTURE §6.2）
+		regT("world.player_field", "world", BlockShape.REPORTER, "玩家的 {FIELD}",
+				BlockParam.fieldOption("FIELD", "health", "health", "food", "xp_level",
+						"selected_slot", "x", "y", "z", "yaw", "pitch", "dimension", "ping"));
 		reg("world.container_slots", "world", BlockShape.REPORTER);
 		regT("world.slot_field", "world", BlockShape.REPORTER, "槽位 {INDEX} 的 {FIELD}",
 				BlockParam.number("INDEX", "0"),
@@ -224,15 +224,12 @@ final class Blocks {
 		regT("world.aim_pos", "world", BlockShape.REPORTER, "准星方块的 {AXIS} 坐标",
 				BlockParam.fieldOption("AXIS", "x", "x", "y", "z"));
 		reg("world.is_day", "world", BlockShape.BOOLEAN);
-		reg("world.dimension", "world", BlockShape.REPORTER);
 		reg("world.in_water", "world", BlockShape.BOOLEAN);
 		reg("world.in_lava", "world", BlockShape.BOOLEAN);
-		reg("world.xp_level", "world", BlockShape.REPORTER);
 		reg("world.inventory_full", "world", BlockShape.BOOLEAN);
 		regT("world.entity_count", "world", BlockShape.REPORTER, "附近 {TYPE} 的数量",
 				BlockParam.text("TYPE", "minecraft:zombie"));
 		reg("world.biome", "world", BlockShape.REPORTER);
-		reg("world.ping", "world", BlockShape.REPORTER);
 
 		// ---- 快照（游戏状态 → JSON 文本，只读，见 ARCHITECTURE §26）----
 		// 返回的是字符串，可直接接 JSON 那批积木；字段名是契约，只增不删

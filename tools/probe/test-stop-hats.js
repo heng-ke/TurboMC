@@ -237,7 +237,7 @@ setTimeout(() => {
 	check(read('turbomc_isMining') === true && read('turbomc_miningProgress') === 33, '挖掘状态与进度');
 	check(read('turbomc_blockInFront') === true && read('turbomc_frontBlock') === 'minecraft:stone', '准星方块');
 	check(read('turbomc_blockBelow') === 'minecraft:dirt', '脚下方块');
-	check(read('turbomc_ping') === 42, '延迟读快照');
+	check(read('turbomc_playerField', ['ping']) === 42, '延迟读快照');
 	check(read('turbomc_mouseDown', ['left']) === true && read('turbomc_mouseDown', ['middle']) === false,
 		'鼠标按键');
 	check(read('turbomc_mouseDown', ['any']) === true, '鼠标 any 合并三键');

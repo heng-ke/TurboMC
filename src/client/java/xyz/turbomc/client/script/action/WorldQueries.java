@@ -76,28 +76,22 @@ public final class WorldQueries {
 		// 合并块：一个 opcode + 下拉菜单，取代原先的三轴/五字段细粒度积木。
 		// 被取代的旧 opcode（world.pos_x、world.aim_x、world.nearest_entity* 等）已删除，
 		// 含它们的旧工程会出现未知积木——见 ARCHITECTURE §6.2
-		NativeRegistry.function("world.pos", WorldQueries::pos);
+		NativeRegistry.function("world.player_field", WorldQueries::playerField);
 		NativeRegistry.function("world.aim_pos", WorldQueries::aimPos);
 		NativeRegistry.function("world.nearest_entity_field", WorldQueries::nearestEntityField);
 		NativeRegistry.function("world.held_item_field", WorldQueries::heldItemField);
 		NativeRegistry.function("world.block_in_front", WorldQueries::blockInFront);
-		NativeRegistry.function("world.health", WorldQueries::health);
-		NativeRegistry.function("world.food", WorldQueries::food);
-		NativeRegistry.function("world.selected_slot", WorldQueries::selectedSlot);
 		NativeRegistry.function("world.on_ground", WorldQueries::onGround);
 		NativeRegistry.function("world.item_count", WorldQueries::itemCount);
 		NativeRegistry.function("world.front_block", WorldQueries::frontBlock);
 		NativeRegistry.function("world.block_below", WorldQueries::blockBelow);
 		NativeRegistry.function("world.block_at", WorldQueries::blockAt);
 		NativeRegistry.function("world.is_day", WorldQueries::isDay);
-		NativeRegistry.function("world.dimension", WorldQueries::dimension);
 		NativeRegistry.function("world.in_water", WorldQueries::inWater);
 		NativeRegistry.function("world.in_lava", WorldQueries::inLava);
-		NativeRegistry.function("world.xp_level", WorldQueries::xpLevel);
 		NativeRegistry.function("world.inventory_full", WorldQueries::inventoryFull);
 		NativeRegistry.function("world.entity_count", WorldQueries::entityCount);
 		NativeRegistry.function("world.biome", WorldQueries::biome);
-		NativeRegistry.function("world.ping", WorldQueries::ping);
 		// 快照：把游戏状态读成 JSON 文本，补上 JSON 积木缺的输入源。
 		// 单向只读，回归写必须走动作积木——见 ARCHITECTURE §26
 		NativeRegistry.function("world.player_json", WorldQueries::playerJson);
@@ -231,29 +225,51 @@ public final class WorldQueries {
 		return false;
 	}
 
-	private static Object health(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : (double) client.player.getHealth();
-	}
-
-	private static Object food(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : (double) client.player.getHungerManager().getFoodLevel();
-	}
-
 	// ---- 合并块实现（一块 + 下拉选择轴/字段）----
 	// 被它取代的细粒度旧 opcode 已删除；这些方法只服务面板上仍存在的合并块。
 
-	private static Object pos(ScriptContext ctx, Object[] args) {
+	/**
+	 * 「玩家的 [字段]」：所有数值/文本类的玩家读数走这一个入口。
+	 *
+	 * <p>字段名与玩家 JSON 快照的键一致（{@code Snapshots.PLAYER_KEYS}），作者在
+	 * 「快照里有什么」与「这个下拉里有什么」之间不必再做换算。布尔类（站在地面 /
+	 * 在水中 / 在岩浆中 / 背包已满）不在这里——六边形是条件槽的语法要求，
+	 * 合并成 reporter 就再也放不进「如果」。</p>
+	 *
+	 * <p><b>槽位从 1 开始</b>：与原「当前槽位」积木一致，也与快捷键 1–9 的读法一致；
+	 * 快照里的 {@code selected_slot} 是 0 基，两者刻意不同。</p>
+	 */
+	private static Object playerField(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
-		if (client.player == null) {
+		if (client == null || client.player == null) {
 			return 0d;
 		}
-		return switch (axisOf(args)) {
-			case 1 -> client.player.getY();
-			case 2 -> client.player.getZ();
-			default -> client.player.getX();
+		var player = client.player;
+		String field = args == null || args.length == 0 ? "health" : ScratchCast.toString(args[0]).trim();
+		return switch (field) {
+			case "health" -> (double) player.getHealth();
+			case "food" -> (double) player.getHungerManager().getFoodLevel();
+			case "xp_level" -> (double) player.experienceLevel;
+			case "selected_slot" -> (double) (player.getInventory().getSelectedSlot() + 1);
+			case "x" -> player.getX();
+			case "y" -> player.getY();
+			case "z" -> player.getZ();
+			case "yaw" -> (double) player.getYaw();
+			case "pitch" -> (double) player.getPitch();
+			case "dimension" -> client.world == null ? ""
+					: client.world.getRegistryKey().getValue().toString();
+			case "ping" -> latency(client);
+			default -> 0d;
 		};
+	}
+
+	/** 与服务端之间的延迟（毫秒）。单人游戏为 0；玩家未就绪时也是 0。 */
+	private static double latency(MinecraftClient client) {
+		if (client.player == null || client.getNetworkHandler() == null) {
+			return 0d;
+		}
+		var entry = client.getNetworkHandler().getPlayerListEntry(client.player.getUuid());
+		return entry == null ? 0d : (double) entry.getLatency();
 	}
 
 	private static Object aimPos(ScriptContext ctx, Object[] args) {
@@ -318,11 +334,6 @@ public final class WorldQueries {
 			case "z" -> 2;
 			default -> 0;
 		};
-	}
-
-	private static Object selectedSlot(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : (double) (client.player.getInventory().getSelectedSlot() + 1);
 	}
 
 	private static Object onGround(ScriptContext ctx, Object[] args) {
@@ -427,11 +438,6 @@ public final class WorldQueries {
 		return client.world != null && client.world.isDay();
 	}
 
-	private static Object dimension(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.world == null ? "" : client.world.getRegistryKey().getValue().toString();
-	}
-
 	private static Object inWater(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
 		return client.player != null && client.player.isTouchingWater();
@@ -440,11 +446,6 @@ public final class WorldQueries {
 	private static Object inLava(ScriptContext ctx, Object[] args) {
 		MinecraftClient client = client(ctx);
 		return client.player != null && client.player.isInLava();
-	}
-
-	private static Object xpLevel(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		return client.player == null ? 0d : (double) client.player.experienceLevel;
 	}
 
 	/**
@@ -491,18 +492,6 @@ public final class WorldQueries {
 				.getKey()
 				.map(key -> key.getValue().toString())
 				.orElse("");
-	}
-
-	/**
-	 * 与服务器之间的延迟（毫秒）。单人游戏为 0。
-	 */
-	private static Object ping(ScriptContext ctx, Object[] args) {
-		MinecraftClient client = client(ctx);
-		if (client.player == null || client.getNetworkHandler() == null) {
-			return 0d;
-		}
-		var entry = client.getNetworkHandler().getPlayerListEntry(client.player.getUuid());
-		return entry == null ? 0d : (double) entry.getLatency();
 	}
 
 	/**

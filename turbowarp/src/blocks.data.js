@@ -100,14 +100,27 @@ module.exports = {
 		{opcode: 'quickMoveSlot', blockType: 'command', text: {en: 'quick move slot [INDEX]', zh: '快速移动槽位 [INDEX]'}, arguments: {INDEX: {type: 'number', defaultValue: 0}}, stub: 'this.preview(\'quickMoveSlot\');'},
 		{opcode: 'closeContainer', blockType: 'command', text: {en: 'close container', zh: '关闭界面'}, stub: 'this.preview(\'closeContainer\');'},
 		{label: {en: 'Player', zh: '玩家状态'}},
-		{opcode: 'health', blockType: 'reporter', text: {en: 'health', zh: '血量'}, stub: 'return 20;', read: (s) => (s ? s.hp : 0)},
-		{opcode: 'food', blockType: 'reporter', text: {en: 'food level', zh: '饱食度'}, stub: 'return 20;', read: (s) => (s ? s.food : 0)},
-		{opcode: 'xpLevel', blockType: 'reporter', text: {en: 'xp level', zh: '经验等级'}, stub: 'return 0;', read: (s) => (s ? s.xpLevel : 0)},
+		// 玩家的数值/文本字段全部走这一块下拉。旧的 health / food / xpLevel / selectedSlot /
+		// dimension / ping / pos 七块已删除，sb3 里存的是 opcode，含它们的旧工程会出现未知积木
+		// （见 ARCHITECTURE §6.2，与 posX/posY/posZ 那次同一处理）。
+		//
+		// 布尔类不并进来：六边形是条件槽的语法要求，塞进 reporter 就再也放不进「如果」。
+		{opcode: 'playerField', blockType: 'reporter', text: {en: 'player [FIELD]', zh: '玩家的 [FIELD]'},
+			arguments: {FIELD: {type: 'string', defaultValue: "health", menu: 'playerField'}},
+			stub: 'return 0;',
+			// 浏览器侧读的是远程快照（SnapshotPublisher），那边用短名（hp / dim / slot / xpLevel），
+			// 与玩家 JSON 快照的长名（health / dimension / selected_slot / xp_level）不是同一套。
+			// 别名表只能写在这里：read 会被 toString 序列化进产物，引用外部常量会直接失效。
+			read: (s, a) => {
+				if (!s) {
+					return 0;
+				}
+				const alias = {health: 'hp', xp_level: 'xpLevel', selected_slot: 'slot', dimension: 'dim'};
+				const key = (a && alias[a[0]]) || (a && a[0]);
+				const value = s[key];
+				return value === undefined || value === null ? 0 : value;
+			}},
 		{opcode: 'onGround', blockType: 'boolean', text: {en: 'on ground?', zh: '站在地面？'}, stub: 'this.preview(\'onGround\'); return true;', read: (s) => !!(s && s.onGround)},
-		// 三轴合并成一块下拉。旧的三块（posX/posY/posZ）已删除——sb3 里存的是 opcode，
-		// 删掉就意味着含它们的旧工程会出现未知积木（见 ARCHITECTURE §6.2）
-		{opcode: 'pos', blockType: 'reporter', text: {en: 'player [AXIS] position', zh: '玩家 [AXIS] 坐标'}, arguments: {AXIS: {type: 'string', defaultValue: "x", menu: 'axis'}}, stub: 'return 0;', read: (s, a) => (s ? s[a[0]] : 0)},
-		{opcode: 'selectedSlot', blockType: 'reporter', text: {en: 'selected slot', zh: '当前槽位'}, read: (s) => (s ? s.slot : 0), stub: 'return 1;'},
 		{opcode: 'heldItemField', blockType: 'reporter', text: {en: 'held [FIELD]', zh: '手中的 [FIELD]'}, arguments: {FIELD: {type: 'string', defaultValue: "id", menu: 'heldField'}}, stub: 'return \'\';',
 			read: (s, a) => {
 				const field = String((a && a[0]) || 'id').trim().toLowerCase();
@@ -161,7 +174,6 @@ module.exports = {
 		{opcode: 'respawn', blockType: 'command', text: {en: 'respawn', zh: '重生'}, stub: 'this.preview(\'respawn\');'},
 		{label: {en: 'World', zh: '世界查询'}},
 		{opcode: 'isDay', blockType: 'boolean', text: {en: 'is daytime?', zh: '是白天?'}, read: (s) => !!(s && s.isDay), stub: 'return true;'},
-		{opcode: 'dimension', blockType: 'reporter', text: {en: 'dimension', zh: '当前维度'}, read: (s) => (s ? s.dim : ''), stub: 'return \'minecraft:overworld\';'},
 		{opcode: 'biome', blockType: 'reporter', text: {en: 'biome', zh: '当前生物群系'}, read: (s) => (s ? s.biome : ''), stub: 'return \'minecraft:plains\';'},
 		{opcode: 'inWater', blockType: 'boolean', text: {en: 'in water?', zh: '在水中?'}, read: (s) => !!(s && s.inWater), stub: 'return false;'},
 		{opcode: 'inLava', blockType: 'boolean', text: {en: 'in lava?', zh: '在岩浆中?'}, read: (s) => !!(s && s.inLava), stub: 'return false;'},
@@ -187,7 +199,6 @@ module.exports = {
 		{opcode: 'worldJson', blockType: 'reporter', text: {en: 'world snapshot', zh: '世界快照'}, read: (s) => JSON.stringify(s && s.worldInfo ? s.worldInfo : {}), stub: 'return \'{"time":0,"day":1,"moon_phase":0,"raining":false,"thundering":false,"dimension":"","biome":"","light":0}\';'},
 		{opcode: 'frontBlock', blockType: 'reporter', text: {en: 'block at crosshair', zh: '准星所指方块'}, read: (s) => (s && s.aim ? s.aim.block : ''), stub: 'return \'minecraft:air\';'},
 		{opcode: 'aimPos', blockType: 'reporter', text: {en: 'aimed block [AXIS] position', zh: '准星方块的 [AXIS] 坐标'}, arguments: {AXIS: {type: 'string', defaultValue: "x", menu: 'axis'}}, read: (s, a) => (s && s.aim ? s.aim[a[0]] : 0), stub: 'return 0;'},
-		{opcode: 'ping', blockType: 'reporter', text: {en: 'server ping (ms)', zh: '服务端延迟(ms)'}, read: (s) => (s ? s.ping : 0), stub: 'return 0;'},
 		{label: {en: 'Entities', zh: '实体查询'}},
 		// 距离 / 三轴 / 名称合成一块：共享同一次世界遍历（WorldQueries 的单 tick 缓存按类型键控）
 		{opcode: 'nearestEntityField', blockType: 'reporter', text: {en: 'nearest [TYPE] [FIELD]', zh: '最近 [TYPE] 的 [FIELD]'}, arguments: {TYPE: {type: 'string', defaultValue: "minecraft:zombie", menu: 'entityType'}, FIELD: {type: 'string', defaultValue: "distance", menu: 'entityField'}}, read: (s, a) => nearestEntityField(s, a), stub: 'return 0;'},
@@ -308,6 +319,22 @@ module.exports = {
 			{text: {en: 'X', zh: 'X'}, value: 'x'},
 			{text: {en: 'Y', zh: 'Y'}, value: 'y'},
 			{text: {en: 'Z', zh: 'Z'}, value: 'z'}
+		]},
+		// 「玩家的 [字段]」的字段表。value 是**长名**（与玩家 JSON 快照一致），
+		// 远程快照那套短名（hp / dim / slot / xpLevel）在积木的 read 里换算。
+		// 顺序按常用度排：读数类 → 坐标 → 视角 → 维度 → 延迟。
+		playerField: {acceptReporters: false, items: [
+			{text: {en: 'health', zh: '血量'}, value: 'health'},
+			{text: {en: 'food level', zh: '饱食度'}, value: 'food'},
+			{text: {en: 'xp level', zh: '经验等级'}, value: 'xp_level'},
+			{text: {en: 'selected slot', zh: '当前槽位'}, value: 'selected_slot'},
+			{text: {en: 'x position', zh: 'X 坐标'}, value: 'x'},
+			{text: {en: 'y position', zh: 'Y 坐标'}, value: 'y'},
+			{text: {en: 'z position', zh: 'Z 坐标'}, value: 'z'},
+			{text: {en: 'yaw', zh: '水平视角'}, value: 'yaw'},
+			{text: {en: 'pitch', zh: '俯仰视角'}, value: 'pitch'},
+			{text: {en: 'dimension', zh: '当前维度'}, value: 'dimension'},
+			{text: {en: 'server ping (ms)', zh: '服务端延迟(ms)'}, value: 'ping'}
 		]},
 		entityField: {acceptReporters: false, items: [
 			{text: {en: 'distance', zh: '距离'}, value: 'distance'},

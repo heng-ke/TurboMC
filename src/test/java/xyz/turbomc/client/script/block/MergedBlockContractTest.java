@@ -29,7 +29,9 @@ class MergedBlockContractTest {
 	@Test
 	@DisplayName("合并块映射到新类型，参数数与扩展文案的占位符数一致")
 	void mergedBlocksAreMapped() {
-		assertMapping("turbomc_pos", "world.pos", 1);
+		// 玩家的七个读数合并成一块：health / food / xpLevel / selectedSlot / dimension /
+		// ping / pos 的旧 opcode 已删（2026-11-27），这里只断言新块
+		assertMapping("turbomc_playerField", "world.player_field", 1);
 		assertMapping("turbomc_aimPos", "world.aim_pos", 1);
 		assertMapping("turbomc_nearestEntityField", "world.nearest_entity_field", 2);
 		assertMapping("turbomc_heldItemField", "world.held_item_field", 1);

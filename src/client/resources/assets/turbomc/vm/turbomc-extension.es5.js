@@ -1756,38 +1756,18 @@ var ITEM_TABLE = [
 						text: T('close container', '关闭界面')
 					},
 					{
-						opcode: 'health',
+						opcode: 'playerField',
 						blockType: Scratch.BlockType.REPORTER,
-						text: T('health', '血量')
-					},
-					{
-						opcode: 'food',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('food level', '饱食度')
-					},
-					{
-						opcode: 'xpLevel',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('xp level', '经验等级')
+						text: T('player [FIELD]', '玩家的 [FIELD]'),
+						argOrder: ['FIELD'],
+						arguments: {
+							FIELD: {type: Scratch.ArgumentType.STRING, defaultValue: 'health', menu: 'playerField'}
+						}
 					},
 					{
 						opcode: 'onGround',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('on ground?', '站在地面？')
-					},
-					{
-						opcode: 'pos',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('player [AXIS] position', '玩家 [AXIS] 坐标'),
-						argOrder: ['AXIS'],
-						arguments: {
-							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
-						}
-					},
-					{
-						opcode: 'selectedSlot',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('selected slot', '当前槽位')
 					},
 					{
 						opcode: 'heldItemField',
@@ -1831,11 +1811,6 @@ var ITEM_TABLE = [
 						opcode: 'isDay',
 						blockType: Scratch.BlockType.BOOLEAN,
 						text: T('is daytime?', '是白天?')
-					},
-					{
-						opcode: 'dimension',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('dimension', '当前维度')
 					},
 					{
 						opcode: 'biome',
@@ -1931,11 +1906,6 @@ var ITEM_TABLE = [
 						arguments: {
 							AXIS: {type: Scratch.ArgumentType.STRING, defaultValue: 'x', menu: 'axis'}
 						}
-					},
-					{
-						opcode: 'ping',
-						blockType: Scratch.BlockType.REPORTER,
-						text: T('server ping (ms)', '服务端延迟(ms)')
 					},
 					{
 						opcode: 'nearestEntityField',
@@ -2401,6 +2371,19 @@ var ITEM_TABLE = [
 							{text: T('X', 'X'), value: 'x'},
 							{text: T('Y', 'Y'), value: 'y'},
 							{text: T('Z', 'Z'), value: 'z'}
+					]},
+					playerField: {acceptReporters: false, items: [
+							{text: T('health', '血量'), value: 'health'},
+							{text: T('food level', '饱食度'), value: 'food'},
+							{text: T('xp level', '经验等级'), value: 'xp_level'},
+							{text: T('selected slot', '当前槽位'), value: 'selected_slot'},
+							{text: T('x position', 'X 坐标'), value: 'x'},
+							{text: T('y position', 'Y 坐标'), value: 'y'},
+							{text: T('z position', 'Z 坐标'), value: 'z'},
+							{text: T('yaw', '水平视角'), value: 'yaw'},
+							{text: T('pitch', '俯仰视角'), value: 'pitch'},
+							{text: T('dimension', '当前维度'), value: 'dimension'},
+							{text: T('server ping (ms)', '服务端延迟(ms)'), value: 'ping'}
 					]},
 					entityField: {acceptReporters: false, items: [
 							{text: T('distance', '距离'), value: 'distance'},
